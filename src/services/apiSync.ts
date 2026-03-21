@@ -151,8 +151,8 @@ export const apiSync = {
           tamanho: getValueByKeywords(item, ['TAMANHO', 'TAM', 'SIZE']) || 'M',
           cor: getValueByKeywords(item, ['COR', 'COLOR']) || 'Preta',
           quantidade: Number(getValueByKeywords(item, ['QUANTIDADE', 'QTD', 'AMOUNT']) || 1),
-          valorTotal: parseReal(getValueByKeywords(item, ['TOTAL', 'VALOR', 'PRECO', 'PRICE']) || 0),
-          preco: parseReal(getValueByKeywords(item, ['TOTAL', 'VALOR', 'PRECO', 'PRICE']) || 0),
+          valorTotal: parseReal(getValueByKeywords(item, ['TOTAL PAGO', 'PAGO', 'VALOR PAGO', 'TOTAL', 'VALOR', 'PRECO', 'PRICE'])),
+          preco: parseReal(getValueByKeywords(item, ['VALOR UNITARIO', 'PRECO UNITARIO', 'PRECO', 'PRICE', 'UNITARIO'])),
           custo: 0,
           codigo_barra: getValueByKeywords(item, ['CODIGO', 'BARRA', 'BARCODE', 'BC']) || '',
           dataCriacao: getValueByKeywords(item, ['DATA', 'CARIMBO', 'CRIADO']) || new Date().toISOString()
@@ -193,8 +193,8 @@ export const apiSync = {
         const descricao = String(getValueByKeywords(item, ['DESCRICAO', 'DESCRICAO']) || '');
         const row_number = item.row_number || index + 1;
 
-        const valorLinha = parseReal(item['total'] || item['Total'] || item['Total pago'] || 0);
-        const valorPessoal = parseReal(item['custos pessoais'] || item['Custos pessoais'] || 0);
+        const valorLinha = parseReal(getValueByKeywords(item, ['TOTAL PAGO', 'PAGO', 'VALOR PAGO', 'TOTAL', 'VALOR']));
+        const valorPessoal = parseReal(getValueByKeywords(item, ['CUSTOS PESSOAIS', 'PESSOAL', 'GASTO PESSOAL']));
         const valorNegocio = valorPessoal > 0 ? 0 : valorLinha;
 
         if (data || descricao) {
@@ -281,8 +281,8 @@ export const apiSync = {
         .map(item => {
           const data = String(getValueByKeywords(item, ['DATA']) || '');
           const categoria = String(getValueByKeywords(item, ['ORIGEM', 'CONTAS', 'CATEGORIA']) || 'Geral');
-          const entrada = parseReal(getValueByKeywords(item, ['ENTRADA', 'PAGO', 'VALOR']));
-          const saida = parseReal(getValueByKeywords(item, ['SAIDA', 'Gasto', 'Custo']));
+          const entrada = parseReal(getValueByKeywords(item, ['ENTRADA', 'TOTAL PAGO', 'VALOR PAGO', 'PAGO', 'RECEBIDO']));
+          const saida = parseReal(getValueByKeywords(item, ['SAIDA', 'GASTO', 'CUSTO', 'PAGAMENTO']));
           return { data, categoria, entrada, saida };
 
         })
