@@ -28,12 +28,17 @@ const parseReal = (val: any): number => {
 const getValueByKeywords = (item: any, keywords: string[]) => {
   const entries = Object.entries(item);
   const normalizedKeywords = keywords.map(k => normalizeString(k));
+  
   for (const [key, val] of entries) {
     const normKey = normalizeString(key);
-    if (normalizedKeywords.includes(normKey)) return val;
+    // Busca exata ou se a chave contém a palavra-chave (ex: "nomecompletoresponsavel" contem "nomecompleto")
+    if (normalizedKeywords.some(k => normKey.includes(k) || k.includes(normKey))) {
+      return val;
+    }
   }
   return null;
 };
+
 
 const sendWebhook = async (url: string, data: any) => {
   try {
@@ -138,8 +143,8 @@ export const apiSync = {
         return {
           id_pedido: item.id || item.row_number || item['ID Pedido'] || item['id_pedido'] || `n8n-${index}`,
           data: getValueByKeywords(item, ['DATA', 'CARIMBO', 'CRIADO']) || new Date().toISOString(),
-          cliente: getValueByKeywords(item, ['NOME', 'CLIENTE', 'RESPONSAVEL']) || 'Sem Nome',
-          whatsapp: getValueByKeywords(item, ['WHATSAPP', 'TELEFONE', 'CELULAR', 'PHONE']) || '',
+          cliente: getValueByKeywords(item, ['NOME', 'CLIENTE', 'RESPONSAVEL', 'NOME COMPLETO']),
+          whatsapp: getValueByKeywords(item, ['WHATSAPP', 'TELEFONE', 'CELULAR', 'PHONE', 'WPP', 'WHATS']),
           status: status as any,
           produtoNome: getValueByKeywords(item, ['PRODUTO', 'DESCRICAO', 'DESC', 'ITEM']) || 'Camiseta Escolar',
           produtoId: getValueByKeywords(item, ['PRODUTO', 'ID PRODUTO', 'SKU']) || '',
@@ -276,9 +281,10 @@ export const apiSync = {
         .map(item => {
           const data = String(getValueByKeywords(item, ['DATA']) || '');
           const categoria = String(getValueByKeywords(item, ['ORIGEM', 'CONTAS', 'CATEGORIA']) || 'Geral');
-          const entrada = parseReal(item['Entrada'] || item['entrada'] || '');
-          const saida = parseReal(item['Saida'] || item['saida'] || '');
+          const entrada = parseReal(getValueByKeywords(item, ['ENTRADA', 'PAGO', 'VALOR']));
+          const saida = parseReal(getValueByKeywords(item, ['SAIDA', 'Gasto', 'Custo']));
           return { data, categoria, entrada, saida };
+
         })
         .filter(i => i.entrada > 0 || i.saida > 0);
 
