@@ -3,11 +3,12 @@ import { OrderStatus as OrderStatusValue } from '../types';
 export { OrderStatusValue };
 
 const N8N_WEBHOOK_URLS = {
-  NEW_ORDER: 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/pedidos',
+  NEW_ORDER: 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/app',
   ORDER_PRODUCTION: 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/fabricacao',
-  NEW_SALE: 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/vendas',
+  NEW_SALE: 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/venda',
   NEW_CONTAS: 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/contas'
 };
+
 
 const normalizeString = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
 
