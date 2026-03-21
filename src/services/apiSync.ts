@@ -29,15 +29,23 @@ const getValueByKeywords = (item: any, keywords: string[]) => {
   const entries = Object.entries(item);
   const normalizedKeywords = keywords.map(k => normalizeString(k));
   
+  // 1. Tenta correspondência exata primeiro (resolve chaves com \n na frente)
   for (const [key, val] of entries) {
     const normKey = normalizeString(key);
-    // Busca exata ou se a chave contém a palavra-chave (ex: "nomecompletoresponsavel" contem "nomecompleto")
-    if (normalizedKeywords.some(k => normKey.includes(k) || k.includes(normKey))) {
+    if (normalizedKeywords.includes(normKey)) return val;
+  }
+
+  // 2. Se não achou exato, tenta parcial, mas ignorando colunas de status/pergunta (que têm ?)
+  for (const [key, val] of entries) {
+    const normKey = normalizeString(key);
+    if (!key.includes('?') && normalizedKeywords.some(k => normKey.includes(k))) {
       return val;
     }
   }
+  
   return null;
 };
+
 
 
 const sendWebhook = async (url: string, data: any) => {
