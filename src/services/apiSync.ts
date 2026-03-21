@@ -3,11 +3,12 @@ import { OrderStatus as OrderStatusValue } from '../types';
 export { OrderStatusValue };
 
 const N8N_WEBHOOK_URLS = {
-  NEW_ORDER: 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/app',
-  ORDER_PRODUCTION: 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/fabricacao',
-  NEW_SALE: 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/venda',
-  NEW_CONTAS: 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/contas'
+  NEW_ORDER: '/webhook/app',
+  ORDER_PRODUCTION: '/webhook/fabricacao',
+  NEW_SALE: '/webhook/venda',
+  NEW_CONTAS: '/webhook/contas'
 };
+
 
 
 const normalizeString = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
@@ -86,7 +87,7 @@ export const apiSync = {
   },
 
   notifyCaixa: async (data: any) => {
-    return sendWebhook('https://n8n-n8n.sd8jyi.easypanel.host/webhook/caixa', { action: 'nova_entrada', ...data });
+    return sendWebhook('/webhook/caixa', { action: 'nova_entrada', ...data });
   },
 
   fetchPedidos: async () => {
@@ -160,7 +161,7 @@ export const apiSync = {
 
   fetchGastos: async () => {
     try {
-      const response = await fetch('https://n8n-n8n.sd8jyi.easypanel.host/webhook/gastos', {
+      const response = await fetch('/webhook/gastos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'get_gastos' })
@@ -230,7 +231,7 @@ export const apiSync = {
 
   fetchCaixa: async (): Promise<{ items: CaixaItem[], summary: { entrada: number, saida: number, saldo: number } } | null> => {
     try {
-      const response = await fetch('https://n8n-n8n.sd8jyi.easypanel.host/webhook/caixa', {
+      const response = await fetch('/webhook/caixa', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'get_caixa' })
@@ -304,7 +305,7 @@ export const apiSync = {
   fetchEstoque: async (force = false): Promise<StockItem[]> => {
     if (!force && !canSync('estoque', 1000)) return [];
     try {
-      const response = await fetch('https://n8n-n8n.sd8jyi.easypanel.host/webhook/estoque', {
+      const response = await fetch('/webhook/estoque', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'get_estoque' })
@@ -388,7 +389,7 @@ export const apiSync = {
 
   updateEstoque: async (item: StockItem, quantidadeVendida: number) => {
     const novoEstoque = (item.estoque || 0) - quantidadeVendida;
-    return sendWebhook('https://n8n-n8n.sd8jyi.easypanel.host/webhook/estoque', {
+    return sendWebhook('/webhook/estoque', {
       action: 'update_estoque',
       produto: item.produto,
       tamanho: item.tamanho,

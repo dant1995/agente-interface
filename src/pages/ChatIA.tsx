@@ -50,7 +50,7 @@ const ChatIA = () => {
       };
 
       // Enviar para o n8n processar (que deve usar OpenAI/Claude)
-      const response = await fetch('https://n8n-n8n.sd8jyi.easypanel.host/webhook/contas', {
+      const response = await fetch('/webhook/contas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'ia_chat', ...context })
