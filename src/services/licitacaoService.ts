@@ -125,5 +125,21 @@ export const licitacaoService = {
       console.error('Erro ao buscar no PNCP via n8n:', e);
       return [];
     }
+  },
+
+  // --- Robô Pescador Noturno ---
+  async getAchadosRobo(): Promise<any[]> {
+    try {
+      const response = await fetch('https://n8n-n8n.sd8jyi.easypanel.host/webhook/buscar-achados', {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!response.ok) throw new Error('Erro na rede');
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.error("Erro ao buscar achados do robô:", error);
+      return [];
+    }
   }
 };

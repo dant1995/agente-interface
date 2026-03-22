@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, FileText, ChevronRight, Globe, DownloadCloud } from 'lucide-react';
+import { Search, Plus, FileText, ChevronRight, Globe, DownloadCloud, Bot } from 'lucide-react';
 import { licitacaoService } from '../services/licitacaoService';
 import type { Licitacao, LicitacaoStatus } from '../types';
 
@@ -31,6 +31,41 @@ const Licitacoes = () => {
     const res = await licitacaoService.searchPNCP(buscaPNCP);
     setResultadosPNCP(res);
     setLoadingPNCP(false);
+  };
+
+  const [showAchados, setShowAchados] = useState(false);
+  const [loadingAchados, setLoadingAchados] = useState(false);
+  const [resultadosAchados, setResultadosAchados] = useState<any[]>([]);
+
+  const handleBuscarAchados = async () => {
+    setShowAchados(true);
+    setLoadingAchados(true);
+    const res = await licitacaoService.getAchadosRobo();
+    setResultadosAchados(res);
+    setLoadingAchados(false);
+  };
+
+  const importarAchado = async (achado: any) => {
+    const novaLicitacao: Licitacao = {
+       id: crypto.randomUUID(),
+       nome: achado['Objeto'] || 'Licitação do Robô',
+       orgao: achado['Órgão/Entidade'] || 'Órgão Desconhecido',
+       valorEstimado: Number(String(achado['Valor Estimado'] || '0').replace(/[^0-9.-]+/g,"")) || 0,
+       dataAbertura: achado['Data Publicação'] || new Date().toISOString(),
+       linkEdital: achado['Link Original'] || '',
+       arquivoEdital: '',
+       observacoes: 'Licitação pescada automaticamente de madrugada via n8n.',
+       status: 'analisando',
+       historico: [{ data: new Date().toISOString(), descricao: 'Importada via Robô Pescador Noturno.' }],
+       dataCriacao: new Date().toISOString()
+    };
+    if (achado['UF']) novaLicitacao.unidade = achado['UF'];
+    
+    await licitacaoService.save(novaLicitacao);
+    await licitacaoService.sendToWebhook(novaLicitacao, 'nova_licitacao');
+    alert('Achado importado com sucesso para a base Local das Lojas Capel!');
+    setShowAchados(false);
+    loadData();
   };
 
   const importarPNCP = async (itemPNCP: any) => {
@@ -89,12 +124,21 @@ const Licitacoes = () => {
           </h1>
           <p style={{ margin: '0.2rem 0 0 0', color: '#666', fontSize: '0.9rem' }}>Acompanhe e analise oportunidades</p>
         </div>
-        <button 
-           onClick={() => setShowPNCP(true)}
-           style={{ background: '#10B981', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem' }}
-        >
-          <Globe size={16} /> Central de Buscas (PNCP)
-        </button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <button 
+             onClick={handleBuscarAchados}
+             style={{ background: '#8B5CF6', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', boxShadow: '0 2px 4px rgba(139, 92, 246, 0.3)' }}
+          >
+            <Bot size={16} /> Achados do Robô
+          </button>
+          <button 
+             onClick={() => setShowPNCP(true)}
+             style={{ background: '#10B981', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', boxShadow: '0 2px 4px rgba(16, 185, 129, 0.3)' }}
+          >
+            <Globe size={16} /> Central de Buscas (PNCP)
+          </button>
+          <span style={{ fontSize: '10px', color: '#ccc', opacity: 0.5 }}>v1.0.1</span>
+        </div>
       </div>
 
       <div style={{ padding: '0 1rem' }}>
@@ -219,6 +263,71 @@ const Licitacoes = () => {
       >
         <Plus size={28} />
       </button>
+
+      {/* MODAL ACHADOS DO ROBO */}
+      {showAchados && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.6)', zIndex: 100, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1rem' }}>
+          <div style={{ background: 'white', borderRadius: '16px', width: '100%', maxWidth: '650px', maxHeight: '90vh', overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.2rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E5E7EB', paddingBottom: '1rem' }}>
+                <h2 style={{ margin: 0, fontSize: '1.35rem', display: 'flex', alignItems: 'center', gap: '10px', color: '#111827' }}>
+                   <Bot size={24} color="#8B5CF6" /> Achados da Madrugada
+                </h2>
+                <button onClick={() => setShowAchados(false)} style={{ background: '#F3F4F6', color: '#4B5563', border: 'none', fontSize: '1.2rem', cursor: 'pointer', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>&times;</button>
+             </div>
+             
+             {loadingAchados ? (
+               <div style={{ textAlign: 'center', padding: '3rem' }}>
+                  <p>Inspecionando os mares... Aguarde.</p>
+               </div>
+             ) : (
+               <div style={{ flex: 1, minHeight: '300px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem', color: '#111827', fontWeight: 600 }}>
+                     Oportunidades Pescadas ({resultadosAchados.length})
+                  </h3>
+                  
+                  {resultadosAchados.map((res: any, i) => (
+                     <div key={i} style={{ 
+                        padding: '1.2rem', border: '1px solid #E2E8F0', borderRadius: '12px', background: 'white',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', gap: '8px'
+                     }}>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#8B5CF6', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                           {res['Órgão/Entidade'] || 'ÓRGÃO PÚBLICO'}
+                        </div>
+                        <div style={{ fontWeight: 600, color: '#1E293B', fontSize: '0.95rem', lineHeight: '1.4' }}>
+                           {res['Objeto'] || 'Sem Objeto'}
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '4px' }}>
+                           <div>
+                              <span style={{ fontSize: '0.75rem', color: '#64748B', display: 'block' }}>Valor Estimado</span>
+                              <span style={{ fontSize: '1.1rem', color: '#10B981', fontWeight: 700 }}>
+                                 {formatCurrency(Number(String(res['Valor Estimado'] || '0').replace(/[^0-9.-]+/g,"")) || 0)}
+                              </span>
+                           </div>
+                           <button 
+                              onClick={() => importarAchado(res)} 
+                              style={{ 
+                                 background: '#8B5CF6', color: 'white', border: 'none', padding: '8px 16px', 
+                                 borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600,
+                                 display: 'flex', alignItems: 'center', gap: '6px'
+                              }}>
+                              <DownloadCloud size={16} /> Importar e Analisar
+                           </button>
+                        </div>
+                     </div>
+                  ))}
+                  
+                  {resultadosAchados.length === 0 && (
+                     <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#94A3B8', border: '2px dashed #E2E8F0', borderRadius: '12px', background: '#F8FAFC' }}>
+                        <Bot size={40} color="#CBD5E1" style={{ margin: '0 auto 1rem' }} />
+                        <p style={{ margin: 0, fontWeight: 500 }}>A rede voltou vazia hoje.</p>
+                        <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem' }}>O robô não encontrou novas oportunidades com suas palavras-chave.</p>
+                     </div>
+                  )}
+               </div>
+             )}
+          </div>
+        </div>
+      )}
 
       {/* MODAL DE BUSCA PNCP */}
       {showPNCP && (

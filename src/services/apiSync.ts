@@ -2,11 +2,13 @@ import type { Order, StockItem, FabricacaoItem, CaixaItem } from '../types';
 import { OrderStatus as OrderStatusValue } from '../types';
 export { OrderStatusValue };
 
+const BASE_URL = 'https://n8n-n8n.sd8jyi.easypanel.host';
+
 const N8N_WEBHOOK_URLS = {
-  NEW_ORDER: '/webhook/app',
-  ORDER_PRODUCTION: '/webhook/fabricacao',
-  NEW_SALE: '/webhook/venda',
-  NEW_CONTAS: '/webhook/contas'
+  NEW_ORDER: `${BASE_URL}/webhook/app`,
+  ORDER_PRODUCTION: `${BASE_URL}/webhook/fabricacao`,
+  NEW_SALE: `${BASE_URL}/webhook/venda`,
+  NEW_CONTAS: `${BASE_URL}/webhook/contas`
 };
 
 
@@ -100,7 +102,7 @@ export const apiSync = {
   },
 
   notifyCaixa: async (data: any) => {
-    return sendWebhook('/webhook/caixa', { action: 'nova_entrada', ...data });
+    return sendWebhook(`${BASE_URL}/webhook/caixa`, { action: 'nova_entrada', ...data });
   },
 
   fetchPedidos: async () => {
@@ -174,7 +176,7 @@ export const apiSync = {
 
   fetchGastos: async () => {
     try {
-      const response = await fetch('/webhook/gastos', {
+      const response = await fetch(`${BASE_URL}/webhook/gastos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'get_gastos' })
@@ -244,7 +246,7 @@ export const apiSync = {
 
   fetchCaixa: async (): Promise<{ items: CaixaItem[], summary: { entrada: number, saida: number, saldo: number } } | null> => {
     try {
-      const response = await fetch('/webhook/caixa', {
+      const response = await fetch(`${BASE_URL}/webhook/caixa`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'get_caixa' })
@@ -319,7 +321,7 @@ export const apiSync = {
   fetchEstoque: async (force = false): Promise<StockItem[]> => {
     if (!force && !canSync('estoque', 1000)) return [];
     try {
-      const response = await fetch('/webhook/estoque', {
+      const response = await fetch(`${BASE_URL}/webhook/estoque`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'get_estoque' })
@@ -403,7 +405,7 @@ export const apiSync = {
 
   updateEstoque: async (item: StockItem, quantidadeVendida: number) => {
     const novoEstoque = (item.estoque || 0) - quantidadeVendida;
-    return sendWebhook('/webhook/estoque', {
+    return sendWebhook(`${BASE_URL}/webhook/estoque`, {
       action: 'update_estoque',
       produto: item.produto,
       tamanho: item.tamanho,

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { storage } from '../services/storage';
 import { apiSync } from '../services/apiSync';
 import { OrderStatus } from '../types';
+import { authService } from '../services/authService';
+import { LogOut } from 'lucide-react';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -164,6 +166,11 @@ const Dashboard = () => {
     setSyncing(false);
   };
 
+  const handleLogout = () => {
+    authService.lock();
+    window.location.reload();
+  };
+
   const navItems = [
     { icon: '🛒', label: 'Vendas', route: '/vendas', color: '#EE4D2D' },
     { icon: '📋', label: 'Pedidos', route: '/pedidos', color: '#3B82F6' },
@@ -180,7 +187,7 @@ const Dashboard = () => {
   const gerenciaItems = [
     { icon: '🤖', label: 'Capel IA', route: '/chat-ia', color: '#6366F1' },
     { icon: '📊', label: 'Relatórios', route: '/relatorios', color: '#8B5CF6' },
-    { icon: '⚙️', label: 'Configurações', route: '/', color: '#64748B' },
+    { icon: '🔒', label: 'Bloquear', action: handleLogout, color: '#64748B' },
   ];
 
   return (
@@ -241,6 +248,23 @@ const Dashboard = () => {
             }}
           >
             {syncing ? '⏳' : '🔄'}
+          </button>
+          
+          <button
+            onClick={handleLogout}
+            style={{
+              background: 'rgba(255,255,255,0.2)',
+              border: 'none',
+              color: 'white',
+              borderRadius: '50%',
+              width: '36px', height: '36px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '1rem',
+            }}
+            title="Sair / Bloquear"
+          >
+            <LogOut size={18} />
           </button>
         </div>
 
@@ -409,7 +433,7 @@ const Dashboard = () => {
           {gerenciaItems.map(item => (
             <button
               key={item.label}
-              onClick={() => navigate(item.route)}
+              onClick={() => item.action ? item.action() : navigate(item.route || '/')}
               style={{
                 background: 'transparent',
                 border: 'none',

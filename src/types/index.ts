@@ -178,6 +178,7 @@ export interface Licitacao {
   orgao: string;
   valorEstimado: number;
   dataAbertura: string;
+  unidade?: string;
   linkEdital?: string;
   arquivoEdital?: string; // base64 or reference
   observacoes?: string;
