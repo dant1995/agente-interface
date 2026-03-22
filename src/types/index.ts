@@ -133,3 +133,56 @@ export interface FabricacaoItem {
   revisao: number;
   codigoBarra?: string;
 }
+
+// Licitação Data Types
+export type LicitacaoStatus = 'analisando' | 'aprovado' | 'recusado' | 'em_pregao' | 'finalizado';
+
+export interface AnaliseLicitacao {
+  "ID Análise"?: string;
+  "Objeto Resumido"?: string;
+  "Lista de Itens"?: string;
+  "Valor Estimado"?: string;
+  "Custo Estimado"?: string;
+  "Margem Bruta (%)"?: string;
+  "Cap. Técnica (1-5)"?: number | string;
+  "Cap. Financeira (1-5)"?: number | string;
+  "Experiência Prévia (1-5)"?: number | string;
+  "Complexidade (1-5)"?: number | string;
+  "Concorrência Estimada"?: string;
+  "Pontuação Total"?: number | string;
+  "Viabilidade"?: string;
+  "Risco"?: string;
+  "Recomendação"?: string;
+  "Responsável Análise"?: string;
+  "Data Análise"?: string;
+  "Data de Início"?: string;
+  "Data de Fim"?: string;
+  "Data de Pagamento"?: string;
+
+  // Legacy mock fields
+  resumo?: string;
+  riscos?: string[];
+  recomendacaoParticipar?: boolean;
+  faixaPrecoCompetitiva?: string;
+  dataAnalise?: string;
+}
+
+export interface HistoricoLicitacao {
+  data: string;
+  descricao: string;
+}
+
+export interface Licitacao {
+  id: string;
+  nome: string;
+  orgao: string;
+  valorEstimado: number;
+  dataAbertura: string;
+  linkEdital?: string;
+  arquivoEdital?: string; // base64 or reference
+  observacoes?: string;
+  status: LicitacaoStatus;
+  analise?: AnaliseLicitacao;
+  historico: HistoricoLicitacao[];
+  dataCriacao: string;
+}

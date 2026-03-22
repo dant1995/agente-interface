@@ -25,6 +25,38 @@ const Dashboard = () => {
     previsao30Dias: 0,
     alertas: [] as string[],
   });
+
+
+
+  const [syncingEdital, setSyncingEdital] = useState(false);
+
+  const handleSyncEditais = async () => {
+    setSyncingEdital(true);
+    try {
+      // Substitua pela URL que o n8n te der no nó "Webhook"
+      const WEBHOOK_N8N = 'https://seu-n8n.com/webhook/sync-editais';
+
+      const response = await fetch(WEBHOOK_N8N, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'sync_drive_editais', date: new Date().toISOString() })
+      });
+
+      if (response.ok) {
+        alert('✅ Sincronização de editais iniciada no Drive!');
+      } else {
+        alert('❌ Erro ao comunicar com o servidor.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('❌ Falha na rede ao tentar sincronizar.');
+    } finally {
+      setSyncingEdital(false);
+    }
+  };
+
+
+
   const [syncing, setSyncing] = useState(true);
   const [lastSync, setLastSync] = useState<string | null>(null);
 
@@ -34,14 +66,14 @@ const Dashboard = () => {
 
   const autoSync = async () => {
     setSyncing(true);
-    
+
     // Sincronizar pedidos e vendas (marketplaces)
     try {
       const [extOrders, extSales] = await Promise.all([
         apiSync.fetchPedidos(),
         apiSync.fetchVendas()
       ]);
-      
+
       const allExternalOrders = [...(extOrders || []), ...(extSales || [])];
       if (allExternalOrders.length > 0) {
         await storage.syncExternalOrders(allExternalOrders);
@@ -54,7 +86,7 @@ const Dashboard = () => {
     let financeiro = { totalCustos: 0, totalVendas: 0, lucroBruto: 0, totalNegocio: 0, totalPessoal: 0 };
     let caixa = { summary: { entrada: 0, saida: 0, saldo: 0 } };
     let contas: any[] = [];
-    
+
     try {
       const [gastosData, caixaData, contasData] = await Promise.all([
         apiSync.fetchGastos(),
@@ -87,7 +119,7 @@ const Dashboard = () => {
     const emProducaoItems = orders.filter(o => {
       const s = String(o.status);
       return s === OrderStatus.PRODUCAO || s === OrderStatus.CORTE || s === OrderStatus.ESTAMPA || s === OrderStatus.COSTURA || s === OrderStatus.REVISAO ||
-             ['Em produção', 'Em corte', 'Na estamparia', 'Em costura', 'Em revisão'].includes(s);
+        ['Em produção', 'Em corte', 'Na estamparia', 'Em costura', 'Em revisão'].includes(s);
     });
     const emProducaoCount = emProducaoItems.length;
 
@@ -112,14 +144,14 @@ const Dashboard = () => {
 
     const aReceber = contas.filter(c => c.tipo === 'receber' && c.status === 'pendente').reduce((acc, c) => acc + c.valor, 0);
     const aPagar = contas.filter(c => c.tipo === 'pagar' && c.status === 'pendente').reduce((acc, c) => acc + c.valor, 0);
-    
+
     // Saldo projetado = Saldo Atual + Receber - Pagar
     const previsao30Dias = caixa.summary.saldo + aReceber - aPagar;
 
     // 4. Sistema de Alertas
     const novosAlertas: string[] = [];
     if (previsao30Dias < 0) novosAlertas.push(`Atenção: Saldo previsto para 30 dias é negativo (R$ ${previsao30Dias.toFixed(2)})`);
-    
+
     const vencendoHoje = contas.filter(c => {
       if (c.status !== 'pendente' || c.tipo !== 'pagar') return false;
       const d = new Date(c.data);
@@ -160,7 +192,6 @@ const Dashboard = () => {
     setSyncing(false);
   };
 
-  // Grid de navegação
   const navItems = [
     { icon: '🛒', label: 'Vendas', route: '/vendas', color: '#EE4D2D' },
     { icon: '📋', label: 'Pedidos', route: '/pedidos', color: '#3B82F6' },
@@ -171,6 +202,7 @@ const Dashboard = () => {
     { icon: '🏷️', label: 'Etiquetas', route: '/etiquetas', color: '#EC4899' },
     { icon: '🧾', label: 'Histórico\nVendas', route: '/vendas-historico', color: '#6366F1' },
     { icon: '💰', label: 'Receitas\nDespesas', route: '/gastos', color: '#059669' },
+    { icon: '🏛️', label: 'Licitações', route: '/licitacoes', color: '#1E40AF' },
   ];
 
   const gerenciaItems = [
@@ -417,6 +449,7 @@ const Dashboard = () => {
                 padding: '0.6rem 0',
               }}
             >
+
               <div style={{
                 width: '48px', height: '48px',
                 borderRadius: '12px',
@@ -592,12 +625,12 @@ const Dashboard = () => {
       }}>
         <div>
           <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.8)' }}>Faturamento Total</div>
-            <div style={{ fontSize: '2.5rem', fontWeight: '900', color: 'white', lineHeight: '1.1', marginBottom: '0.4rem' }}>
-              R$ {metrics.totalVendas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </div>
-            <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.9)', fontWeight: '500' }}>
-              Volume total de {metrics.totalPedidos} pedidos
-            </div>
+          <div style={{ fontSize: '2.5rem', fontWeight: '900', color: 'white', lineHeight: '1.1', marginBottom: '0.4rem' }}>
+            R$ {metrics.totalVendas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </div>
+          <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.9)', fontWeight: '500' }}>
+            Volume total de {metrics.totalPedidos} pedidos
+          </div>
         </div>
         {/* Removed the icon div as it's not in the new structure */}
       </div>

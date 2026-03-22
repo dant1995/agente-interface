@@ -15,6 +15,9 @@ import Producao from './pages/Producao';
 import Estoque from './pages/Estoque';
 import Dashboard from './pages/Dashboard';
 import Gastos from './pages/Gastos';
+import Licitacoes from './pages/Licitacoes';
+import LicitacaoNova from './pages/LicitacaoNova';
+import LicitacaoDetalhe from './pages/LicitacaoDetalhe';
 
 function App() {
   return (
@@ -35,6 +38,9 @@ function App() {
           <Route path="/materia-prima" element={<MateriaPrima />} />
           <Route path="/etiquetas" element={<Etiquetas />} />
           <Route path="/gastos" element={<Gastos />} />
+          <Route path="/licitacoes" element={<Licitacoes />} />
+          <Route path="/licitacoes/nova" element={<LicitacaoNova />} />
+          <Route path="/licitacoes/:id" element={<LicitacaoDetalhe />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <BottomNav />
