@@ -83,8 +83,6 @@ const Dashboard = () => {
       const s = String(o.status).toLowerCase();
       return !s.includes('cancelado') && !s.includes('estorno');
     });
-    const totalVendas = activeSales.reduce((acc, o) => acc + (Number(o.valorTotal) || 0), 0);
-    const totalPedidos = orders.length;
 
     // 2. Vendas Realizadas (Apenas Prontas ou Entregues)
 
