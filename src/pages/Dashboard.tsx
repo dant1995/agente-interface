@@ -28,34 +28,6 @@ const Dashboard = () => {
 
 
 
-  const [syncingEdital, setSyncingEdital] = useState(false);
-
-  const handleSyncEditais = async () => {
-    setSyncingEdital(true);
-    try {
-      // Substitua pela URL que o n8n te der no nó "Webhook"
-      const WEBHOOK_N8N = 'https://seu-n8n.com/webhook/sync-editais';
-
-      const response = await fetch(WEBHOOK_N8N, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'sync_drive_editais', date: new Date().toISOString() })
-      });
-
-      if (response.ok) {
-        alert('✅ Sincronização de editais iniciada no Drive!');
-      } else {
-        alert('❌ Erro ao comunicar com o servidor.');
-      }
-    } catch (e) {
-      console.error(e);
-      alert('❌ Falha na rede ao tentar sincronizar.');
-    } finally {
-      setSyncingEdital(false);
-    }
-  };
-
-
 
   const [syncing, setSyncing] = useState(true);
   const [lastSync, setLastSync] = useState<string | null>(null);
