@@ -5,10 +5,12 @@ export { OrderStatusValue };
 const BASE_URL = 'https://n8n-n8n.sd8jyi.easypanel.host';
 
 const N8N_WEBHOOK_URLS = {
-  NEW_ORDER: `${BASE_URL}/webhook/app`,
+  NEW_ORDER: `${BASE_URL}/webhook/pedidos`,
   ORDER_PRODUCTION: `${BASE_URL}/webhook/fabricacao`,
   NEW_SALE: `${BASE_URL}/webhook/venda`,
-  NEW_CONTAS: `${BASE_URL}/webhook/contas`
+  NEW_CONTAS: `${BASE_URL}/webhook/contas`,
+  GASTOS: `${BASE_URL}/webhook/gastos`,
+  CAIXA: `${BASE_URL}/webhook/caixa`
 };
 
 
@@ -182,7 +184,7 @@ export const apiSync = {
 
   fetchGastos: async () => {
     try {
-      const response = await fetch(`${BASE_URL}/webhook/gastos`, {
+      const response = await fetch(N8N_WEBHOOK_URLS.GASTOS, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'get_gastos' })
@@ -252,7 +254,7 @@ export const apiSync = {
 
   fetchCaixa: async (): Promise<{ items: CaixaItem[], summary: { entrada: number, saida: number, saldo: number } } | null> => {
     try {
-      const response = await fetch(`${BASE_URL}/webhook/caixa`, {
+      const response = await fetch(N8N_WEBHOOK_URLS.CAIXA, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'get_caixa' })
