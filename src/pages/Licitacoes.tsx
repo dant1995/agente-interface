@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, FileText, ChevronRight } from 'lucide-react';
+import { Search, Plus, FileText, ChevronRight, Globe, DownloadCloud } from 'lucide-react';
 import { licitacaoService } from '../services/licitacaoService';
 import type { Licitacao, LicitacaoStatus } from '../types';
 
@@ -19,6 +19,39 @@ const Licitacoes = () => {
     // Sort by most recent
     data.sort((a, b) => new Date(b.dataCriacao).getTime() - new Date(a.dataCriacao).getTime());
     setLicitacoes(data);
+  };
+
+  const [showPNCP, setShowPNCP] = useState(false);
+  const [buscaPNCP, setBuscaPNCP] = useState({ palavraChave: '', uf: '', dataInicial: '', dataFinal: '' });
+  const [loadingPNCP, setLoadingPNCP] = useState(false);
+  const [resultadosPNCP, setResultadosPNCP] = useState<any[]>([]);
+
+  const handleSearchPNCP = async () => {
+    setLoadingPNCP(true);
+    const res = await licitacaoService.searchPNCP(buscaPNCP);
+    setResultadosPNCP(res);
+    setLoadingPNCP(false);
+  };
+
+  const importarPNCP = async (itemPNCP: any) => {
+    const novaLicitacao: Licitacao = {
+       id: crypto.randomUUID(),
+       nome: itemPNCP.objetoCompra || itemPNCP.objeto || 'Licitação Importada do PNCP',
+       orgao: itemPNCP.orgaoEntidade?.razaoSocial || itemPNCP.orgao || 'Órgão Desconhecido',
+       valorEstimado: itemPNCP.valorTotalEstimado || itemPNCP.valorEstimado || 0,
+       dataAbertura: itemPNCP.dataAbertura || itemPNCP.dataPublicacaoPncp || new Date().toISOString(),
+       linkEdital: itemPNCP.linkSistemaOrigem || '',
+       arquivoEdital: '',
+       observacoes: 'Licitação importada automaticamente via integração com Portal de Compras / n8n.',
+       status: 'analisando',
+       historico: [{ data: new Date().toISOString(), descricao: 'Importada via Integração de Busca PNCP.' }],
+       dataCriacao: new Date().toISOString()
+    };
+    await licitacaoService.save(novaLicitacao);
+    await licitacaoService.sendToWebhook(novaLicitacao, 'nova_licitacao');
+    alert('Edital importado com sucesso para a base Local das Lojas Capel!');
+    setShowPNCP(false);
+    loadData();
   };
 
   const filteredData = licitacoes.filter(l => {
@@ -49,11 +82,19 @@ const Licitacoes = () => {
 
   return (
     <div className="page-container" style={{ paddingBottom: '90px' }}>
-      <div className="header glass" style={{ padding: '1.2rem', marginBottom: '1rem' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '1.8rem' }}>🏛️</span> Gestão de Licitações
-        </h1>
-        <p style={{ margin: '0.2rem 0 0 0', color: '#666', fontSize: '0.9rem' }}>Acompanhe e analise oportunidades</p>
+      <div className="header glass" style={{ padding: '1.2rem', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+        <div>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1.8rem' }}>🏛️</span> Gestão de Licitações
+          </h1>
+          <p style={{ margin: '0.2rem 0 0 0', color: '#666', fontSize: '0.9rem' }}>Acompanhe e analise oportunidades</p>
+        </div>
+        <button 
+           onClick={() => setShowPNCP(true)}
+           style={{ background: '#10B981', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem' }}
+        >
+          <Globe size={16} /> Central de Buscas (PNCP)
+        </button>
       </div>
 
       <div style={{ padding: '0 1rem' }}>
@@ -178,6 +219,130 @@ const Licitacoes = () => {
       >
         <Plus size={28} />
       </button>
+
+      {/* MODAL DE BUSCA PNCP */}
+      {showPNCP && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.6)', zIndex: 100, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1rem' }}>
+          <div style={{ background: 'white', borderRadius: '16px', width: '100%', maxWidth: '650px', maxHeight: '90vh', overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.2rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E5E7EB', paddingBottom: '1rem' }}>
+                <h2 style={{ margin: 0, fontSize: '1.35rem', display: 'flex', alignItems: 'center', gap: '10px', color: '#111827' }}>
+                   <Globe size={24} color="#1E40AF" /> Busca Oficial de Licitações (PNCP)
+                </h2>
+                <button onClick={() => setShowPNCP(false)} style={{ background: '#F3F4F6', color: '#4B5563', border: 'none', fontSize: '1.2rem', cursor: 'pointer', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>&times;</button>
+             </div>
+             
+             {/* Filtros da Busca */}
+             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', background: '#F8FAFC', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                   <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Palavra-chave (Material / Objeto)</label>
+                   <input 
+                      type="text" 
+                      value={buscaPNCP.palavraChave} 
+                      onChange={e => setBuscaPNCP({...buscaPNCP, palavraChave: e.target.value})} 
+                      placeholder="ex: camisetas, uniformes, tecido..." 
+                      style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #CBD5E1', outline: 'none', background: 'white' }} 
+                   />
+                </div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>UF</label>
+                      <select 
+                         value={buscaPNCP.uf} 
+                         onChange={e => setBuscaPNCP({...buscaPNCP, uf: e.target.value})} 
+                         style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #CBD5E1', outline: 'none', background: 'white' }}
+                      >
+                          <option value="">Brasil Todo</option>
+                          <option value="SP">SP</option>
+                          <option value="MG">MG</option>
+                          <option value="RJ">RJ</option>
+                          <option value="PR">PR</option>
+                          <option value="SC">SC</option>
+                          <option value="RS">RS</option>
+                          <option value="BA">BA</option>
+                          {/* Adicionar todos conforme necessário */}
+                      </select>
+                   </div>
+                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Abertura (Mínima)</label>
+                      <input 
+                         type="date" 
+                         value={buscaPNCP.dataInicial} 
+                         onChange={e => setBuscaPNCP({...buscaPNCP, dataInicial: e.target.value})} 
+                         style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #CBD5E1', outline: 'none', background: 'white' }} 
+                      />
+                   </div>
+                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Abertura (Máxima)</label>
+                      <input 
+                         type="date" 
+                         value={buscaPNCP.dataFinal} 
+                         onChange={e => setBuscaPNCP({...buscaPNCP, dataFinal: e.target.value})} 
+                         style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #CBD5E1', outline: 'none', background: 'white' }} 
+                      />
+                   </div>
+                </div>
+                
+                <button 
+                  onClick={handleSearchPNCP} 
+                  disabled={loadingPNCP}
+                  style={{ 
+                     background: '#2563EB', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', 
+                     cursor: 'pointer', fontWeight: 600, marginTop: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px',
+                     opacity: loadingPNCP ? 0.7 : 1
+                  }}>
+                   {loadingPNCP ? 'Pesquisando na nuvem...' : <><Search size={18} /> Procurar Licitações no n8n</>}
+                </button>
+             </div>
+
+             {/* Resultados da Busca */}
+             <div style={{ flex: 1, minHeight: '300px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem', color: '#111827', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                   Resultados Encontrados ({resultadosPNCP.length})
+                </h3>
+                
+                {resultadosPNCP.map((res: any, i) => (
+                   <div key={i} style={{ 
+                      padding: '1.2rem', border: '1px solid #E2E8F0', borderRadius: '12px', background: 'white',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', gap: '8px'
+                   }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6366F1', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                         {res.orgaoEntidade?.razaoSocial || res.orgao || 'ÓRGÃO PÚBLICO'}
+                      </div>
+                      <div style={{ fontWeight: 600, color: '#1E293B', fontSize: '0.95rem', lineHeight: '1.4' }}>
+                         {res.objetoCompra || res.objeto || 'Aquisição e Registro de Preços'}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '4px' }}>
+                         <div>
+                            <span style={{ fontSize: '0.75rem', color: '#64748B', display: 'block' }}>Valor Estimado</span>
+                            <span style={{ fontSize: '1.1rem', color: '#10B981', fontWeight: 700 }}>
+                               {formatCurrency(res.valorTotalEstimado || res.valorEstimado || 0)}
+                            </span>
+                         </div>
+                         <button 
+                            onClick={() => importarPNCP(res)} 
+                            style={{ 
+                               background: '#10B981', color: 'white', border: 'none', padding: '8px 16px', 
+                               borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600,
+                               display: 'flex', alignItems: 'center', gap: '6px'
+                            }}>
+                            <DownloadCloud size={16} /> Importar e Analisar
+                         </button>
+                      </div>
+                   </div>
+                ))}
+                
+                {resultadosPNCP.length === 0 && !loadingPNCP && (
+                   <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#94A3B8', border: '2px dashed #E2E8F0', borderRadius: '12px', background: '#F8FAFC' }}>
+                      <Globe size={40} color="#CBD5E1" style={{ margin: '0 auto 1rem' }} />
+                      <p style={{ margin: 0, fontWeight: 500 }}>Nenhuma oferta capturada ainda.</p>
+                      <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem' }}>Utilize os filtros acima para varrer o país em busca de novos editais.</p>
+                   </div>
+                )}
+             </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

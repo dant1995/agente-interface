@@ -103,5 +103,27 @@ export const licitacaoService = {
        data: new Date().toISOString(),
        descricao
     });
+  },
+
+  // --- PNCP Search Integration ---
+  async searchPNCP(filters: { palavraChave?: string; uf?: string; dataInicial?: string; dataFinal?: string }): Promise<any[]> {
+    try {
+      const SEARCH_URL = 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/buscar-pncp';
+      
+      const response = await fetch(SEARCH_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(filters)
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        return Array.isArray(data) ? data : (data.data || []);
+      }
+      return [];
+    } catch (e) {
+      console.error('Erro ao buscar no PNCP via n8n:', e);
+      return [];
+    }
   }
 };
