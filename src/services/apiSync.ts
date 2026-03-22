@@ -116,7 +116,7 @@ export const apiSync = {
       
       const rawData = await response.json();
       console.log('Pedidos raw:', rawData);
-
+      
       let items: any[] = [];
       if (Array.isArray(rawData)) {
         items = rawData;
@@ -127,9 +127,10 @@ export const apiSync = {
       }
 
       const isTrue = (val: any) => val === true || val === 'TRUE' || val === 'Sim' || val === 'sim' || val === 'checked';
+      const nameKeywords = ['NOME', 'CLIENTE', 'RESPONSAVEL', 'NOME COMPLETO', 'NOME COMPLETO DO RESPONSAVEL', 'NOME COMPLETO DO RESPONSÁVEL'];
 
       return items.filter(item => {
-        const name = getValueByKeywords(item, ['NOME', 'CLIENTE', 'RESPONSAVEL', 'NOME COMPLETO']);
+        const name = getValueByKeywords(item, nameKeywords);
         return !!name;
       }).map((item, index) => {
         let status: any = OrderStatusValue.RECEBIDO;
