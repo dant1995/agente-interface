@@ -133,26 +133,29 @@ const Dashboard = () => {
     });
     if (vencendoHoje.length > 0) novosAlertas.push(`Você tem ${vencendoHoje.length} conta(s) a pagar vencendo hoje!`);
 
-    // 4. Fallbacks Financeiros
+    // 4. Fallbacks Financeiros - PRIORIDADE PARA O TOTAL CALCULADO DOS PEDIDOS
+    const totalPedidosAtivosSoma = activeSales.reduce((acc, o) => acc + (Number(o.valorTotal) || 0), 0);
+    
+    // O valor principal (topo do Dashboard) deve ser o total de pedidos ativos ou o financeiro, o que for MAIOR/MAIS RECENTE
+    // Mas para o usuário, o "Total de Vendas" deve refletir o que ele vê na planilha de Pedidos.
+    const totalVendasExibir = Math.max(totalPedidosAtivosSoma, financeiro.totalVendas);
+    
     let totalCustosFinal = financeiro.totalCustos;
-    // Se não houver custos no financeiro, mas houver no caixa, tenta usar o maior
     if (caixa.summary.saida > totalCustosFinal) totalCustosFinal = caixa.summary.saida;
 
-    // Se o financeiro.totalVendas (da planilha de resumo) for 0, usa o totalVendas calculado dos pedidos
-    const totalVendasCalculadoFinal = (financeiro.totalVendas > 0) ? financeiro.totalVendas : totalVendas;
     const saldoCaixaFinal = caixa.summary.saldo;
 
     setMetrics({
-      totalVendas,
-      totalPedidos,
+      totalVendas: totalPedidosAtivosSoma,
+      totalPedidos: orders.length,
       emProducao: emProducaoCount,
       prontos: orders.filter(o => String(o.status) === OrderStatus.PRONTA || String(o.status) === 'Camiseta pronta').length,
       entregues: orders.filter(o => String(o.status) === OrderStatus.ENTREGUE || String(o.status) === 'Entregue').length,
       recebidos: orders.filter(o => String(o.status) === OrderStatus.RECEBIDO || String(o.status) === 'Pedido recebido').length,
       estoqueBaixo: stockData.filter(i => (i.estoque || 0) <= (i.estoqueMinimo || 5)).length,
       totalCustos: totalCustosFinal,
-      totalVendasFinanceiro: totalVendasCalculadoFinal,
-      lucroBruto: totalVendasCalculadoFinal - totalCustosFinal, // Mais intuitivo: Vendas - Custos
+      totalVendasFinanceiro: totalVendasExibir,
+      lucroBruto: totalVendasExibir - totalCustosFinal,
       totalEstoque: stockData.reduce((acc, item) => acc + (item.estoque || 0), 0),
       totalValorPrevisto: stockData.reduce((acc, item) => {
         const preco = item.precoDesconto || item.preco || 35;
