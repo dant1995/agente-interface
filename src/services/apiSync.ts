@@ -480,7 +480,13 @@ export const apiSync = {
       } else if (rawData && typeof rawData === 'object') {
         items = Object.values(rawData).find(val => Array.isArray(val)) as any[] || [rawData];
       }
-      return items.map((item: any, index: number) => {
+      const marketplaceItems = items.filter(item => {
+        const origem = normalizeString(String(getValueByKeywords(item, ['ORIGEM', 'SOURCE', 'TIPO']) || ''));
+        const validSources = ['online', 'shopee', 'tiktok'];
+        return validSources.some(s => origem.includes(s)) || (origem === ''); // Mantém se vazio para não perder dados legados
+      });
+
+      return marketplaceItems.map((item: any, index: number) => {
         const baseDateStr = getValueByKeywords(item, ['DATA', 'CARIMBO', 'CRIADO']);
         const baseDate = parseBRDate(baseDateStr) || new Date();
         const forecastDate = new Date(baseDate);
