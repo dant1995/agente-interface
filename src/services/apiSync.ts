@@ -150,22 +150,27 @@ export const apiSync = {
           status = OrderStatusValue.CORTE; // Começa pelo corte se pago
         }
 
+        const preco = parseReal(getValueByKeywords(item, ['VALOR UNITARIO', 'PRECO UNITARIO', 'PRECO', 'PRICE', 'UNITARIO', 'VALOR UNITÁRIO']));
+        const quantidade = Number(getValueByKeywords(item, ['QUANTIDADE', 'QTD', 'AMOUNT']) || 1);
+        const totalPlanilha = parseReal(getValueByKeywords(item, ['TOTAL PAGO', 'PAGO', 'VALOR PAGO', 'TOTAL', 'VALOR']));
+        const valorTotal = (totalPlanilha > 0) ? totalPlanilha : (preco * quantidade);
+
         return {
           id_pedido: item.id || item.row_number || item['ID Pedido'] || item['id_pedido'] || `n8n-${index}`,
-          data: getValueByKeywords(item, ['DATA', 'CARIMBO', 'CRIADO']) || new Date().toISOString(),
-          cliente: getValueByKeywords(item, ['NOME', 'CLIENTE', 'RESPONSAVEL', 'NOME COMPLETO']),
+          data: getValueByKeywords(item, ['DATA', 'CARIMBO', 'CRIADO', 'CARIMBO DE DATA/HORA']) || new Date().toISOString(),
+          cliente: getValueByKeywords(item, ['NOME', 'CLIENTE', 'RESPONSAVEL', 'NOME COMPLETO', 'NOME COMPLETO DO RESPONSAVEL']),
           whatsapp: getValueByKeywords(item, ['WHATSAPP', 'TELEFONE', 'CELULAR', 'PHONE', 'WPP', 'WHATS']),
           status: status as any,
           produtoNome: getValueByKeywords(item, ['PRODUTO', 'DESCRICAO', 'DESC', 'ITEM']) || 'Camiseta Escolar',
           produtoId: getValueByKeywords(item, ['PRODUTO', 'ID PRODUTO', 'SKU']) || '',
           tamanho: getValueByKeywords(item, ['TAMANHO', 'TAM', 'SIZE']) || 'M',
           cor: getValueByKeywords(item, ['COR', 'COLOR']) || 'Preta',
-          quantidade: Number(getValueByKeywords(item, ['QUANTIDADE', 'QTD', 'AMOUNT']) || 1),
-          valorTotal: parseReal(getValueByKeywords(item, ['TOTAL PAGO', 'PAGO', 'VALOR PAGO', 'TOTAL', 'VALOR', 'PRECO', 'PRICE'])),
-          preco: parseReal(getValueByKeywords(item, ['VALOR UNITARIO', 'PRECO UNITARIO', 'PRECO', 'PRICE', 'UNITARIO'])),
+          quantidade: quantidade,
+          valorTotal: valorTotal,
+          preco: preco,
           custo: 0,
           codigo_barra: getValueByKeywords(item, ['CODIGO', 'BARRA', 'BARCODE', 'BC']) || '',
-          dataCriacao: getValueByKeywords(item, ['DATA', 'CARIMBO', 'CRIADO']) || new Date().toISOString()
+          dataCriacao: getValueByKeywords(item, ['DATA', 'CARIMBO', 'CRIADO', 'CARIMBO DE DATA/HORA']) || new Date().toISOString()
         } as Order;
       });
     } catch (error) {
@@ -203,17 +208,17 @@ export const apiSync = {
         const descricao = String(getValueByKeywords(item, ['DESCRICAO', 'DESCRICAO']) || '');
         const row_number = item.row_number || index + 1;
 
-        const valorLinha = parseReal(getValueByKeywords(item, ['TOTAL PAGO', 'PAGO', 'VALOR PAGO', 'TOTAL', 'VALOR']));
+        const valorLinha = parseReal(getValueByKeywords(item, ['TOTAL PAGO', 'PAGO', 'VALOR PAGO', 'TOTAL', 'VALOR', 'GASTO', 'CUSTO', 'SAIDA']));
         const valorPessoal = parseReal(getValueByKeywords(item, ['CUSTOS PESSOAIS', 'PESSOAL', 'GASTO PESSOAL']));
         const valorNegocio = valorPessoal > 0 ? 0 : valorLinha;
 
-        if (data || descricao) {
+        if (data || descricao || valorLinha > 0) {
           totalCustosCalc += valorLinha;
           totalNegocio += valorNegocio;
           totalPessoal += valorPessoal;
         }
 
-        const tv = parseReal(item['Total de Vendas'] || item['Total Vendas'] || 0);
+        const tv = parseReal(getValueByKeywords(item, ['TOTAL DE VENDAS', 'TOTAL VENDAS', 'VENDAS', 'ENTRADA']));
         if (tv > 0 && totalVendasCalc === 0) totalVendasCalc = tv;
 
         if (!data && !descricao) return null;
@@ -472,28 +477,31 @@ export const apiSync = {
       } else if (rawData && typeof rawData === 'object') {
         items = Object.values(rawData).find(val => Array.isArray(val)) as any[] || [rawData];
       }
-
       return items.map((item: any, index: number) => {
-        const baseDateStr = item.data || item.Data;
+        const baseDateStr = getValueByKeywords(item, ['DATA', 'CARIMBO', 'CRIADO']);
         const baseDate = parseBRDate(baseDateStr) || new Date();
         const forecastDate = new Date(baseDate);
         forecastDate.setDate(forecastDate.getDate() + 10);
-        const finalValue = parseReal(item['com desconto'] || item['previsao de recebimento'] || item.total || item['preço']);
+        
+        const precoVenda = parseReal(getValueByKeywords(item, ['VALOR UNITARIO', 'PRECO', 'PRICE', 'UNITARIO', 'VALOR UNITÁRIO']));
+        const qtdVenda = Number(getValueByKeywords(item, ['QUANTIDADE', 'QTD', 'AMOUNT']) || 1);
+        const totalVendaPlanilha = parseReal(getValueByKeywords(item, ['COM DESCONTO', 'PREVISAO DE RECEBIMENTO', 'TOTAL', 'TOTAL PAGO', 'VALOR PAGO', 'PAGO']));
+        const finalValue = totalVendaPlanilha > 0 ? totalVendaPlanilha : (precoVenda * qtdVenda);
 
         return {
-          id_pedido: item.ID || item.id || `venda-${index}`,
+          id_pedido: String(item.ID || item.id || item.row_number || `venda-${index}`),
           data: baseDate.toISOString(),
           dataCriacao: baseDate.toISOString(),
-          cliente: item.cliente || 'Venda Marketplace',
-          whatsapp: item.telefone || '',
+          cliente: String(getValueByKeywords(item, ['CLIENTE', 'NOME', 'RESPONSAVEL']) || 'Venda Marketplace'),
+          whatsapp: String(getValueByKeywords(item, ['TELEFONE', 'WHATSAPP', 'CELULAR']) || ''),
           status: OrderStatusValue.ENTREGUE,
-          produtoNome: item.produto || 'Produto',
-          produtoId: item.produto || '',
-          tamanho: item.taamnho || item.tamanho || '',
-          cor: item.cor || '',
-          quantidade: Number(item.quantidade) || 1,
+          produtoNome: String(getValueByKeywords(item, ['PRODUTO', 'DESCRICAO', 'DESC']) || 'Produto'),
+          produtoId: String(getValueByKeywords(item, ['PRODUTO', 'SKU', 'ID']) || ''),
+          tamanho: String(getValueByKeywords(item, ['TAMANHO', 'TAM', 'SIZE']) || 'M'),
+          cor: String(getValueByKeywords(item, ['COR', 'COLOR']) || ''),
+          quantidade: qtdVenda,
           valorTotal: finalValue,
-          preco: parseReal(item['preço']),
+          preco: precoVenda,
           custo: 15,
           lucro: finalValue - 15,
           codigo_barra: item.ID || item.codigo_barra || item.codigo_barras || '',

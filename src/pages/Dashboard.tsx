@@ -133,10 +133,13 @@ const Dashboard = () => {
     });
     if (vencendoHoje.length > 0) novosAlertas.push(`Você tem ${vencendoHoje.length} conta(s) a pagar vencendo hoje!`);
 
-    // Fallbacks Financeiros
+    // 4. Fallbacks Financeiros
     let totalCustosFinal = financeiro.totalCustos;
-    // 4. Prioridade Local (Mostrar apenas o valor dos pedidos no topo conforme pedido)
-    const totalVendasCalculado = totalVendas;
+    // Se não houver custos no financeiro, mas houver no caixa, tenta usar o maior
+    if (caixa.summary.saida > totalCustosFinal) totalCustosFinal = caixa.summary.saida;
+
+    // Se o financeiro.totalVendas (da planilha de resumo) for 0, usa o totalVendas calculado dos pedidos
+    const totalVendasCalculadoFinal = (financeiro.totalVendas > 0) ? financeiro.totalVendas : totalVendas;
     const saldoCaixaFinal = caixa.summary.saldo;
 
     setMetrics({
@@ -148,8 +151,8 @@ const Dashboard = () => {
       recebidos: orders.filter(o => String(o.status) === OrderStatus.RECEBIDO || String(o.status) === 'Pedido recebido').length,
       estoqueBaixo: stockData.filter(i => (i.estoque || 0) <= (i.estoqueMinimo || 5)).length,
       totalCustos: totalCustosFinal,
-      totalVendasFinanceiro: totalVendasCalculado,
-      lucroBruto: saldoCaixaFinal - totalCustosFinal,
+      totalVendasFinanceiro: totalVendasCalculadoFinal,
+      lucroBruto: totalVendasCalculadoFinal - totalCustosFinal, // Mais intuitivo: Vendas - Custos
       totalEstoque: stockData.reduce((acc, item) => acc + (item.estoque || 0), 0),
       totalValorPrevisto: stockData.reduce((acc, item) => {
         const preco = item.precoDesconto || item.preco || 35;
