@@ -401,7 +401,7 @@ const Estoque = () => {
         onClick={() => setShowCadastro(true)}
         style={{
           position: 'fixed',
-          bottom: '90px',
+          bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))',
           right: '1rem',
           width: '56px',
           height: '56px',

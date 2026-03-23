@@ -79,15 +79,22 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
   const abrirCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', aspectRatio: 3/4 }
+        video: {
+          facingMode: { ideal: 'environment' }
+          // Sem aspectRatio constraint — causa tela preta em muitos Android
+        }
       });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        // setTimeout garante que o DOM atualizou antes do play()
+        setTimeout(() => {
+          videoRef.current?.play().catch(console.error);
+        }, 100);
       }
       setCameraAtiva(true);
-    } catch {
+    } catch (e) {
+      console.error('Camera error:', e);
       setErro('Não foi possível acessar a câmera. Verifique as permissões.');
     }
   };
@@ -111,12 +118,14 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
   const abrirScanner = async (para: 'produto' | 'variacao') => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }
+        video: { facingMode: { ideal: 'environment' } }
       });
       streamRef.current = stream;
       if (scanVideoRef.current) {
         scanVideoRef.current.srcObject = stream;
-        scanVideoRef.current.play();
+        setTimeout(() => {
+          scanVideoRef.current?.play().catch(console.error);
+        }, 100);
       }
       setScannerAtivo(true);
 
