@@ -14,6 +14,8 @@ interface NovoProduto {
   preco: string;
   precoDesconto: string;
   custo: string;
+  cor: string;
+  tamanho: string;
   origem: string;
   categoria: string;
   descricao: string;
@@ -79,6 +81,7 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
   const [step, setStep] = useState<'foto' | 'info' | 'variacoes' | 'confirmar'>('foto');
   const [produto, setProduto] = useState<NovoProduto>({
     nome: '', preco: '', precoDesconto: '', custo: '',
+    cor: '', tamanho: 'M',
     origem: 'Físico', categoria: 'Camiseta', descricao: '',
     estoqueMinimo: '5', estoqueTotal: '1', fornecedor: '', imagem: '', variacoes: []
   });
@@ -307,6 +310,21 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
                   <label style={labelStyle}>Preço com Desconto</label>
                   <input style={inputStyle} type="number" placeholder="29.90" value={produto.precoDesconto}
                     onChange={e => setProduto(p => ({ ...p, precoDesconto: e.target.value }))} />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                <div>
+                  <label style={labelStyle}>Tamanho Principal</label>
+                  <select style={inputStyle} value={produto.tamanho}
+                    onChange={e => setProduto(p => ({ ...p, tamanho: e.target.value }))}>
+                    {TAMANHOS.map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Cor Principal</label>
+                  <input style={inputStyle} placeholder="Ex: preto, azul..." value={produto.cor}
+                    onChange={e => setProduto(p => ({ ...p, cor: e.target.value }))} />
                 </div>
               </div>
 

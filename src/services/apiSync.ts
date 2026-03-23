@@ -546,6 +546,8 @@ export const apiSync = {
     preco: string;
     precoDesconto: string;
     custo: string;
+    cor: string;
+    tamanho: string;
     origem: string;
     categoria: string;
     descricao: string;
@@ -582,8 +584,8 @@ export const apiSync = {
           'Código de barra': '',
           'Data': data,
           'Produto': produto.nome,
-          'Tamnho': '',
-          'Cor': '',
+          'Tamnho': produto.tamanho || '',
+          'Cor': produto.cor || '',
           'Estoque': produto.estoqueTotal ? Number(produto.estoqueTotal) : 0,
           'Preço': Number(produto.preco),
           'Valor com desconto': produto.precoDesconto ? Number(produto.precoDesconto) : '',
