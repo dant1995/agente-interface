@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { ImageEditor } from './ImageEditor';
 
 interface Variacao {
   id: string;
@@ -86,6 +87,7 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
   const [scanStatus, setScanStatus] = useState('');
+  const [editandoImagem, setEditandoImagem] = useState(false);
 
   const fotoInputRef = useRef<HTMLInputElement>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
@@ -152,8 +154,18 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
   };
 
   return (
+    <>
+    {/* Editor de imagem com IA */}
+    {editandoImagem && produto.imagem && (
+      <ImageEditor
+        imageSrc={produto.imagem}
+        onSave={(img) => { setProduto(p => ({ ...p, imagem: img })); setEditandoImagem(false); }}
+        onClose={() => setEditandoImagem(false)}
+      />
+    )}
+
     <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000,
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1100,
       display: 'flex', flexDirection: 'column', justifyContent: 'flex-end'
     }}>
       {/* Inputs nativos ocultos */}
@@ -232,6 +244,12 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
                   borderRadius: '8px', padding: '0.4rem 0.7rem',
                   fontSize: '0.75rem', cursor: 'pointer'
                 }}>🔄 Trocar</button>
+                <button onClick={() => setEditandoImagem(true)} style={{
+                  position: 'absolute', bottom: '10px', left: '10px',
+                  background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white',
+                  border: 'none', borderRadius: '8px', padding: '0.4rem 0.7rem',
+                  fontSize: '0.75rem', cursor: 'pointer', fontWeight: '700'
+                }}>✏️ Editar IA</button>
               </div>
             ) : (
               <button
@@ -524,5 +542,6 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
         )}
       </div>
     </div>
+    </>
   );
 };

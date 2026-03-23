@@ -412,7 +412,7 @@ const Estoque = () => {
           fontSize: '1.6rem',
           cursor: 'pointer',
           boxShadow: '0 4px 16px rgba(238,77,45,0.5)',
-          zIndex: 100,
+          zIndex: 1001,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
