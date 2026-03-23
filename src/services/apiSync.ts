@@ -571,7 +571,7 @@ export const apiSync = {
           'Preço': Number(produto.preco),
           'Valor com desconto': produto.precoDesconto ? Number(produto.precoDesconto) : '',
           'Origem': produto.origem,
-          // imagem base64 nao enviada ao Sheets (limite 50k chars por celula),
+          'foto_base64': produto.imagem || '', // Para WooCommerce (Filtrar no n8n antes do Sheets!)
           'Custo': produto.custo ? Number(produto.custo) : '',
           'Estoque Minimo': produto.estoqueMinimo ? Number(produto.estoqueMinimo) : 5,
           'Fornecedor': produto.fornecedor || '',
@@ -590,7 +590,7 @@ export const apiSync = {
           'Preço': Number(produto.preco),
           'Valor com desconto': produto.precoDesconto ? Number(produto.precoDesconto) : '',
           'Origem': produto.origem,
-          // imagem base64 nao enviada ao Sheets (limite 50k chars por celula),
+          'foto_base64': produto.imagem || '', // Para WooCommerce (Filtrar no n8n antes do Sheets!)
           'Custo': produto.custo ? Number(produto.custo) : '',
           'Estoque Minimo': produto.estoqueMinimo ? Number(produto.estoqueMinimo) : 5,
           'Fornecedor': produto.fornecedor || '',
