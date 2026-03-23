@@ -550,6 +550,7 @@ export const apiSync = {
     categoria: string;
     descricao: string;
     estoqueMinimo: string;
+    estoqueTotal: string;
     fornecedor: string;
     imagem: string;
     variacoes: Array<{ tamanho: string; cor: string; codigoBarra: string; quantidade: number }>;
@@ -583,7 +584,7 @@ export const apiSync = {
           'Produto': produto.nome,
           'Tamnho': '',
           'Cor': '',
-          'Estoque': 0,
+          'Estoque': produto.estoqueTotal ? Number(produto.estoqueTotal) : 0,
           'Preço': Number(produto.preco),
           'Valor com desconto': produto.precoDesconto ? Number(produto.precoDesconto) : '',
           'Origem': produto.origem,

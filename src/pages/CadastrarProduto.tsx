@@ -18,6 +18,7 @@ interface NovoProduto {
   categoria: string;
   descricao: string;
   estoqueMinimo: string;
+  estoqueTotal: string;
   fornecedor: string;
   imagem: string;
   variacoes: Variacao[];
@@ -79,7 +80,7 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
   const [produto, setProduto] = useState<NovoProduto>({
     nome: '', preco: '', precoDesconto: '', custo: '',
     origem: 'Físico', categoria: 'Camiseta', descricao: '',
-    estoqueMinimo: '5', fornecedor: '', imagem: '', variacoes: []
+    estoqueMinimo: '5', estoqueTotal: '1', fornecedor: '', imagem: '', variacoes: []
   });
   const [variacaoAtual, setVariacaoAtual] = useState<Variacao>({
     id: Date.now().toString(), tamanho: 'M', cor: '', codigoBarra: '', quantidade: 1
@@ -320,6 +321,21 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
                   <input style={inputStyle} type="number" placeholder="5" value={produto.estoqueMinimo}
                     onChange={e => setProduto(p => ({ ...p, estoqueMinimo: e.target.value }))} />
                 </div>
+              </div>
+
+              <div style={{ background: '#fff3f0', border: '1px solid #ffcfbc', borderRadius: '8px', padding: '0.6rem 0.8rem' }}>
+                <label style={{ ...labelStyle, color: '#EE4D2D' }}>📊 Quantidade em Estoque (atual)</label>
+                <input
+                  style={{ ...inputStyle, border: '1px solid #EE4D2D' }}
+                  type="number"
+                  min="0"
+                  placeholder="Ex: 10"
+                  value={produto.estoqueTotal}
+                  onChange={e => setProduto(p => ({ ...p, estoqueTotal: e.target.value }))}
+                />
+                <p style={{ fontSize: '0.7rem', color: '#999', marginTop: '0.3rem' }}>
+                  Quantidade disponível agora • Se usar variações abaixo, este campo é ignorado
+                </p>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
