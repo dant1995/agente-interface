@@ -22,10 +22,11 @@ const Etiquetas = () => {
 
   useEffect(() => {
     storage.getOrders().then(data => {
-      const emProducao = data.filter(o => 
-        o.status === OrderStatusValue.PRONTA
+      const pendentes = data.filter(o => 
+        o.status !== OrderStatusValue.PRONTA && 
+        o.status !== OrderStatusValue.ENTREGUE
       );
-      setOrders(emProducao);
+      setOrders(pendentes);
     });
 
     apiSync.fetchEstoque().then(data => {
