@@ -548,6 +548,7 @@ export const apiSync = {
     custo: string;
     cor: string;
     tamanho: string;
+    codigoBarra: string;
     origem: string;
     categoria: string;
     descricao: string;
@@ -581,7 +582,7 @@ export const apiSync = {
         }))
       : [{
           action: 'cadastrar_produto',
-          'Código de barra': '',
+          'Código de barra': produto.codigoBarra || '',
           'Data': data,
           'Produto': produto.nome,
           'Tamnho': produto.tamanho || '',

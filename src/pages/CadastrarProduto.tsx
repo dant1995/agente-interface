@@ -16,6 +16,7 @@ interface NovoProduto {
   custo: string;
   cor: string;
   tamanho: string;
+  codigoBarra: string;
   origem: string;
   categoria: string;
   descricao: string;
@@ -81,7 +82,7 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
   const [step, setStep] = useState<'foto' | 'info' | 'variacoes' | 'confirmar'>('foto');
   const [produto, setProduto] = useState<NovoProduto>({
     nome: '', preco: '', precoDesconto: '', custo: '',
-    cor: '', tamanho: 'M',
+    cor: '', tamanho: 'M', codigoBarra: '',
     origem: 'Físico', categoria: 'Camiseta', descricao: '',
     estoqueMinimo: '5', estoqueTotal: '1', fornecedor: '', imagem: '', variacoes: []
   });
@@ -113,6 +114,7 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
     const code = await detectBarcode(file);
     if (code) {
       setVariacaoAtual(v => ({ ...v, codigoBarra: code }));
+      setProduto(p => ({ ...p, codigoBarra: code }));
       setScanStatus('✅ Código lido: ' + code);
     } else {
       setScanStatus('⚠️ Não detectou. Digite o código manualmente.');
@@ -298,6 +300,26 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
                 <label style={labelStyle}>Nome do Produto *</label>
                 <input style={inputStyle} placeholder="Ex: Camiseta Algodão" value={produto.nome}
                   onChange={e => setProduto(p => ({ ...p, nome: e.target.value }))} />
+              </div>
+
+              <div>
+                <label style={labelStyle}>Código de Barras (Principal)</label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    style={{ ...inputStyle, flex: 1 }}
+                    placeholder="Digite ou fotografe o código"
+                    value={produto.codigoBarra}
+                    onChange={e => setProduto(p => ({ ...p, codigoBarra: e.target.value }))}
+                  />
+                  <button
+                    onClick={() => barcodeInputRef.current?.click()}
+                    style={{
+                      padding: '0.75rem', background: '#333', color: 'white',
+                      border: 'none', borderRadius: '8px', cursor: 'pointer',
+                      fontSize: '1.1rem', whiteSpace: 'nowrap'
+                    }}
+                  >📷</button>
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
