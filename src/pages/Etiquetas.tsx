@@ -27,7 +27,8 @@ const Etiquetas = () => {
         o.status === OrderStatusValue.ESTAMPA ||
         o.status === OrderStatusValue.COSTURA ||
         o.status === OrderStatusValue.REVISAO ||
-        o.status === OrderStatusValue.PRONTA
+        o.status === OrderStatusValue.PRONTA ||
+        o.status === OrderStatusValue.ENTREGUE
       );
       setOrders(emProducao);
     });
