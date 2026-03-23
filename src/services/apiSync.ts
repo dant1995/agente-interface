@@ -150,7 +150,9 @@ export const apiSync = {
         } else if (isTrue(item['Corte']) || isTrue(item['corte'])) {
           status = OrderStatusValue.CORTE;
         } else if (isTrue(item['Pago?'])) {
-          status = OrderStatusValue.CORTE; // Começa pelo corte se pago
+          // Mantém como RECEBIDO conforme solicitado pelo usuário,
+          // a menos que já tenha um status de produção marcado.
+          status = OrderStatusValue.RECEBIDO;
         }
 
         const preco = parseReal(getValueByKeywords(item, ['VALOR UNITARIO', 'PRECO UNITARIO', 'PRECO', 'PRICE', 'UNITARIO', 'VALOR UNITÁRIO']));
@@ -166,7 +168,7 @@ export const apiSync = {
           status: status as any,
           produtoNome: getValueByKeywords(item, ['PRODUTO', 'DESCRICAO', 'DESC', 'ITEM']) || 'Camiseta Escolar',
           produtoId: getValueByKeywords(item, ['PRODUTO', 'ID PRODUTO', 'SKU']) || '',
-          tamanho: getValueByKeywords(item, ['TAMANHO', 'TAM', 'SIZE']) || 'M',
+          tamanho: getValueByKeywords(item, ['TAMANHO', 'TAM', 'SIZE', 'TAMNHO']) || 'M',
           cor: getValueByKeywords(item, ['COR', 'COLOR']) || 'Preta',
           quantidade: quantidade,
           valorTotal: valorTotal,
