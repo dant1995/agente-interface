@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 
 interface Variacao {
   id: string;
@@ -31,6 +31,48 @@ const ORIGENS = ['Físico', 'Shopee', 'TikTok', 'Instagram', 'Outro'];
 const CATEGORIAS = ['Camiseta', 'Short', 'Regata', 'Polo', 'Kit', 'Acessório', 'Outro'];
 const TAMANHOS = ['PP', 'P', 'M', 'G', 'GG', 'XGG', '2', '4', '6', '8', '10', '12', '14', '60cm', '70cm', '80cm', '90cm', 'Único'];
 
+// Recorta imagem em proporção 3:4 usando canvas
+const cropTo3x4 = (file: File): Promise<string> =>
+  new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement('canvas');
+      // Calcula recorte 3:4 centralizado
+      const targetRatio = 3 / 4;
+      let srcX = 0, srcY = 0, srcW = img.width, srcH = img.height;
+      if (img.width / img.height > targetRatio) {
+        srcW = img.height * targetRatio;
+        srcX = (img.width - srcW) / 2;
+      } else {
+        srcH = img.width / targetRatio;
+        srcY = (img.height - srcH) / 2;
+      }
+      canvas.width = 600;
+      canvas.height = 800;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, 600, 800);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.src = url;
+  });
+
+// Tenta ler código de barras de uma imagem usando BarcodeDetector
+const detectBarcode = async (file: File): Promise<string | null> => {
+  if (!('BarcodeDetector' in window)) return null;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const detector = new (window as any).BarcodeDetector({
+      formats: ['ean_13', 'ean_8', 'code_128', 'qr_code', 'code_39', 'itf']
+    });
+    const codes = await detector.detect(bitmap);
+    return codes.length > 0 ? codes[0].rawValue : null;
+  } catch {
+    return null;
+  }
+};
+
 export const CadastrarProduto = ({ onClose, onSave }: Props) => {
   const [step, setStep] = useState<'foto' | 'info' | 'variacoes' | 'confirmar'>('foto');
   const [produto, setProduto] = useState<NovoProduto>({
@@ -41,114 +83,36 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
   const [variacaoAtual, setVariacaoAtual] = useState<Variacao>({
     id: Date.now().toString(), tamanho: 'M', cor: '', codigoBarra: '', quantidade: 1
   });
-  const [cameraAtiva, setCameraAtiva] = useState(false);
-  const [scannerAtivo, setScannerAtivo] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const scanVideoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const scanIntervalRef = useRef<any>(null);
+  const [scanStatus, setScanStatus] = useState('');
 
-  // Limpar câmera ao sair
-  useEffect(() => {
-    return () => {
-      stopCamera();
-      stopScanner();
-    };
-  }, []);
+  const fotoInputRef = useRef<HTMLInputElement>(null);
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
 
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    }
-    setCameraAtiva(false);
-  };
-
-  const stopScanner = () => {
-    if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    }
-    setScannerAtivo(false);
-  };
-
-  const abrirCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: 'environment' }
-          // Sem aspectRatio constraint — causa tela preta em muitos Android
-        }
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        // setTimeout garante que o DOM atualizou antes do play()
-        setTimeout(() => {
-          videoRef.current?.play().catch(console.error);
-        }, 100);
-      }
-      setCameraAtiva(true);
-    } catch (e) {
-      console.error('Camera error:', e);
-      setErro('Não foi possível acessar a câmera. Verifique as permissões.');
-    }
-  };
-
-  const capturarFoto = () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    // Forçar proporção 3:4
-    const size = Math.min(video.videoWidth, video.videoHeight * 3 / 4);
-    canvas.width = size;
-    canvas.height = size * 4 / 3;
-    const ctx = canvas.getContext('2d')!;
-    const xOffset = (video.videoWidth - size) / 2;
-    ctx.drawImage(video, xOffset, 0, size, size * 4 / 3, 0, 0, canvas.width, canvas.height);
-    const imagem = canvas.toDataURL('image/jpeg', 0.85);
+  // Ao selecionar foto, corta para 3:4
+  const handleFotoSelecionada = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const imagem = await cropTo3x4(file);
     setProduto(p => ({ ...p, imagem }));
-    stopCamera();
+    e.target.value = '';
   };
 
-  const abrirScanner = async (para: 'produto' | 'variacao') => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } }
-      });
-      streamRef.current = stream;
-      if (scanVideoRef.current) {
-        scanVideoRef.current.srcObject = stream;
-        setTimeout(() => {
-          scanVideoRef.current?.play().catch(console.error);
-        }, 100);
-      }
-      setScannerAtivo(true);
-
-      // Tenta usar BarcodeDetector nativo
-      if ('BarcodeDetector' in window) {
-        const detector = new (window as any).BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'qr_code', 'code_39'] });
-        scanIntervalRef.current = setInterval(async () => {
-          if (!scanVideoRef.current) return;
-          try {
-            const codes = await detector.detect(scanVideoRef.current);
-            if (codes.length > 0) {
-              const codigo = codes[0].rawValue;
-              if (para === 'variacao') {
-                setVariacaoAtual(v => ({ ...v, codigoBarra: codigo }));
-              }
-              stopScanner();
-            }
-          } catch { /* ignora */ }
-        }, 300);
-      }
-    } catch {
-      setErro('Câmera indisponível para scanner.');
+  // Ao fotografar código de barras
+  const handleBarcodeCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setScanStatus('🔍 Lendo código...');
+    const code = await detectBarcode(file);
+    if (code) {
+      setVariacaoAtual(v => ({ ...v, codigoBarra: code }));
+      setScanStatus('✅ Código lido: ' + code);
+    } else {
+      setScanStatus('⚠️ Não detectou. Digite o código manualmente.');
     }
+    setTimeout(() => setScanStatus(''), 3000);
+    e.target.value = '';
   };
 
   const adicionarVariacao = () => {
@@ -192,11 +156,29 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000,
       display: 'flex', flexDirection: 'column', justifyContent: 'flex-end'
     }}>
+      {/* Inputs nativos ocultos */}
+      <input
+        ref={fotoInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: 'none' }}
+        onChange={handleFotoSelecionada}
+      />
+      <input
+        ref={barcodeInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: 'none' }}
+        onChange={handleBarcodeCapture}
+      />
+
       <div style={{
         background: 'white', borderRadius: '20px 20px 0 0',
         maxHeight: '92vh', display: 'flex', flexDirection: 'column'
       }}>
-        {/* Header */}
+        {/* Header + Steps */}
         <div style={{
           padding: '1rem 1.2rem', borderBottom: '1px solid #f0f0f0',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0
@@ -226,68 +208,53 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
           </div>
         )}
 
-        {/* STEP 1 — FOTO */}
+        {/* ── STEP 1 — FOTO ── */}
         {step === 'foto' && (
           <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
             <p style={{ fontSize: '0.85rem', color: '#666', margin: '0 0 1rem' }}>
-              Tire uma foto do produto (formato 3:4)
+              Tire uma foto do produto — será recortada em 3:4 automaticamente
             </p>
 
-            {/* Preview da foto */}
             {produto.imagem ? (
               <div style={{ position: 'relative', marginBottom: '1rem' }}>
                 <img src={produto.imagem} alt="produto" style={{
-                  width: '100%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: '12px'
+                  width: '100%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: '12px',
+                  display: 'block'
                 }} />
                 <button onClick={() => setProduto(p => ({ ...p, imagem: '' }))} style={{
-                  position: 'absolute', top: '8px', right: '8px', background: 'rgba(0,0,0,0.5)',
-                  color: 'white', border: 'none', borderRadius: '50%', width: '30px', height: '30px',
-                  cursor: 'pointer', fontSize: '0.8rem'
+                  position: 'absolute', top: '8px', right: '8px', background: 'rgba(0,0,0,0.55)',
+                  color: 'white', border: 'none', borderRadius: '50%', width: '32px', height: '32px',
+                  cursor: 'pointer', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}>✕</button>
-              </div>
-            ) : cameraAtiva ? (
-              <div style={{ position: 'relative', marginBottom: '1rem' }}>
-                <video ref={videoRef} autoPlay playsInline muted style={{
-                  width: '100%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: '12px', background: '#000'
-                }} />
-                {/* Grade 3:4 visual */}
-                <div style={{
-                  position: 'absolute', inset: 0, border: '2px solid rgba(255,255,255,0.5)',
-                  borderRadius: '12px', pointerEvents: 'none'
-                }} />
-                <button onClick={capturarFoto} style={{
-                  position: 'absolute', bottom: '12px', left: '50%', transform: 'translateX(-50%)',
-                  background: 'white', border: '4px solid #EE4D2D', borderRadius: '50%',
-                  width: '60px', height: '60px', cursor: 'pointer', fontSize: '1.5rem'
-                }}>📷</button>
+                <button onClick={() => fotoInputRef.current?.click()} style={{
+                  position: 'absolute', bottom: '10px', right: '10px',
+                  background: 'rgba(0,0,0,0.55)', color: 'white', border: 'none',
+                  borderRadius: '8px', padding: '0.4rem 0.7rem',
+                  fontSize: '0.75rem', cursor: 'pointer'
+                }}>🔄 Trocar</button>
               </div>
             ) : (
-              <div style={{
-                width: '100%', aspectRatio: '3/4', background: '#f9f9f9', borderRadius: '12px',
-                border: '2px dashed #ddd', display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '1rem'
-              }}>
-                <span style={{ fontSize: '3rem' }}>📷</span>
-                <span style={{ color: '#999', fontSize: '0.85rem' }}>Toque para abrir câmera</span>
-                <span style={{ color: '#bbb', fontSize: '0.7rem' }}>Formato 3:4</span>
-              </div>
+              <button
+                onClick={() => fotoInputRef.current?.click()}
+                style={{
+                  width: '100%', aspectRatio: '3/4', background: '#f9f9f9', borderRadius: '12px',
+                  border: '2px dashed #EE4D2D', display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center', gap: '0.6rem',
+                  marginBottom: '1rem', cursor: 'pointer'
+                }}
+              >
+                <span style={{ fontSize: '3.5rem' }}>📷</span>
+                <span style={{ color: '#EE4D2D', fontWeight: '700', fontSize: '1rem' }}>Toque para fotografar</span>
+                <span style={{ color: '#bbb', fontSize: '0.75rem' }}>Recortado automaticamente em 3:4</span>
+              </button>
             )}
-            <canvas ref={canvasRef} style={{ display: 'none' }} />
 
             <div style={{ display: 'flex', gap: '0.8rem' }}>
-              {!cameraAtiva && !produto.imagem && (
-                <button onClick={abrirCamera} style={{
+              {!produto.imagem && (
+                <button onClick={() => fotoInputRef.current?.click()} style={{
                   flex: 1, padding: '0.9rem', background: '#EE4D2D', color: 'white',
                   border: 'none', borderRadius: '10px', fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer'
-                }}>
-                  📷 Abrir Câmera
-                </button>
-              )}
-              {cameraAtiva && (
-                <button onClick={stopCamera} style={{
-                  flex: 1, padding: '0.9rem', background: '#f5f5f5', color: '#333',
-                  border: 'none', borderRadius: '10px', fontSize: '0.9rem', cursor: 'pointer'
-                }}>Cancelar</button>
+                }}>📷 Abrir Câmera</button>
               )}
               <button onClick={() => setStep('info')} style={{
                 flex: 1, padding: '0.9rem',
@@ -301,11 +268,10 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
           </div>
         )}
 
-        {/* STEP 2 — INFORMAÇÕES */}
+        {/* ── STEP 2 — INFORMAÇÕES ── */}
         {step === 'info' && (
           <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
-
               <div>
                 <label style={labelStyle}>Nome do Produto *</label>
                 <input style={inputStyle} placeholder="Ex: Camiseta Algodão" value={produto.nome}
@@ -375,7 +341,10 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
                 flex: 1, padding: '0.9rem', background: '#f5f5f5', border: 'none',
                 borderRadius: '10px', fontSize: '0.9rem', cursor: 'pointer'
               }}>← Voltar</button>
-              <button onClick={() => { if (!produto.nome || !produto.preco) { setErro('Nome e preço são obrigatórios'); return; } setErro(''); setStep('variacoes'); }} style={{
+              <button onClick={() => {
+                if (!produto.nome || !produto.preco) { setErro('Nome e preço são obrigatórios'); return; }
+                setErro(''); setStep('variacoes');
+              }} style={{
                 flex: 2, padding: '0.9rem', background: '#EE4D2D', color: 'white',
                 border: 'none', borderRadius: '10px', fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer'
               }}>Próximo → Variações</button>
@@ -383,137 +352,113 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
           </div>
         )}
 
-        {/* STEP 3 — VARIAÇÕES */}
+        {/* ── STEP 3 — VARIAÇÕES ── */}
         {step === 'variacoes' && (
           <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
-            {!scannerAtivo ? (
-              <>
-                <p style={{ fontSize: '0.8rem', color: '#888', margin: '0 0 1rem' }}>
-                  Adicione as variações do produto (tamanho, cor e estoque)
-                </p>
+            <p style={{ fontSize: '0.8rem', color: '#888', margin: '0 0 1rem' }}>
+              Adicione as variações do produto (tamanho, cor e estoque)
+            </p>
 
-                {/* Form nova variação */}
-                <div style={{ background: '#fafafa', borderRadius: '10px', padding: '0.8rem', marginBottom: '1rem' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginBottom: '0.6rem' }}>
-                    <div>
-                      <label style={labelStyle}>Tamanho</label>
-                      <select style={inputStyle} value={variacaoAtual.tamanho}
-                        onChange={e => setVariacaoAtual(v => ({ ...v, tamanho: e.target.value }))}>
-                        {TAMANHOS.map(t => <option key={t}>{t}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Cor *</label>
-                      <input style={inputStyle} placeholder="Ex: preto, azul..." value={variacaoAtual.cor}
-                        onChange={e => setVariacaoAtual(v => ({ ...v, cor: e.target.value }))} />
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.6rem', marginBottom: '0.6rem' }}>
-                    <div>
-                      <label style={labelStyle}>Código de Barras</label>
-                      <input style={inputStyle} placeholder="Escanear ou digitar" value={variacaoAtual.codigoBarra}
-                        onChange={e => setVariacaoAtual(v => ({ ...v, codigoBarra: e.target.value }))} />
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                      <button onClick={() => abrirScanner('variacao')} style={{
-                        padding: '0.75rem', background: '#333', color: 'white', border: 'none',
-                        borderRadius: '8px', cursor: 'pointer', fontSize: '1.1rem'
-                      }}>📷</button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={labelStyle}>Quantidade em estoque</label>
-                    <input style={inputStyle} type="number" min="0" value={variacaoAtual.quantidade}
-                      onChange={e => setVariacaoAtual(v => ({ ...v, quantidade: Number(e.target.value) }))} />
-                  </div>
-
-                  <button onClick={adicionarVariacao} style={{
-                    width: '100%', marginTop: '0.8rem', padding: '0.75rem',
-                    background: '#EE4D2D', color: 'white', border: 'none',
-                    borderRadius: '8px', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer'
-                  }}>+ Adicionar Variação</button>
+            <div style={{ background: '#fafafa', borderRadius: '10px', padding: '0.8rem', marginBottom: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginBottom: '0.6rem' }}>
+                <div>
+                  <label style={labelStyle}>Tamanho</label>
+                  <select style={inputStyle} value={variacaoAtual.tamanho}
+                    onChange={e => setVariacaoAtual(v => ({ ...v, tamanho: e.target.value }))}>
+                    {TAMANHOS.map(t => <option key={t}>{t}</option>)}
+                  </select>
                 </div>
-
-                {/* Lista de variações */}
-                {produto.variacoes.length > 0 && (
-                  <div style={{ marginBottom: '1rem' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: '0.5rem', fontWeight: '600' }}>
-                      VARIAÇÕES ADICIONADAS ({produto.variacoes.length})
-                    </div>
-                    {produto.variacoes.map(v => (
-                      <div key={v.id} style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        padding: '0.6rem 0.8rem', background: 'white', borderRadius: '8px',
-                        border: '1px solid #eee', marginBottom: '0.4rem'
-                      }}>
-                        <div>
-                          <span style={{ fontWeight: '600', fontSize: '0.85rem' }}>{v.tamanho} / {v.cor}</span>
-                          <span style={{ color: '#999', fontSize: '0.75rem', marginLeft: '0.5rem' }}>
-                            {v.quantidade} un.
-                          </span>
-                          {v.codigoBarra && (
-                            <div style={{ fontSize: '0.65rem', color: '#EE4D2D', fontFamily: 'monospace' }}>
-                              [{v.codigoBarra}]
-                            </div>
-                          )}
-                        </div>
-                        <button onClick={() => removerVariacao(v.id)} style={{
-                          background: 'none', border: 'none', color: '#ccc', cursor: 'pointer', fontSize: '1rem'
-                        }}>✕</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', gap: '0.8rem' }}>
-                  <button onClick={() => setStep('info')} style={{
-                    flex: 1, padding: '0.9rem', background: '#f5f5f5', border: 'none',
-                    borderRadius: '10px', fontSize: '0.9rem', cursor: 'pointer'
-                  }}>← Voltar</button>
-                  <button onClick={() => setStep('confirmar')} style={{
-                    flex: 2, padding: '0.9rem', background: '#EE4D2D', color: 'white',
-                    border: 'none', borderRadius: '10px', fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer'
-                  }}>
-                    {produto.variacoes.length === 0 ? 'Pular →' : `Próximo → (${produto.variacoes.length} var.)`}
-                  </button>
-                </div>
-              </>
-            ) : (
-              /* Scanner de código de barras */
-              <div>
-                <p style={{ textAlign: 'center', color: '#666', fontSize: '0.85rem', margin: '0 0 0.8rem' }}>
-                  Aponte para o código de barras
-                </p>
-                <video ref={scanVideoRef} autoPlay playsInline muted style={{
-                  width: '100%', borderRadius: '12px', background: '#000', maxHeight: '300px', objectFit: 'cover'
-                }} />
-                <div style={{ textAlign: 'center', padding: '0.5rem', color: '#999', fontSize: '0.75rem' }}>
-                  📡 Detectando código...
-                </div>
-                <button onClick={stopScanner} style={{
-                  width: '100%', marginTop: '0.5rem', padding: '0.9rem', background: '#f5f5f5',
-                  border: 'none', borderRadius: '10px', fontSize: '0.9rem', cursor: 'pointer'
-                }}>Cancelar Scanner</button>
-                <div style={{ marginTop: '0.8rem' }}>
-                  <label style={labelStyle}>Ou digite o código manualmente:</label>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input style={{ ...inputStyle, flex: 1 }} placeholder="Código de barras"
-                      value={variacaoAtual.codigoBarra}
-                      onChange={e => setVariacaoAtual(v => ({ ...v, codigoBarra: e.target.value }))} />
-                    <button onClick={stopScanner} style={{
-                      padding: '0.75rem 1rem', background: '#EE4D2D', color: 'white',
-                      border: 'none', borderRadius: '8px', cursor: 'pointer'
-                    }}>OK</button>
-                  </div>
+                <div>
+                  <label style={labelStyle}>Cor *</label>
+                  <input style={inputStyle} placeholder="Ex: preto, azul..." value={variacaoAtual.cor}
+                    onChange={e => setVariacaoAtual(v => ({ ...v, cor: e.target.value }))} />
                 </div>
               </div>
+
+              {/* Código de barras com captura nativa */}
+              <div style={{ marginBottom: '0.6rem' }}>
+                <label style={labelStyle}>Código de Barras</label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    style={{ ...inputStyle, flex: 1 }}
+                    placeholder="Digite ou fotografe o código"
+                    value={variacaoAtual.codigoBarra}
+                    onChange={e => setVariacaoAtual(v => ({ ...v, codigoBarra: e.target.value }))}
+                  />
+                  <button
+                    onClick={() => barcodeInputRef.current?.click()}
+                    style={{
+                      padding: '0.75rem', background: '#333', color: 'white',
+                      border: 'none', borderRadius: '8px', cursor: 'pointer',
+                      fontSize: '1.1rem', whiteSpace: 'nowrap'
+                    }}
+                    title="Fotografar código de barras"
+                  >📷</button>
+                </div>
+                {scanStatus && (
+                  <div style={{ fontSize: '0.75rem', marginTop: '0.3rem', color: scanStatus.startsWith('✅') ? '#2ecc71' : '#888' }}>
+                    {scanStatus}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label style={labelStyle}>Quantidade em estoque</label>
+                <input style={inputStyle} type="number" min="0" value={variacaoAtual.quantidade}
+                  onChange={e => setVariacaoAtual(v => ({ ...v, quantidade: Number(e.target.value) }))} />
+              </div>
+
+              <button onClick={adicionarVariacao} style={{
+                width: '100%', marginTop: '0.8rem', padding: '0.75rem',
+                background: '#EE4D2D', color: 'white', border: 'none',
+                borderRadius: '8px', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer'
+              }}>+ Adicionar Variação</button>
+            </div>
+
+            {produto.variacoes.length > 0 && (
+              <div style={{ marginBottom: '1rem' }}>
+                <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: '0.5rem', fontWeight: '600' }}>
+                  VARIAÇÕES ({produto.variacoes.length})
+                </div>
+                {produto.variacoes.map(v => (
+                  <div key={v.id} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '0.6rem 0.8rem', background: 'white', borderRadius: '8px',
+                    border: '1px solid #eee', marginBottom: '0.4rem'
+                  }}>
+                    <div>
+                      <span style={{ fontWeight: '600', fontSize: '0.85rem' }}>{v.tamanho} / {v.cor}</span>
+                      <span style={{ color: '#999', fontSize: '0.75rem', marginLeft: '0.5rem' }}>{v.quantidade} un.</span>
+                      {v.codigoBarra && (
+                        <div style={{ fontSize: '0.65rem', color: '#EE4D2D', fontFamily: 'monospace' }}>
+                          [{v.codigoBarra}]
+                        </div>
+                      )}
+                    </div>
+                    <button onClick={() => removerVariacao(v.id)} style={{
+                      background: 'none', border: 'none', color: '#ccc', cursor: 'pointer', fontSize: '1rem'
+                    }}>✕</button>
+                  </div>
+                ))}
+              </div>
             )}
+
+            <div style={{ display: 'flex', gap: '0.8rem' }}>
+              <button onClick={() => setStep('info')} style={{
+                flex: 1, padding: '0.9rem', background: '#f5f5f5', border: 'none',
+                borderRadius: '10px', fontSize: '0.9rem', cursor: 'pointer'
+              }}>← Voltar</button>
+              <button onClick={() => setStep('confirmar')} style={{
+                flex: 2, padding: '0.9rem', background: '#EE4D2D', color: 'white',
+                border: 'none', borderRadius: '10px', fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer'
+              }}>
+                {produto.variacoes.length === 0 ? 'Pular →' : `Próximo → (${produto.variacoes.length} var.)`}
+              </button>
+            </div>
           </div>
         )}
 
-        {/* STEP 4 — CONFIRMAR */}
+        {/* ── STEP 4 — CONFIRMAR ── */}
         {step === 'confirmar' && (
           <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
@@ -526,14 +471,13 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
                 <div style={{ fontSize: '1rem', fontWeight: '700', marginBottom: '0.3rem' }}>{produto.nome}</div>
                 <div style={{ fontSize: '0.85rem', color: '#EE4D2D', fontWeight: '600' }}>
                   R$ {Number(produto.preco).toFixed(2)}
-                  {produto.precoDesconto && <span style={{ textDecoration: 'line-through', color: '#999', marginLeft: '0.5rem', fontSize: '0.75rem' }}>R$ {Number(produto.precoDesconto).toFixed(2)}</span>}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: '#888', marginTop: '0.2rem' }}>
                   {produto.categoria} · {produto.origem}
                 </div>
                 {produto.custo && (
                   <div style={{ fontSize: '0.75rem', color: '#2ecc71', marginTop: '0.2rem' }}>
-                    Lucro: R$ {(Number(produto.preco) - Number(produto.custo)).toFixed(2)} por unidade
+                    Lucro: R$ {(Number(produto.preco) - Number(produto.custo)).toFixed(2)} / un.
                   </div>
                 )}
               </div>
@@ -558,7 +502,7 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
                 📤 EXPORTAÇÃO AUTOMÁTICA
               </div>
               <div style={{ fontSize: '0.8rem', color: '#666' }}>
-                Ao clicar em Concluir, o produto será enviado automaticamente para o Google Sheets.
+                Ao clicar em Concluir, o produto será enviado para o Google Sheets.
               </div>
             </div>
 
