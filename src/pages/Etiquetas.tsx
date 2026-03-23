@@ -23,12 +23,7 @@ const Etiquetas = () => {
   useEffect(() => {
     storage.getOrders().then(data => {
       const emProducao = data.filter(o => 
-        o.status === OrderStatusValue.CORTE ||
-        o.status === OrderStatusValue.ESTAMPA ||
-        o.status === OrderStatusValue.COSTURA ||
-        o.status === OrderStatusValue.REVISAO ||
-        o.status === OrderStatusValue.PRONTA ||
-        o.status === OrderStatusValue.ENTREGUE
+        o.status === OrderStatusValue.PRONTA
       );
       setOrders(emProducao);
     });

@@ -137,10 +137,10 @@ export const apiSync = {
       }).map((item, index) => {
         let status: any = OrderStatusValue.RECEBIDO;
 
-        if (isTrue(item['Entregue?']) || isTrue(item['concluido'])) {
-          status = OrderStatusValue.ENTREGUE;
-        } else if (isTrue(item['camisetas prontas']) || isTrue(item['Pronta'])) {
+        if (isTrue(item['camisetas prontas']) || isTrue(item['Pronta'])) {
           status = OrderStatusValue.PRONTA;
+        } else if (isTrue(item['Entregue?']) || isTrue(item['concluido'])) {
+          status = OrderStatusValue.ENTREGUE;
         } else if (isTrue(item['Revisão']) || isTrue(item['revisao'])) {
           status = OrderStatusValue.REVISAO;
         } else if (isTrue(item['Costura']) || isTrue(item['costura'])) {
