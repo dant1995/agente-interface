@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import type { StockItem } from '../types';
 import { storage } from '../services/storage';
 import { apiSync } from '../services/apiSync';
+import { CadastrarProduto } from './CadastrarProduto';
 
 const Estoque = () => {
   const [items, setItems] = useState<StockItem[]>([]);
@@ -9,6 +10,8 @@ const Estoque = () => {
   const [syncing, setSyncing] = useState(false);
   const [activeTab, setActiveTab] = useState('Ativo');
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
+  const [showCadastro, setShowCadastro] = useState(false);
+  const [salvouProduto, setSalvouProduto] = useState('');
 
   useEffect(() => {
     loadStock();
@@ -31,6 +34,14 @@ const Estoque = () => {
       console.error('Erro ao sincronizar estoque:', e);
     }
     setSyncing(false);
+  };
+
+  const handleSalvarProduto = async (produto: any) => {
+    await apiSync.cadastrarProduto(produto);
+    setSalvouProduto(produto.nome);
+    setTimeout(() => setSalvouProduto(''), 4000);
+    // Recarrega estoque após cadastro
+    setTimeout(() => handleSync(), 1500);
   };
 
   const toggleGroup = (produto: string) => {
@@ -108,6 +119,26 @@ const Estoque = () => {
 
   return (
     <div className="page-content" style={{ background: '#f5f5f5', minHeight: '100vh', padding: '0', paddingBottom: '100px' }}>
+
+      {/* Modal de Cadastro */}
+      {showCadastro && (
+        <CadastrarProduto
+          onClose={() => setShowCadastro(false)}
+          onSave={handleSalvarProduto}
+        />
+      )}
+
+      {/* Toast de sucesso */}
+      {salvouProduto && (
+        <div style={{
+          position: 'fixed', top: '1rem', left: '50%', transform: 'translateX(-50%)',
+          background: '#2ecc71', color: 'white', padding: '0.7rem 1.4rem',
+          borderRadius: '20px', zIndex: 2000, fontSize: '0.85rem', fontWeight: '600',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.2)', whiteSpace: 'nowrap'
+        }}>
+          ✅ {salvouProduto} exportado para a planilha!
+        </div>
+      )}
       
       {/* Header Shopee */}
       <div style={{
@@ -364,6 +395,35 @@ const Estoque = () => {
           ))
         )}
       </div>
+
+      {/* FAB — Botão Cadastrar Produto */}
+      <button
+        onClick={() => setShowCadastro(true)}
+        style={{
+          position: 'fixed',
+          bottom: '90px',
+          right: '1rem',
+          width: '56px',
+          height: '56px',
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, #EE4D2D 0%, #ff7337 100%)',
+          color: 'white',
+          border: 'none',
+          fontSize: '1.6rem',
+          cursor: 'pointer',
+          boxShadow: '0 4px 16px rgba(238,77,45,0.5)',
+          zIndex: 100,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'transform 0.15s'
+        }}
+        onMouseDown={e => (e.currentTarget.style.transform = 'scale(0.92)')}
+        onMouseUp={e => (e.currentTarget.style.transform = 'scale(1)')}
+        title="Cadastrar produto"
+      >
+        +
+      </button>
     </div>
   );
 };

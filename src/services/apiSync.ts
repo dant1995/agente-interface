@@ -539,5 +539,63 @@ export const apiSync = {
       novo_total: novoTotal,
       timestamp: new Date().toISOString()
     });
+  },
+
+  cadastrarProduto: async (produto: {
+    nome: string;
+    preco: string;
+    precoDesconto: string;
+    custo: string;
+    origem: string;
+    categoria: string;
+    descricao: string;
+    estoqueMinimo: string;
+    fornecedor: string;
+    imagem: string;
+    variacoes: Array<{ tamanho: string; cor: string; codigoBarra: string; quantidade: number }>;
+  }) => {
+    const data = new Date().toLocaleDateString('pt-BR');
+    // Envia uma linha por variação (mesma estrutura da planilha)
+    const linhas = produto.variacoes.length > 0
+      ? produto.variacoes.map(v => ({
+          action: 'cadastrar_produto',
+          'Código de barra': v.codigoBarra || '',
+          'Data': data,
+          'Produto': produto.nome,
+          'Tamnho': v.tamanho,
+          'Cor': v.cor,
+          'Estoque': v.quantidade,
+          'Preço': Number(produto.preco),
+          'Valor com desconto': produto.precoDesconto ? Number(produto.precoDesconto) : '',
+          'Origem': produto.origem,
+          'url imagem': produto.imagem || '',
+          'Custo': produto.custo ? Number(produto.custo) : '',
+          'Estoque Minimo': produto.estoqueMinimo ? Number(produto.estoqueMinimo) : 5,
+          'Fornecedor': produto.fornecedor || '',
+          'Categoria': produto.categoria || '',
+          'Descricao': produto.descricao || '',
+          timestamp: new Date().toISOString()
+        }))
+      : [{
+          action: 'cadastrar_produto',
+          'Código de barra': '',
+          'Data': data,
+          'Produto': produto.nome,
+          'Tamnho': '',
+          'Cor': '',
+          'Estoque': 0,
+          'Preço': Number(produto.preco),
+          'Valor com desconto': produto.precoDesconto ? Number(produto.precoDesconto) : '',
+          'Origem': produto.origem,
+          'url imagem': produto.imagem || '',
+          'Custo': produto.custo ? Number(produto.custo) : '',
+          'Estoque Minimo': produto.estoqueMinimo ? Number(produto.estoqueMinimo) : 5,
+          'Fornecedor': produto.fornecedor || '',
+          'Categoria': produto.categoria || '',
+          'Descricao': produto.descricao || '',
+          timestamp: new Date().toISOString()
+        }];
+
+    return sendWebhook(`${BASE_URL}/webhook/estoque`, { linhas });
   }
 };
