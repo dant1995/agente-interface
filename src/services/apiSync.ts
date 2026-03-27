@@ -10,7 +10,8 @@ const N8N_WEBHOOK_URLS = {
   NEW_SALE: `${BASE_URL}/webhook/venda`,
   NEW_CONTAS: `${BASE_URL}/webhook/contas`,
   GASTOS: `${BASE_URL}/webhook/gastos`,
-  CAIXA: `${BASE_URL}/webhook/caixa`
+  CAIXA: `${BASE_URL}/webhook/caixa`,
+  STRATEGY: `${BASE_URL}/webhook/analise_estrategica`
 };
 
 
@@ -137,7 +138,8 @@ export const apiSync = {
       }).map((item, index) => {
         let status: any = OrderStatusValue.RECEBIDO;
 
-        if (isTrue(item['camisetas prontas']) || isTrue(item['Pronta'])) {
+        const hasPronta = isTrue(item['camisetas prontas']) || isTrue(item['Pronta']);
+        if (hasPronta) {
           status = OrderStatusValue.PRONTA;
         } else if (isTrue(item['Entregue?']) || isTrue(item['concluido'])) {
           status = OrderStatusValue.ENTREGUE;
@@ -328,6 +330,17 @@ export const apiSync = {
     }
   },
 
+  fetchStrategy: async (): Promise<any> => {
+    try {
+      const response = await fetch(N8N_WEBHOOK_URLS.STRATEGY);
+      if (!response.ok) throw new Error('Falha ao buscar estratégia da IA');
+      return await response.json();
+    } catch (e) {
+      console.error('Erro ao buscar estratégia:', e);
+      return null;
+    }
+  },
+
   fetchEstoque: async (force = false): Promise<StockItem[]> => {
     if (!force && !canSync('estoque', 1000)) return [];
     try {
@@ -362,6 +375,8 @@ export const apiSync = {
           precoDesconto: Number(item['Valor com desconto']) || undefined,
           origem: item['Origem'] || '',
           codigoBarra: item['Codigo de barra'] || item['codigo_barra'] || '',
+          // Tenta pegar de qualquer coluna de imagem comum
+          imagem: item['foto_base64'] || item['imagem'] || item['Foto'] || item['url imagem'] || item['URL Imagem'] || '',
         }));
     } catch (error) {
       console.error('Erro buscando estoque:', error);
@@ -574,7 +589,8 @@ export const apiSync = {
           'Preço': Number(produto.preco),
           'Valor com desconto': produto.precoDesconto ? Number(produto.precoDesconto) : '',
           'Origem': produto.origem,
-          'foto_base64': produto.imagem || '', // Para WooCommerce (Filtrar no n8n antes do Sheets!)
+          'foto_base64': (v as any).imagem || produto.imagem || '', // Prioriza a foto da variação para o WooCommerce
+          'url imagem': (v as any).imagem || produto.imagem || '',  // Para a planilha do Google Sheets
           'Custo': produto.custo ? Number(produto.custo) : '',
           'Estoque Minimo': produto.estoqueMinimo ? Number(produto.estoqueMinimo) : 5,
           'Fornecedor': produto.fornecedor || '',

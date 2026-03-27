@@ -21,6 +21,7 @@ import Gastos from './pages/Gastos';
 import Licitacoes from './pages/Licitacoes';
 import LicitacaoNova from './pages/LicitacaoNova';
 import LicitacaoDetalhe from './pages/LicitacaoDetalhe';
+import Tarefas from './pages/Tarefas';
 
 function App() {
   const [unlocked, setUnlocked] = useState(authService.isUnlocked());
@@ -50,6 +51,7 @@ function App() {
           <Route path="/licitacoes" element={<Licitacoes />} />
           <Route path="/licitacoes/nova" element={<LicitacaoNova />} />
           <Route path="/licitacoes/:id" element={<LicitacaoDetalhe />} />
+          <Route path="/tarefas" element={<Tarefas />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <BottomNav />

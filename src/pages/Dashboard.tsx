@@ -26,6 +26,7 @@ const Dashboard = () => {
     proximaPrevisao: '',
     previsao30Dias: 0,
     alertas: [] as string[],
+    estrategia: null as any,
   });
 
 
@@ -143,6 +144,14 @@ const Dashboard = () => {
 
     const saldoCaixaFinal = caixa.summary.saldo;
 
+    // 5. Buscar Estratégia da IA (Gerente Geral)
+    let iaStrategy = null;
+    try {
+      iaStrategy = await apiSync.fetchStrategy();
+    } catch (e) {
+      console.warn('Não foi possível buscar estratégia da IA:', e);
+    }
+
     setMetrics({
       totalVendas: totalPedidosAtivosSoma,
       totalPedidos: orders.length,
@@ -164,6 +173,7 @@ const Dashboard = () => {
       proximaPrevisao: proximaData ? (proximaData as Date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '',
       previsao30Dias,
       alertas: novosAlertas,
+      estrategia: iaStrategy,
     });
 
     setLastSync(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
@@ -196,6 +206,44 @@ const Dashboard = () => {
 
   return (
     <div style={{ background: '#f5f5f5', minHeight: '100vh', paddingBottom: '80px' }}>
+      {/* Insight da IA - Gerente Geral */}
+      {metrics.estrategia && (
+        <div style={{
+          background: 'white',
+          margin: '0.8rem 0.8rem 0',
+          borderRadius: '12px',
+          padding: '1rem',
+          boxShadow: '0 4px 12px rgba(99, 102, 241, 0.12)',
+          borderLeft: '4px solid #6366f1',
+          position: 'relative',
+          zIndex: 10
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              🤖 Insight do Gerente IA
+            </span>
+            <span style={{ 
+              fontSize: '0.7rem', 
+              background: '#e0e7ff', 
+              color: '#4338ca', 
+              padding: '2px 8px', 
+              borderRadius: '20px', 
+              fontWeight: '600' 
+            }}>
+              {metrics.estrategia.nivel_atual || 'Estabilidade'}
+            </span>
+          </div>
+          <div style={{ fontSize: '0.85rem', color: '#1e293b', lineHeight: '1.5', fontWeight: '500' }}>
+            {metrics.estrategia.resumo_dono || metrics.estrategia.resumo}
+          </div>
+          {metrics.estrategia.plano_semana?.foco_principal && (
+            <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#64748b', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+              <span style={{ color: '#ef4444' }}>🎯</span> 
+              <b>Foco:</b> {metrics.estrategia.plano_semana.foco_principal}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Header com total de vendas */}
       <div style={{

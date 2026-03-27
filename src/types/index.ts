@@ -9,6 +9,7 @@ export interface Product {
   lucro: number;
   estoque: number;
   codigo_barra: string;
+  imagem?: string;
 }
 
 // Order Status Enum pattern without using 'enum' keyword to pass erasableSyntaxOnly
@@ -118,6 +119,7 @@ export interface StockItem {
   estoqueMinimo?: number;
   codigoBarra?: string;
   localizacao?: string;
+  imagem?: string;
 }
 // Fabricacao Item Interface (consolidado da planilha)
 export interface FabricacaoItem {

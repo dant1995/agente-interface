@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, FileText, Factory, Package, ShoppingBag, Tag } from 'lucide-react';
+import { LayoutDashboard, FileText, Factory, Package, ShoppingBag, Tag, CheckSquare } from 'lucide-react';
 
 const BottomNav = () => {
   return (
@@ -27,6 +27,10 @@ const BottomNav = () => {
       <NavLink to="/etiquetas" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
         <Tag size={20} />
         <span>Etiquetas</span>
+      </NavLink>
+      <NavLink to="/tarefas" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+        <CheckSquare size={20} />
+        <span>Tarefas</span>
       </NavLink>
       {/* Note: Produtos can be nested under Estoque or accessed via Settings. We'll leave it out of standard bottom nav to save space. */}
     </nav>

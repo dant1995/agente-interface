@@ -7,6 +7,7 @@ interface Variacao {
   cor: string;
   codigoBarra: string;
   quantidade: number;
+  imagem?: string;
 }
 
 interface NovoProduto {
@@ -87,7 +88,7 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
     estoqueMinimo: '5', estoqueTotal: '1', fornecedor: '', imagem: '', variacoes: []
   });
   const [variacaoAtual, setVariacaoAtual] = useState<Variacao>({
-    id: Date.now().toString(), tamanho: 'M', cor: '', codigoBarra: '', quantidade: 1
+    id: Date.now().toString(), tamanho: 'M', cor: '', codigoBarra: '', quantidade: 1, imagem: ''
   });
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
@@ -95,6 +96,7 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
   const [editandoImagem, setEditandoImagem] = useState(false);
 
   const fotoInputRef = useRef<HTMLInputElement>(null);
+  const fotoVariacaoInputRef = useRef<HTMLInputElement>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   // Ao selecionar foto, corta para 3:4
@@ -103,6 +105,14 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
     if (!file) return;
     const imagem = await cropTo3x4(file);
     setProduto(p => ({ ...p, imagem }));
+    e.target.value = '';
+  };
+
+  const handleFotoVariacaoSelecionada = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const imagem = await cropTo3x4(file);
+    setVariacaoAtual(v => ({ ...v, imagem }));
     e.target.value = '';
   };
 
@@ -129,7 +139,7 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
       ...p,
       variacoes: [...p.variacoes, { ...variacaoAtual, id: Date.now().toString() }]
     }));
-    setVariacaoAtual({ id: Date.now().toString(), tamanho: 'M', cor: '', codigoBarra: '', quantidade: 1 });
+    setVariacaoAtual({ id: Date.now().toString(), tamanho: 'M', cor: '', codigoBarra: '', quantidade: 1, imagem: '' });
     setErro('');
   };
 
@@ -182,6 +192,14 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
         capture="environment"
         style={{ display: 'none' }}
         onChange={handleFotoSelecionada}
+      />
+      <input
+        ref={fotoVariacaoInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: 'none' }}
+        onChange={handleFotoVariacaoSelecionada}
       />
       <input
         ref={barcodeInputRef}
@@ -482,6 +500,49 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
                   onChange={e => setVariacaoAtual(v => ({ ...v, quantidade: Number(e.target.value) }))} />
               </div>
 
+              {/* Foto da Variação */}
+              <div style={{ marginTop: '0.8rem' }}>
+                <label style={labelStyle}>Foto da Variação (opcional)</label>
+                <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+                  {variacaoAtual.imagem ? (
+                    <div style={{ position: 'relative' }}>
+                      <img src={variacaoAtual.imagem} alt="Variação" style={{ width: '60px', height: '80px', borderRadius: '6px', objectFit: 'cover' }} />
+                      <button 
+                        onClick={() => setVariacaoAtual(v => ({ ...v, imagem: '' }))}
+                        style={{
+                          position: 'absolute', top: '-5px', right: '-5px', background: '#EE4D2D',
+                          color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px',
+                          fontSize: '10px', cursor: 'pointer'
+                        }}
+                      >✕</button>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => fotoVariacaoInputRef.current?.click()}
+                      style={{
+                        width: '60px', height: '80px', background: '#f0f0f0', borderRadius: '6px',
+                        border: '1px dashed #ccc', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '1.5rem', cursor: 'pointer', color: '#888'
+                      }}
+                    >📷</button>
+                  )}
+                  <div style={{ flex: 1 }}>
+                    <button 
+                      onClick={() => fotoVariacaoInputRef.current?.click()}
+                      style={{
+                        width: '100%', padding: '0.6rem', background: 'white', border: '1px solid #ddd',
+                        borderRadius: '6px', fontSize: '0.8rem', cursor: 'pointer'
+                      }}
+                    >
+                      {variacaoAtual.imagem ? '🔄 Trocar Foto' : '📷 Tirar Foto desta Variação'}
+                    </button>
+                    <p style={{ fontSize: '0.65rem', color: '#999', marginTop: '0.3rem' }}>
+                      Use se esta cor/tamanho for diferente da foto principal
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <button onClick={adicionarVariacao} style={{
                 width: '100%', marginTop: '0.8rem', padding: '0.75rem',
                 background: '#EE4D2D', color: 'white', border: 'none',
@@ -503,11 +564,16 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
                     <div>
                       <span style={{ fontWeight: '600', fontSize: '0.85rem' }}>{v.tamanho} / {v.cor}</span>
                       <span style={{ color: '#999', fontSize: '0.75rem', marginLeft: '0.5rem' }}>{v.quantidade} un.</span>
-                      {v.codigoBarra && (
-                        <div style={{ fontSize: '0.65rem', color: '#EE4D2D', fontFamily: 'monospace' }}>
-                          [{v.codigoBarra}]
-                        </div>
-                      )}
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.2rem' }}>
+                        {v.imagem && (
+                          <img src={v.imagem} alt="mini" style={{ width: '24px', height: '32px', borderRadius: '3px', objectFit: 'cover' }} />
+                        )}
+                        {v.codigoBarra && (
+                          <div style={{ fontSize: '0.65rem', color: '#EE4D2D', fontFamily: 'monospace' }}>
+                            [{v.codigoBarra}]
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <button onClick={() => removerVariacao(v.id)} style={{
                       background: 'none', border: 'none', color: '#ccc', cursor: 'pointer', fontSize: '1rem'
@@ -563,8 +629,13 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
                   {produto.variacoes.length} VARIAÇÕES · {produto.variacoes.reduce((a, v) => a + v.quantidade, 0)} un. total
                 </div>
                 {produto.variacoes.map(v => (
-                  <div key={v.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', padding: '0.2rem 0' }}>
-                    <span>{v.tamanho} / {v.cor}</span>
+                  <div key={v.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', padding: '0.4rem 0', borderBottom: '1px solid #f0f0f0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      {v.imagem && (
+                        <img src={v.imagem} alt="mini" style={{ width: '20px', height: '26px', borderRadius: '3px', objectFit: 'cover' }} />
+                      )}
+                      <span>{v.tamanho} / {v.cor}</span>
+                    </div>
                     <span style={{ color: '#666' }}>{v.quantidade} un.</span>
                   </div>
                 ))}

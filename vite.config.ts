@@ -12,5 +12,12 @@ export default defineConfig({
   server: {
     https: {}, // Força o uso de HTTPS (necessário para câmera no celular)
     host: true, // Permite acesso via IP na rede local
+    proxy: {
+      '/api-tasks': {
+        target: 'https://n8n-n8n.sd8jyi.easypanel.host',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api-tasks/, '/webhook')
+      }
+    }
   }
 })

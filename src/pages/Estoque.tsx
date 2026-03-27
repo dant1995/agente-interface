@@ -254,9 +254,18 @@ const Estoque = () => {
               <div style={{ display: 'flex', gap: '0.8rem', marginBottom: '0.8rem' }}>
                 <div style={{ 
                   width: '70px', height: '70px', background: '#f9f9f9', borderRadius: '4px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem', border: '1px solid #eee'
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                  fontSize: '1.8rem', border: '1px solid #eee', overflow: 'hidden'
                 }}>
-                  👕
+                  {group.variants.find(v => v.imagem)?.imagem ? (
+                    <img 
+                      src={group.variants.find(v => v.imagem)?.imagem} 
+                      alt={group.produto} 
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                    />
+                  ) : (
+                    '👕'
+                  )}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#333', marginBottom: '0.3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -322,41 +331,62 @@ const Estoque = () => {
                   borderTop: '1px dashed #eee', 
                   paddingTop: '1rem' 
                 }}>
-                  <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: '1.2fr 1fr 1fr 1fr 1fr 1fr', 
-                    fontSize: '0.65rem', 
-                    color: '#999', 
-                    fontWeight: 'bold',
-                    paddingBottom: '0.5rem',
-                    borderBottom: '1px solid #f9f9f9',
-                    marginBottom: '0.5rem'
-                  }}>
-                    <span>TAM / COR</span>
-                    <span style={{ textAlign: 'center' }}>MIN</span>
-                    <span style={{ textAlign: 'center' }}>EST</span>
-                    <span style={{ textAlign: 'center' }}>PED</span>
-                    <span style={{ textAlign: 'center' }}>FAL</span>
-                    <span style={{ textAlign: 'center' }}>RES</span>
-                  </div>
+                    <div style={{ 
+                      display: 'grid', 
+                      gridTemplateColumns: '0.8fr 0.8fr 1fr 0.8fr 0.6fr 0.6fr 0.6fr 0.6fr', 
+                      fontSize: '0.65rem', 
+                      color: '#999', 
+                      fontWeight: 'bold',
+                      paddingBottom: '0.5rem',
+                      borderBottom: '1px solid #f9f9f9',
+                      marginBottom: '0.5rem',
+                      alignItems: 'center'
+                    }}>
+                      <span>TAM</span>
+                      <span style={{ textAlign: 'center' }}>FOTO</span>
+                      <span>COR</span>
+                      <span style={{ textAlign: 'center' }}>MIN</span>
+                      <span style={{ textAlign: 'center' }}>EST</span>
+                      <span style={{ textAlign: 'center' }}>PED</span>
+                      <span style={{ textAlign: 'center' }}>FAL</span>
+                      <span style={{ textAlign: 'center' }}>RES</span>
+                    </div>
                   {group.variants
                     .filter(v => activeTab === 'Esgotado' ? (v.estoque || 0) === 0 : true)
                     .map((v, vIdx, arr) => (
                     <div key={vIdx} style={{ 
                       display: 'grid', 
-                      gridTemplateColumns: '1.2fr 1fr 1fr 1fr 1fr 1fr', 
+                      gridTemplateColumns: '0.8fr 0.8fr 1fr 0.8fr 0.6fr 0.6fr 0.6fr 0.6fr', 
                       fontSize: '0.75rem', 
                       padding: '0.4rem 0',
-                      borderBottom: vIdx === arr.length - 1 ? 'none' : '1px solid #f9f9f9'
+                      borderBottom: vIdx === arr.length - 1 ? 'none' : '1px solid #f9f9f9',
+                      alignItems: 'center'
                     }}>
+                      <span style={{ fontWeight: '600', color: '#555' }}>{v.tamanho}</span>
+                      
+                      <div style={{ display: 'flex', justifyContent: 'center' }}>
+                        <div style={{ 
+                          width: '32px', height: '32px', background: '#f5f5f5', borderRadius: '4px',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          border: '1px solid #eee', overflow: 'hidden'
+                        }}>
+                          {v.imagem ? (
+                            <img src={v.imagem} alt={v.cor} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            <span style={{ fontSize: '0.8rem' }}>📷</span>
+                          )}
+                        </div>
+                      </div>
+
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontWeight: '600', color: '#555' }}>{v.tamanho} / {v.cor}</span>
+                        <span style={{ color: '#555' }}>{v.cor}</span>
                         {v.codigoBarra && (
                           <span style={{ fontSize: '0.6rem', color: '#EE4D2D', fontFamily: 'monospace' }}>
-                            [ {v.codigoBarra} ]
+                            [{v.codigoBarra}]
                           </span>
                         )}
                       </div>
+
                       <div style={{ textAlign: 'center' }}>
                         <input 
                            type="number" 
