@@ -25,6 +25,7 @@ interface NovoProduto {
   estoqueTotal: string;
   fornecedor: string;
   imagem: string;
+  imagem2: string;
   variacoes: Variacao[];
 }
 
@@ -85,7 +86,7 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
     nome: '', preco: '', precoDesconto: '', custo: '',
     cor: '', tamanho: 'M', codigoBarra: '',
     origem: 'Físico', categoria: 'Camiseta', descricao: '',
-    estoqueMinimo: '5', estoqueTotal: '1', fornecedor: '', imagem: '', variacoes: []
+    estoqueMinimo: '5', estoqueTotal: '1', fornecedor: '', imagem: '', imagem2: '', variacoes: []
   });
   const [variacaoAtual, setVariacaoAtual] = useState<Variacao>({
     id: Date.now().toString(), tamanho: 'M', cor: '', codigoBarra: '', quantidade: 1, imagem: ''
@@ -93,18 +94,22 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
   const [scanStatus, setScanStatus] = useState('');
-  const [editandoImagem, setEditandoImagem] = useState(false);
+  const [editandoImagem, setEditandoImagem] = useState<1 | 2 | false>(false);
 
   const fotoInputRef = useRef<HTMLInputElement>(null);
   const fotoVariacaoInputRef = useRef<HTMLInputElement>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   // Ao selecionar foto, corta para 3:4
-  const handleFotoSelecionada = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFotoSelecionada = async (e: React.ChangeEvent<HTMLInputElement>, slot: 1 | 2) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const imagem = await cropTo3x4(file);
-    setProduto(p => ({ ...p, imagem }));
+    if (slot === 1) {
+      setProduto(p => ({ ...p, imagem }));
+    } else {
+      setProduto(p => ({ ...p, imagem2: imagem }));
+    }
     e.target.value = '';
   };
 
@@ -172,10 +177,14 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
   return (
     <>
     {/* Editor de imagem com IA */}
-    {editandoImagem && produto.imagem && (
+    {editandoImagem && (
       <ImageEditor
-        imageSrc={produto.imagem}
-        onSave={(img) => { setProduto(p => ({ ...p, imagem: img })); setEditandoImagem(false); }}
+        imageSrc={editandoImagem === 1 ? produto.imagem : produto.imagem2}
+        onSave={(img) => { 
+          if (editandoImagem === 1) setProduto(p => ({ ...p, imagem: img }));
+          else setProduto(p => ({ ...p, imagem2: img }));
+          setEditandoImagem(false); 
+        }}
         onClose={() => setEditandoImagem(false)}
       />
     )}
@@ -191,7 +200,7 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
         accept="image/*"
         capture="environment"
         style={{ display: 'none' }}
-        onChange={handleFotoSelecionada}
+        onChange={(e) => handleFotoSelecionada(e, fotoInputRef.current?.getAttribute('data-slot') === '2' ? 2 : 1)}
       />
       <input
         ref={fotoVariacaoInputRef}
@@ -248,65 +257,95 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
         {step === 'foto' && (
           <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
             <p style={{ fontSize: '0.85rem', color: '#666', margin: '0 0 1rem' }}>
-              Tire uma foto do produto — será recortada em 3:4 automaticamente
+              Tire fotos do produto (Frente/Verso ou detalhes)
             </p>
 
-            {produto.imagem ? (
-              <div style={{ position: 'relative', marginBottom: '1rem' }}>
-                <img src={produto.imagem} alt="produto" style={{
-                  width: '100%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: '12px',
-                  display: 'block'
-                }} />
-                <button onClick={() => setProduto(p => ({ ...p, imagem: '' }))} style={{
-                  position: 'absolute', top: '8px', right: '8px', background: 'rgba(0,0,0,0.55)',
-                  color: 'white', border: 'none', borderRadius: '50%', width: '32px', height: '32px',
-                  cursor: 'pointer', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>✕</button>
-                <button onClick={() => fotoInputRef.current?.click()} style={{
-                  position: 'absolute', bottom: '10px', right: '10px',
-                  background: 'rgba(0,0,0,0.55)', color: 'white', border: 'none',
-                  borderRadius: '8px', padding: '0.4rem 0.7rem',
-                  fontSize: '0.75rem', cursor: 'pointer'
-                }}>🔄 Trocar</button>
-                <button onClick={() => setEditandoImagem(true)} style={{
-                  position: 'absolute', bottom: '10px', left: '10px',
-                  background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white',
-                  border: 'none', borderRadius: '8px', padding: '0.4rem 0.7rem',
-                  fontSize: '0.75rem', cursor: 'pointer', fontWeight: '700'
-                }}>✏️ Editar IA</button>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+              {/* Slot 1 */}
+              <div>
+                <label style={labelStyle}>Foto 1 (Principal)</label>
+                {produto.imagem ? (
+                  <div style={{ position: 'relative' }}>
+                    <img src={produto.imagem} alt="foto1" style={{
+                      width: '100%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: '12px', border: '1px solid #eee'
+                    }} />
+                    <button onClick={() => setProduto(p => ({ ...p, imagem: '' }))} style={{
+                      position: 'absolute', top: '5px', right: '5px', background: 'rgba(0,0,0,0.5)',
+                      color: 'white', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer'
+                    }}>✕</button>
+                    <div style={{ position: 'absolute', bottom: '5px', left: '5px', right: '5px', display: 'flex', gap: '4px' }}>
+                      <button onClick={() => { 
+                        fotoInputRef.current?.setAttribute('data-slot', '1');
+                        fotoInputRef.current?.click(); 
+                      }} style={{
+                        flex: 1, background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none', borderRadius: '4px', padding: '3px', fontSize: '10px'
+                      }}>Trocar</button>
+                      <button onClick={() => setEditandoImagem(1)} style={{
+                        flex: 1, background: '#6366f1', color: 'white', border: 'none', borderRadius: '4px', padding: '3px', fontSize: '10px'
+                      }}>IA</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => { 
+                    fotoInputRef.current?.setAttribute('data-slot', '1');
+                    fotoInputRef.current?.click(); 
+                  }} style={{
+                    width: '100%', aspectRatio: '3/4', background: '#f9f9f9', borderRadius: '12px',
+                    border: '2px dashed #ddd', display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center', gap: '0.4rem', cursor: 'pointer'
+                  }}>
+                    <span style={{ fontSize: '1.5rem' }}>📷</span>
+                    <span style={{ color: '#999', fontSize: '0.7rem', fontWeight: '600' }}>Foto Principal</span>
+                  </button>
+                )}
               </div>
-            ) : (
-              <button
-                onClick={() => fotoInputRef.current?.click()}
-                style={{
-                  width: '100%', aspectRatio: '3/4', background: '#f9f9f9', borderRadius: '12px',
-                  border: '2px dashed #EE4D2D', display: 'flex', flexDirection: 'column',
-                  alignItems: 'center', justifyContent: 'center', gap: '0.6rem',
-                  marginBottom: '1rem', cursor: 'pointer'
-                }}
-              >
-                <span style={{ fontSize: '3.5rem' }}>📷</span>
-                <span style={{ color: '#EE4D2D', fontWeight: '700', fontSize: '1rem' }}>Toque para fotografar</span>
-                <span style={{ color: '#bbb', fontSize: '0.75rem' }}>Recortado automaticamente em 3:4</span>
-              </button>
-            )}
 
-            <div style={{ display: 'flex', gap: '0.8rem' }}>
-              {!produto.imagem && (
-                <button onClick={() => fotoInputRef.current?.click()} style={{
-                  flex: 1, padding: '0.9rem', background: '#EE4D2D', color: 'white',
-                  border: 'none', borderRadius: '10px', fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer'
-                }}>📷 Abrir Câmera</button>
-              )}
-              <button onClick={() => setStep('info')} style={{
-                flex: 1, padding: '0.9rem',
-                background: produto.imagem ? '#EE4D2D' : '#f5f5f5',
-                color: produto.imagem ? 'white' : '#666',
-                border: 'none', borderRadius: '10px', fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer'
-              }}>
-                {produto.imagem ? 'Próximo →' : 'Pular →'}
-              </button>
+              {/* Slot 2 */}
+              <div>
+                <label style={labelStyle}>Foto 2 (Detalhe)</label>
+                {produto.imagem2 ? (
+                  <div style={{ position: 'relative' }}>
+                    <img src={produto.imagem2} alt="foto2" style={{
+                      width: '100%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: '12px', border: '1px solid #eee'
+                    }} />
+                    <button onClick={() => setProduto(p => ({ ...p, imagem2: '' }))} style={{
+                      position: 'absolute', top: '5px', right: '5px', background: 'rgba(0,0,0,0.5)',
+                      color: 'white', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer'
+                    }}>✕</button>
+                    <div style={{ position: 'absolute', bottom: '5px', left: '5px', right: '5px', display: 'flex', gap: '4px' }}>
+                      <button onClick={() => { 
+                        fotoInputRef.current?.setAttribute('data-slot', '2');
+                        fotoInputRef.current?.click(); 
+                      }} style={{
+                        flex: 1, background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none', borderRadius: '4px', padding: '3px', fontSize: '10px'
+                      }}>Trocar</button>
+                      <button onClick={() => setEditandoImagem(2)} style={{
+                        flex: 1, background: '#6366f1', color: 'white', border: 'none', borderRadius: '4px', padding: '3px', fontSize: '10px'
+                      }}>IA</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => { 
+                    fotoInputRef.current?.setAttribute('data-slot', '2');
+                    fotoInputRef.current?.click(); 
+                  }} style={{
+                    width: '100%', aspectRatio: '3/4', background: '#f9f9f9', borderRadius: '12px',
+                    border: '2px dashed #ddd', display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center', gap: '0.4rem', cursor: 'pointer'
+                  }}>
+                    <span style={{ fontSize: '1.5rem' }}>📸</span>
+                    <span style={{ color: '#999', fontSize: '0.7rem', fontWeight: '600' }}>Foto 2</span>
+                  </button>
+                )}
+              </div>
             </div>
+
+            <button onClick={() => setStep('info')} style={{
+              width: '100%', padding: '1rem', background: '#333', color: 'white',
+              border: 'none', borderRadius: '12px', fontSize: '1rem', fontWeight: '700', cursor: 'pointer'
+            }}>
+              Continuar para Informações →
+            </button>
           </div>
         )}
 

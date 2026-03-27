@@ -602,6 +602,7 @@ export const apiSync = {
     estoqueTotal: string;
     fornecedor: string;
     imagem: string;
+    imagem2: string;
     variacoes: Array<{ tamanho: string; cor: string; codigoBarra: string; quantidade: number }>;
   }) => {
     const data = new Date().toLocaleDateString('pt-BR');
@@ -619,6 +620,7 @@ export const apiSync = {
           'Valor com desconto': produto.precoDesconto ? Number(produto.precoDesconto) : '',
           'Origem': produto.origem,
           'foto_base64': (v as any).imagem || produto.imagem || '', // Prioriza a foto da variação para o WooCommerce
+          'foto_base64_2': produto.imagem2 || '',                    // Segunda foto do produto
           'url imagem': (v as any).imagem || produto.imagem || '',  // Para a planilha do Google Sheets
           'Custo': produto.custo ? Number(produto.custo) : '',
           'Estoque Minimo': produto.estoqueMinimo ? Number(produto.estoqueMinimo) : 5,
