@@ -2,7 +2,7 @@ import type { Order, StockItem, FabricacaoItem, CaixaItem } from '../types';
 import { OrderStatus as OrderStatusValue } from '../types';
 export { OrderStatusValue };
 
-const BASE_URL = 'https://n8n-n8n.sd8jyi.easypanel.host';
+const BASE_URL = import.meta.env.VITE_N8N_URL || 'https://n8n-n8n.sd8jyi.easypanel.host';
 
 const N8N_WEBHOOK_URLS = {
   NEW_ORDER: `${BASE_URL}/webhook/pedidos`,
@@ -11,7 +11,13 @@ const N8N_WEBHOOK_URLS = {
   NEW_CONTAS: `${BASE_URL}/webhook/contas`,
   GASTOS: `${BASE_URL}/webhook/gastos`,
   CAIXA: `${BASE_URL}/webhook/caixa`,
-  STRATEGY: `${BASE_URL}/webhook/analise_estrategica`
+  STRATEGY: `${BASE_URL}/webhook/analise_estrategica`,
+  ESTOQUE: `${BASE_URL}/webhook/estoque`,
+  IA_CHAT: `${BASE_URL}/webhook/contas`,
+  LICITACOES: `${BASE_URL}/webhook/licitacoes`,
+  LICITACAO_ANALISE: `${BASE_URL}/webhook/licitacao-analise`,
+  PNCP: `${BASE_URL}/webhook/buscar-pncp`,
+  ACHADOS_ROBO: `${BASE_URL}/webhook/buscar-achados`
 };
 
 
@@ -58,12 +64,13 @@ const sendWebhook = async (url: string, data: any) => {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
     });
-    return response.ok;
+    if (!response.ok) throw new Error(`Status: ${response.status}`);
+    return await response.json();
   } catch (error) {
-    console.error('Erro ao enviar webhook:', error);
-    return false;
+    console.error(`Erro no webhook (${url}):`, error);
+    throw error;
   }
 };
 
@@ -92,8 +99,30 @@ const canSync = (key: string, cooldown = 5000) => {
 };
 
 export const apiSync = {
+  updateStockMin: async (item: StockItem, novoMinimo: number) => {
+    return sendWebhook(N8N_WEBHOOK_URLS.ESTOQUE, {
+      action: 'update_stock_min',
+      produto: item.produto,
+      tamanho: item.tamanho,
+      cor: item.cor,
+      estoqueMinimo: novoMinimo
+    });
+  },
+
+  updateOrderStatus: async (orderId: string, status: OrderStatusValue) => {
+    return sendWebhook(N8N_WEBHOOK_URLS.NEW_ORDER, {
+      action: 'update_order_status',
+      id_pedido: orderId,
+      status: status
+    });
+  },
+
   notifyNewOrder: async (order: any) => {
     return sendWebhook(N8N_WEBHOOK_URLS.NEW_ORDER, { action: 'new_order', ...order });
+  },
+
+  notifyIAChat: async (context: any) => {
+    return sendWebhook(N8N_WEBHOOK_URLS.IA_CHAT, { action: 'ia_chat', ...context });
   },
 
   notifyOrderInProduction: async (order: any) => {

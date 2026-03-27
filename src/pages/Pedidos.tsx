@@ -37,8 +37,10 @@ const Pedidos = () => {
   const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
     const updated = await storage.updateOrderStatus(orderId, newStatus);
     if (updated) {
-      if (newStatus === OrderStatus.PRODUCAO) {
-        apiSync.notifyOrderInProduction(updated);
+      try {
+        await apiSync.updateOrderStatus(orderId, newStatus);
+      } catch (err) {
+        console.error('Erro ao atualizar status no n8n:', err);
       }
       loadOrders();
     }

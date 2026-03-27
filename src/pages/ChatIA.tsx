@@ -49,14 +49,7 @@ const ChatIA = () => {
         pergunta: userMessage
       };
 
-      // Enviar para o n8n processar (que deve usar OpenAI/Claude)
-      const response = await fetch('/webhook/contas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'ia_chat', ...context })
-      });
-
-      const data = await response.json();
+      const data = await apiSync.notifyIAChat(context);
       const reply = data.reply || 'Desculpe, não consegui processar sua pergunta agora. Verifique sua conexão com o n8n.';
       
       setMessages(prev => [...prev, { role: 'assistant', content: reply }]);

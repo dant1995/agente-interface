@@ -1,7 +1,7 @@
 import type { Licitacao, AnaliseLicitacao } from '../types';
+import { apiSync } from './apiSync';
 
 const STORAGE_KEY = '@capel-erp:licitacoes';
-const WEBHOOK_URL = 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/licitacoes.';
 
 export const licitacaoService = {
   // --- Local Storage CRUD ---
@@ -38,7 +38,9 @@ export const licitacaoService = {
   // --- Webhook ---
   async sendToWebhook(licitacao: Licitacao, action: 'nova_licitacao' | 'analise' = 'nova_licitacao'): Promise<{ success: boolean; message: string }> {
     try {
-      const response = await fetch(WEBHOOK_URL, {
+      // @ts-ignore
+      const url = apiSync.N8N_WEBHOOK_URLS?.LICITACOES || 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/licitacoes';
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, data: licitacao, date: new Date().toISOString() })
@@ -58,7 +60,8 @@ export const licitacaoService = {
   // --- Analysis Fetcher ---
   async fetchAnaliseFromWebhook(idLicitacao: string): Promise<AnaliseLicitacao | null> {
     try {
-      const GET_URL = 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/licitacao-analise';
+      // @ts-ignore
+      const GET_URL = apiSync.N8N_WEBHOOK_URLS?.LICITACAO_ANALISE || 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/licitacao-analise';
       const response = await fetch(`${GET_URL}?id=${encodeURIComponent(idLicitacao)}`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' },

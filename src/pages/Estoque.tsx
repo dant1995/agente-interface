@@ -390,11 +390,16 @@ const Estoque = () => {
                       <div style={{ textAlign: 'center' }}>
                         <input 
                            type="number" 
-                           defaultValue={v.estoqueMinimo || 5} 
-                           onBlur={async (e) => {
-                             await storage.updateStockMin(group.produto, v.tamanho, v.cor, Number(e.target.value));
-                             loadStock();
-                           }}
+                           defaultValue={v.estoqueMinimo || 5}                            onBlur={async (e) => {
+                              const novoMin = Number(e.target.value);
+                              await storage.updateStockMin(group.produto, v.tamanho, v.cor, novoMin);
+                              try {
+                                await apiSync.updateStockMin(v, novoMin);
+                              } catch (err) {
+                                console.error('Erro ao sincronizar estoque mínimo:', err);
+                              }
+                              loadStock();
+                            }}
                            style={{ width: '36px', border: '1px solid #ddd', borderRadius: '4px', textAlign: 'center', fontSize: '0.75rem', padding: '0.1rem' }}
                         />
                       </div>

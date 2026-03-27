@@ -55,11 +55,11 @@ const cropTo3x4 = (file: File): Promise<string> =>
         srcH = img.width / targetRatio;
         srcY = (img.height - srcH) / 2;
       }
-      canvas.width = 600;
-      canvas.height = 800;
+      canvas.width = 300;
+      canvas.height = 400;
       const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, 600, 800);
-      resolve(canvas.toDataURL('image/jpeg', 0.85));
+      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, 300, 400);
+      resolve(canvas.toDataURL('image/jpeg', 0.6));
     };
     img.src = url;
   });
