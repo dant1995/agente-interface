@@ -3,6 +3,7 @@ import type { Order } from '../types';
 import { OrderStatus } from '../types';
 import { apiSync } from '../services/apiSync';
 import { storage } from '../services/storage';
+import { BrowserMultiFormatReader, NotFoundException } from '@zxing/browser';
 
 interface EntregaRegistrada {
   ordem: Order;
@@ -17,17 +18,18 @@ const Entregas = () => {
   const [status, setStatus] = useState<'idle' | 'found' | 'notfound' | 'success' | 'loading' | 'already'>('idle');
   const [mensagem, setMensagem] = useState('');
   const [sincronizando, setSincronizando] = useState(false);
+  const [cameraAtiva, setCameraAtiva] = useState(false);
+  const [erroCam, setErroCam] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Foca no input assim que a página carrega
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  // Carrega pedidos ao iniciar
   useEffect(() => {
     carregarPedidos();
+    return () => {
+      pararCamera();
+    };
   }, []);
 
   const carregarPedidos = async () => {
@@ -54,17 +56,16 @@ const Entregas = () => {
     }
   };
 
-  const buscarPorCodigo = useCallback((codigo: string) => {
+  const buscarPorCodigo = useCallback((codigo: string, ordens?: Order[]) => {
     const c = codigo.trim().toUpperCase();
-    if (!c) return;
-
-    // Limpa timeout anterior (debounce do scanner)
+    if (!c || c.length < 3) return;
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
     timeoutRef.current = setTimeout(() => {
       setStatus('loading');
+      const lista = ordens || todasOrdens;
 
-      const encontrado = todasOrdens.find(o => {
+      const encontrado = lista.find(o => {
         const bc = String(o.codigo_barra || '').trim().toUpperCase();
         const id = String(o.id_pedido || '').trim().toUpperCase();
         return bc === c || id === c;
@@ -73,7 +74,6 @@ const Entregas = () => {
       if (!encontrado) {
         setPedidoEncontrado(null);
         setStatus('notfound');
-        inputRef.current?.select();
         return;
       }
 
@@ -85,8 +85,51 @@ const Entregas = () => {
 
       setPedidoEncontrado(encontrado);
       setStatus('found');
-    }, 200);
+    }, 150);
   }, [todasOrdens]);
+
+  // ── CÂMERA ──────────────────────────────────────────────────────────────
+  const iniciarCamera = async () => {
+    setErroCam('');
+    setCameraAtiva(true);
+
+    try {
+      const reader = new BrowserMultiFormatReader();
+      readerRef.current = reader;
+
+      // Pequeno delay para o <video> aparecer no DOM
+      await new Promise(r => setTimeout(r, 300));
+
+      if (!videoRef.current) return;
+
+      await reader.decodeFromVideoDevice(undefined, videoRef.current, (result, err) => {
+        if (result) {
+          const codigo = result.getText();
+          setCodigoInput(codigo);
+          buscarPorCodigo(codigo);
+          pararCamera();
+        }
+        if (err && !(err instanceof NotFoundException)) {
+          console.warn('Scan err:', err);
+        }
+      });
+    } catch (e: any) {
+      console.error('Erro câmera:', e);
+      setErroCam('Não foi possível acessar a câmera. Verifique as permissões.');
+      setCameraAtiva(false);
+    }
+  };
+
+  const pararCamera = () => {
+    try {
+      if (readerRef.current) {
+        BrowserMultiFormatReader.releaseAllStreams();
+        readerRef.current = null;
+      }
+    } catch { /* ignore */ }
+    setCameraAtiva(false);
+  };
+  // ────────────────────────────────────────────────────────────────────────
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -110,10 +153,8 @@ const Entregas = () => {
     setStatus('loading');
 
     try {
-      // 1. Atualiza localmente
       await storage.updateOrderStatus(pedidoEncontrado.id_pedido, OrderStatus.ENTREGUE);
 
-      // 2. Envia para o webhook n8n → planilha Entrega
       await apiSync.marcarEntregue({
         id_pedido: pedidoEncontrado.id_pedido,
         cliente: pedidoEncontrado.cliente,
@@ -128,28 +169,23 @@ const Entregas = () => {
         horarioEntrega: new Date().toLocaleTimeString('pt-BR'),
       });
 
-      // 3. Registra no histórico da sessão
       setEntregasHoje(prev => [{
         ordem: { ...pedidoEncontrado, status: OrderStatus.ENTREGUE },
         horario: new Date().toLocaleTimeString('pt-BR')
       }, ...prev]);
 
-      // 4. Atualiza lista local
       await carregarPedidos();
-
       setStatus('success');
       setCodigoInput('');
       setPedidoEncontrado(null);
 
-      // Volta ao idle e foca para próxima leitura
       setTimeout(() => {
         setStatus('idle');
-        inputRef.current?.focus();
       }, 2500);
     } catch (err) {
       console.error('Erro ao confirmar entrega:', err);
       setStatus('idle');
-      alert('Erro ao confirmar entrega. Verifique a conexão com o servidor.');
+      alert('Erro ao confirmar entrega.');
     }
   };
 
@@ -157,30 +193,26 @@ const Entregas = () => {
     setCodigoInput('');
     setPedidoEncontrado(null);
     setStatus('idle');
+    pararCamera();
     inputRef.current?.focus();
   };
 
-  const statusConfig = {
-    idle: { bg: '#1a1a2e', icon: '📦', texto: 'Aguardando leitura do código de barras...' },
-    loading: { bg: '#1a1a2e', icon: '⏳', texto: 'Buscando pedido...' },
-    found: { bg: '#0a3d20', icon: '✅', texto: 'Pedido encontrado!' },
-    notfound: { bg: '#3d0a0a', icon: '❌', texto: 'Código não encontrado. Tente novamente.' },
-    success: { bg: '#0a3d20', icon: '🎉', texto: 'Entrega registrada com sucesso!' },
-    already: { bg: '#3d2a00', icon: '⚠️', texto: 'Este pedido já foi entregue anteriormente.' },
-  };
-
-  const cfg = statusConfig[status];
+  const statusBorderColor =
+    status === 'found' || status === 'success' ? '#4caf50' :
+    status === 'notfound' ? '#f44336' :
+    status === 'already' ? '#ff9800' : '#4f46e5';
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f0f2f5', padding: '1rem', paddingBottom: '80px' }}>
+    <div style={{ minHeight: '100vh', background: '#f0f2f5', padding: '1rem', paddingBottom: '90px' }}>
+
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1rem', gap: '0.5rem' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: '#1a1a2e' }}>
+          <h1 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 700, color: '#1a1a2e' }}>
             📦 Processar Entregas
           </h1>
-          <p style={{ margin: 0, fontSize: '0.85rem', color: '#666' }}>
-            Leia o código de barras do pedido para registrar a entrega
+          <p style={{ margin: 0, fontSize: '0.8rem', color: '#666' }}>
+            {todasOrdens.length} pedidos carregados
           </p>
         </div>
         <button
@@ -188,10 +220,11 @@ const Entregas = () => {
           disabled={sincronizando}
           style={{
             background: '#4f46e5', color: '#fff', border: 'none', borderRadius: '8px',
-            padding: '0.5rem 1rem', fontSize: '0.85rem', cursor: 'pointer', opacity: sincronizando ? 0.6 : 1
+            padding: '0.5rem 0.8rem', fontSize: '0.8rem', cursor: 'pointer',
+            opacity: sincronizando ? 0.6 : 1, flexShrink: 0
           }}
         >
-          {sincronizando ? '⟳ Sincronizando...' : '🔄 Sincronizar Pedidos'}
+          {sincronizando ? '⟳ Sync...' : '🔄 Sincronizar'}
         </button>
       </div>
 
@@ -201,49 +234,80 @@ const Entregas = () => {
         </div>
       )}
 
-      {/* Scanner Area */}
-      <div
-        onClick={() => inputRef.current?.focus()}
-        style={{
-          background: cfg.bg, borderRadius: '16px', padding: '1.5rem',
-          marginBottom: '1.5rem', transition: 'background 0.4s ease',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.15)', cursor: 'pointer'
-        }}
-      >
-        {/* Botão grande de scan — toque aqui */}
-        <button
-          onClick={(e) => { e.stopPropagation(); inputRef.current?.focus(); }}
-          style={{
-            width: '100%', padding: '1.5rem 1rem',
-            background: status === 'found' || status === 'success'
-              ? 'linear-gradient(135deg,#4caf50,#2e7d32)'
-              : status === 'notfound'
-              ? 'linear-gradient(135deg,#e53935,#b71c1c)'
-              : status === 'already'
-              ? 'linear-gradient(135deg,#ff9800,#e65100)'
-              : 'linear-gradient(135deg,#4f46e5,#2d27a0)',
-            color: '#fff', border: 'none', borderRadius: '12px',
-            cursor: 'pointer', marginBottom: '1rem',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem',
-            boxShadow: '0 4px 15px rgba(79,70,229,0.5)',
-            animation: status === 'idle' ? 'pulse 2s infinite' : 'none',
-          }}
-        >
-          <span style={{ fontSize: '2.5rem' }}>{cfg.icon}</span>
-          <span style={{ fontSize: '1.1rem', fontWeight: 800, letterSpacing: '0.02em' }}>
-            {status === 'idle' ? '📲 TOQUE AQUI PARA SCANEAR' :
-             status === 'loading' ? 'Buscando...' :
-             status === 'found' ? '✅ Pedido encontrado!' :
-             status === 'notfound' ? '❌ Não encontrado — tente novamente' :
-             status === 'success' ? '🎉 Entrega registrada!' :
-             '⚠️ Pedido já entregue'}
-          </span>
-          <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>
-            {status === 'idle' ? 'ou aponte o leitor de código de barras' : cfg.texto}
-          </span>
-        </button>
+      {/* ── ÁREA PRINCIPAL DE SCAN ── */}
+      <div style={{ background: '#1a1a2e', borderRadius: '16px', padding: '1.25rem', marginBottom: '1.25rem', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
 
-        {/* Input — visível e grande, para facilitar no mobile */}
+        {/* Preview da câmera */}
+        {cameraAtiva && (
+          <div style={{ position: 'relative', marginBottom: '1rem' }}>
+            <video
+              ref={videoRef}
+              style={{
+                width: '100%', borderRadius: '12px', display: 'block',
+                maxHeight: '260px', objectFit: 'cover', background: '#000'
+              }}
+              muted
+              playsInline
+            />
+            {/* Mira de scan */}
+            <div style={{
+              position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              pointerEvents: 'none'
+            }}>
+              <div style={{
+                width: '70%', height: '90px', border: '3px solid #4f46e5',
+                borderRadius: '8px', boxShadow: '0 0 0 4000px rgba(0,0,0,0.45)',
+              }} />
+            </div>
+            <button
+              onClick={pararCamera}
+              style={{
+                position: 'absolute', top: '0.5rem', right: '0.5rem',
+                background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none',
+                borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', fontSize: '1rem'
+              }}
+            >✕</button>
+            <p style={{ textAlign: 'center', color: '#aaa', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+              Aponte a câmera para o código de barras
+            </p>
+          </div>
+        )}
+
+        {/* Botão CÂMERA — grande e óbvio */}
+        {!cameraAtiva && (
+          <>
+            <button
+              onClick={iniciarCamera}
+              style={{
+                width: '100%', padding: '1.25rem 1rem', marginBottom: '0.75rem',
+                background: 'linear-gradient(135deg,#4f46e5,#2d27a0)',
+                color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem',
+                boxShadow: '0 4px 20px rgba(79,70,229,0.5)',
+                animation: status === 'idle' ? 'pulse 2s infinite' : 'none',
+              }}
+            >
+              <span style={{ fontSize: '2.2rem' }}>📷</span>
+              <span style={{ fontSize: '1.1rem', fontWeight: 800 }}>ABRIR CÂMERA PARA SCANEAR</span>
+              <span style={{ fontSize: '0.78rem', opacity: 0.8 }}>Toque aqui para usar a câmera do celular</span>
+            </button>
+
+            {erroCam && (
+              <div style={{ background: '#fde8e8', borderRadius: '8px', padding: '0.6rem 0.8rem', marginBottom: '0.75rem', fontSize: '0.8rem', color: '#c0392b' }}>
+                {erroCam}
+              </div>
+            )}
+
+            {/* Divisor */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+              <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.15)' }} />
+              <span style={{ color: '#888', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>ou digite o código</span>
+              <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.15)' }} />
+            </div>
+          </>
+        )}
+
+        {/* Input manual */}
         <div style={{ position: 'relative' }}>
           <input
             ref={inputRef}
@@ -251,20 +315,17 @@ const Entregas = () => {
             value={codigoInput}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder="Digite ou leia o código aqui..."
+            placeholder="Digite o código manualmente..."
             id="barcode-input"
             inputMode="numeric"
             style={{
               width: '100%', boxSizing: 'border-box',
-              padding: '1rem 1rem', fontSize: '1.3rem', fontFamily: 'monospace',
-              borderRadius: '10px', border: '3px solid',
-              borderColor: status === 'found' || status === 'success' ? '#4caf50' :
-                           status === 'notfound' ? '#f44336' :
-                           status === 'already' ? '#ff9800' : '#4f46e5',
-              outline: 'none', background: 'rgba(255,255,255,0.98)',
-              textAlign: 'center',
-              transition: 'border-color 0.3s ease',
-              color: '#111',
+              padding: '0.9rem 2.5rem 0.9rem 1rem',
+              fontSize: '1.1rem', fontFamily: 'monospace',
+              borderRadius: '10px', border: `3px solid ${statusBorderColor}`,
+              outline: 'none', background: 'rgba(255,255,255,0.97)',
+              textAlign: 'center', color: '#111',
+              transition: 'border-color 0.3s',
             }}
             autoComplete="off"
             autoCorrect="off"
@@ -274,55 +335,62 @@ const Entregas = () => {
             <button
               onClick={() => { setCodigoInput(''); setStatus('idle'); setPedidoEncontrado(null); inputRef.current?.focus(); }}
               style={{
-                position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)',
-                background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#999'
+                position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)',
+                background: 'none', border: 'none', fontSize: '1.3rem', cursor: 'pointer', color: '#999'
               }}
             >✕</button>
           )}
         </div>
 
-        <p style={{ textAlign: 'center', color: '#aaa', fontSize: '0.75rem', marginTop: '0.5rem', marginBottom: 0 }}>
-          {todasOrdens.length} pedidos carregados
-        </p>
+        {/* Status badge */}
+        {status !== 'idle' && status !== 'loading' && (
+          <div style={{
+            marginTop: '0.6rem', textAlign: 'center',
+            fontSize: '0.85rem', fontWeight: 600,
+            color: status === 'found' || status === 'success' ? '#4caf50' :
+                   status === 'notfound' ? '#ff5252' :
+                   status === 'already' ? '#ffa726' : '#fff'
+          }}>
+            {status === 'found' && '✅ Pedido encontrado! Confirme abaixo.'}
+            {status === 'notfound' && '❌ Código não encontrado.'}
+            {status === 'success' && '🎉 Entrega registrada com sucesso!'}
+            {status === 'already' && '⚠️ Este pedido já foi entregue.'}
+          </div>
+        )}
       </div>
 
       <style>{`
         @keyframes pulse {
-          0%, 100% { box-shadow: 0 4px 15px rgba(79,70,229,0.5); }
-          50% { box-shadow: 0 4px 30px rgba(79,70,229,0.9); transform: scale(1.01); }
+          0%,100% { box-shadow: 0 4px 15px rgba(79,70,229,0.5); }
+          50% { box-shadow: 0 4px 30px rgba(79,70,229,0.95); transform: scale(1.01); }
         }
       `}</style>
 
-
-      {/* Card do Pedido Encontrado */}
+      {/* ── CARD DO PEDIDO ENCONTRADO ── */}
       {pedidoEncontrado && (status === 'found' || status === 'already') && (
         <div style={{
-          background: '#fff', borderRadius: '16px', padding: '1.5rem',
-          marginBottom: '1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+          background: '#fff', borderRadius: '16px', padding: '1.25rem',
+          marginBottom: '1.25rem', boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
           border: `2px solid ${status === 'already' ? '#ff9800' : '#4caf50'}`
         }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
             <div style={{
-              width: '56px', height: '56px', borderRadius: '12px', background: '#f0f2f5',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem', flexShrink: 0
-            }}>
-              👕
-            </div>
+              width: '52px', height: '52px', borderRadius: '12px',
+              background: '#f0f2f5', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', fontSize: '1.8rem', flexShrink: 0
+            }}>👕</div>
+
             <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1a1a2e' }}>
-                  {pedidoEncontrado.produtoNome}
-                </h3>
+              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.5rem' }}>
+                <h3 style={{ margin: 0, fontSize: '1rem', color: '#1a1a2e' }}>{pedidoEncontrado.produtoNome}</h3>
                 <span style={{
                   background: status === 'already' ? '#fff3e0' : '#e8f5e9',
                   color: status === 'already' ? '#e65100' : '#2e7d32',
-                  padding: '0.2rem 0.6rem', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600
-                }}>
-                  {pedidoEncontrado.status}
-                </span>
+                  padding: '0.15rem 0.5rem', borderRadius: '20px', fontSize: '0.7rem', fontWeight: 600
+                }}>{pedidoEncontrado.status}</span>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem', marginTop: '0.75rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
                 {[
                   { label: '👤 Cliente', valor: pedidoEncontrado.cliente },
                   { label: '📱 WhatsApp', valor: pedidoEncontrado.whatsapp || '—' },
@@ -330,36 +398,27 @@ const Entregas = () => {
                   { label: '🎨 Cor', valor: pedidoEncontrado.cor },
                   { label: '📦 Qtd', valor: String(pedidoEncontrado.quantidade) },
                   { label: '💰 Total', valor: pedidoEncontrado.valorTotal ? `R$ ${Number(pedidoEncontrado.valorTotal).toFixed(2)}` : '—' },
-                  { label: '🔢 Código', valor: pedidoEncontrado.codigo_barra || pedidoEncontrado.id_pedido },
-                  { label: '📅 Data', valor: pedidoEncontrado.data ? new Date(pedidoEncontrado.data).toLocaleDateString('pt-BR') : '—' },
                 ].map(({ label, valor }) => (
-                  <div key={label} style={{ background: '#f8f9fa', borderRadius: '8px', padding: '0.6rem 0.8rem' }}>
-                    <div style={{ fontSize: '0.7rem', color: '#888', marginBottom: '0.2rem' }}>{label}</div>
-                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#333', wordBreak: 'break-word' }}>{valor}</div>
+                  <div key={label} style={{ background: '#f8f9fa', borderRadius: '8px', padding: '0.5rem 0.7rem' }}>
+                    <div style={{ fontSize: '0.65rem', color: '#888' }}>{label}</div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#333', wordBreak: 'break-word' }}>{valor}</div>
                   </div>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* Botões de ação */}
-          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem', justifyContent: 'flex-end' }}>
-            <button
-              onClick={cancelar}
-              style={{
-                background: '#fff', color: '#666', border: '1px solid #ddd',
-                borderRadius: '8px', padding: '0.6rem 1.2rem', cursor: 'pointer', fontSize: '0.9rem'
-              }}
-            >
+          <div style={{ display: 'flex', gap: '0.6rem', marginTop: '1rem', justifyContent: 'flex-end' }}>
+            <button onClick={cancelar} style={{ background: '#fff', color: '#666', border: '1px solid #ddd', borderRadius: '8px', padding: '0.6rem 1rem', cursor: 'pointer', fontSize: '0.85rem' }}>
               Cancelar
             </button>
             {status === 'found' && (
               <button
                 onClick={confirmarEntrega}
                 style={{
-                  background: 'linear-gradient(135deg, #4caf50, #2e7d32)',
+                  background: 'linear-gradient(135deg,#4caf50,#2e7d32)',
                   color: '#fff', border: 'none', borderRadius: '8px',
-                  padding: '0.6rem 1.5rem', cursor: 'pointer', fontSize: '0.9rem',
+                  padding: '0.6rem 1.4rem', cursor: 'pointer', fontSize: '0.9rem',
                   fontWeight: 700, boxShadow: '0 2px 8px rgba(76,175,80,0.4)'
                 }}
               >
@@ -370,51 +429,24 @@ const Entregas = () => {
         </div>
       )}
 
-      {/* Feedback de sucesso inline */}
-      {status === 'success' && (
-        <div style={{
-          background: 'linear-gradient(135deg, #4caf50, #2e7d32)', borderRadius: '16px',
-          padding: '2rem', marginBottom: '1.5rem', textAlign: 'center', color: '#fff',
-          boxShadow: '0 4px 20px rgba(76,175,80,0.3)'
-        }}>
-          <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🎉</div>
-          <h3 style={{ margin: 0 }}>Entrega registrada!</h3>
-          <p style={{ margin: '0.5rem 0 0', opacity: 0.85, fontSize: '0.9rem' }}>
-            Aguardando próxima leitura...
-          </p>
-        </div>
-      )}
-
-      {/* Histórico da sessão */}
+      {/* ── HISTÓRICO ── */}
       {entregasHoje.length > 0 && (
         <div style={{ background: '#fff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.06)' }}>
-          <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ padding: '0.9rem 1.25rem', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <span style={{ fontWeight: 700, color: '#1a1a2e' }}>📋 Entregas desta sessão</span>
-            <span style={{
-              background: '#4f46e5', color: '#fff', borderRadius: '20px',
-              padding: '0.1rem 0.6rem', fontSize: '0.75rem', fontWeight: 700
-            }}>
+            <span style={{ background: '#4f46e5', color: '#fff', borderRadius: '20px', padding: '0.1rem 0.6rem', fontSize: '0.73rem', fontWeight: 700 }}>
               {entregasHoje.length}
             </span>
           </div>
-
           <div style={{ overflow: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-              <thead>
-                <tr style={{ background: '#f8f9fa' }}>
-                  {['Horário', 'Cliente', 'Produto', 'Tam/Cor', 'Total'].map(h => (
-                    <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', color: '#888', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
               <tbody>
                 {entregasHoje.map((e, i) => (
-                  <tr key={i} style={{ borderTop: '1px solid #f0f0f0' }}>
-                    <td style={{ padding: '0.75rem 1rem', color: '#666', fontFamily: 'monospace', fontSize: '0.8rem' }}>{e.horario}</td>
-                    <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#333' }}>{e.ordem.cliente}</td>
-                    <td style={{ padding: '0.75rem 1rem', color: '#555' }}>{e.ordem.produtoNome}</td>
-                    <td style={{ padding: '0.75rem 1rem', color: '#555' }}>{e.ordem.tamanho} • {e.ordem.cor}</td>
-                    <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#2e7d32' }}>
+                  <tr key={i} style={{ borderTop: i === 0 ? 'none' : '1px solid #f0f0f0' }}>
+                    <td style={{ padding: '0.65rem 1rem', color: '#888', fontFamily: 'monospace', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>{e.horario}</td>
+                    <td style={{ padding: '0.65rem 0.5rem', fontWeight: 600, color: '#333' }}>{e.ordem.cliente}</td>
+                    <td style={{ padding: '0.65rem 0.5rem', color: '#555' }}>{e.ordem.tamanho} • {e.ordem.cor}</td>
+                    <td style={{ padding: '0.65rem 1rem', fontWeight: 600, color: '#2e7d32', whiteSpace: 'nowrap' }}>
                       {e.ordem.valorTotal ? `R$ ${Number(e.ordem.valorTotal).toFixed(2)}` : '—'}
                     </td>
                   </tr>
