@@ -10,7 +10,7 @@ const Pedidos = () => {
   const [currentFilter, setCurrentFilter] = useState<OrderStatus | 'TODOS'>('TODOS');
   const [visibleCount, setVisibleCount] = useState<number>(10);
   const [searchQuery, setSearchQuery] = useState('');
-  const [loadingEntregas, setLoadingEntregas] = useState(false); // eslint-disable-line @typescript-eslint/no-unused-vars
+
 
   useEffect(() => {
     loadOrders();
@@ -30,14 +30,11 @@ const Pedidos = () => {
   };
 
   const carregarEntregas = async () => {
-    setLoadingEntregas(true);
     try {
       const data = await apiSync.fetchEntregas();
       setEntregas(data);
     } catch {
       console.error('Erro ao buscar entregas');
-    } finally {
-      setLoadingEntregas(false);
     }
   };
 
