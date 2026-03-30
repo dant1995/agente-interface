@@ -46,6 +46,30 @@ const Pedidos = () => {
     }
   };
 
+  const handleMarcarEntregue = async (order: Order) => {
+    if (!window.confirm(`Confirmar entrega de "${order.cliente}"?`)) return;
+    try {
+      await storage.updateOrderStatus(order.id_pedido, OrderStatus.ENTREGUE);
+      await apiSync.marcarEntregue({
+        id_pedido: order.id_pedido,
+        cliente: order.cliente,
+        whatsapp: order.whatsapp,
+        produtoNome: order.produtoNome,
+        tamanho: order.tamanho,
+        cor: order.cor,
+        quantidade: order.quantidade,
+        valorTotal: order.valorTotal,
+        codigo_barra: order.codigo_barra,
+        dataEntrega: new Date().toLocaleDateString('pt-BR'),
+        horarioEntrega: new Date().toLocaleTimeString('pt-BR'),
+      });
+      loadOrders();
+    } catch (err) {
+      console.error('Erro ao marcar como entregue:', err);
+      alert('Erro ao registrar entrega.');
+    }
+  };
+
   const statusColors: Record<string, string> = {
     [OrderStatus.RECEBIDO]: 'badge-info',
     [OrderStatus.PRODUCAO]: 'badge-warning',
@@ -172,15 +196,32 @@ const Pedidos = () => {
                       </span>
                     </td>
                     <td>
-                      <select 
-                        className="select-action"
-                        value={order.status}
-                        onChange={(e) => handleStatusChange(order.id_pedido, e.target.value as OrderStatus)}
-                      >
-                        {Object.values(OrderStatus).map(s => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                        <select 
+                          className="select-action"
+                          value={order.status}
+                          onChange={(e) => handleStatusChange(order.id_pedido, e.target.value as OrderStatus)}
+                        >
+                          {Object.values(OrderStatus).map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                        {order.status === OrderStatus.PRONTA && (
+                          <button
+                            onClick={() => handleMarcarEntregue(order)}
+                            style={{
+                              background: 'linear-gradient(135deg,#4caf50,#2e7d32)',
+                              color: '#fff', border: 'none', borderRadius: '6px',
+                              padding: '0.35rem 0.6rem', cursor: 'pointer',
+                              fontSize: '0.78rem', fontWeight: 700,
+                              boxShadow: '0 2px 6px rgba(76,175,80,0.35)',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            🚚 Marcar Entregue
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
