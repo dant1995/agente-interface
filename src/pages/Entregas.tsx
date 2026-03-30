@@ -3,7 +3,8 @@ import type { Order } from '../types';
 import { OrderStatus } from '../types';
 import { apiSync } from '../services/apiSync';
 import { storage } from '../services/storage';
-import { BrowserMultiFormatReader, NotFoundException } from '@zxing/browser';
+import { BrowserMultiFormatReader } from '@zxing/browser';
+import { NotFoundException } from '@zxing/library';
 
 interface EntregaRegistrada {
   ordem: Order;
