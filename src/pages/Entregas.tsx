@@ -202,46 +202,97 @@ const Entregas = () => {
       )}
 
       {/* Scanner Area */}
-      <div style={{
-        background: cfg.bg, borderRadius: '16px', padding: '2rem',
-        marginBottom: '1.5rem', transition: 'background 0.4s ease', boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
-      }}>
-        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>{cfg.icon}</div>
-          <p style={{ color: '#ccc', margin: 0, fontSize: '0.95rem' }}>{cfg.texto}</p>
-        </div>
+      <div
+        onClick={() => inputRef.current?.focus()}
+        style={{
+          background: cfg.bg, borderRadius: '16px', padding: '1.5rem',
+          marginBottom: '1.5rem', transition: 'background 0.4s ease',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.15)', cursor: 'pointer'
+        }}
+      >
+        {/* Botão grande de scan — toque aqui */}
+        <button
+          onClick={(e) => { e.stopPropagation(); inputRef.current?.focus(); }}
+          style={{
+            width: '100%', padding: '1.5rem 1rem',
+            background: status === 'found' || status === 'success'
+              ? 'linear-gradient(135deg,#4caf50,#2e7d32)'
+              : status === 'notfound'
+              ? 'linear-gradient(135deg,#e53935,#b71c1c)'
+              : status === 'already'
+              ? 'linear-gradient(135deg,#ff9800,#e65100)'
+              : 'linear-gradient(135deg,#4f46e5,#2d27a0)',
+            color: '#fff', border: 'none', borderRadius: '12px',
+            cursor: 'pointer', marginBottom: '1rem',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem',
+            boxShadow: '0 4px 15px rgba(79,70,229,0.5)',
+            animation: status === 'idle' ? 'pulse 2s infinite' : 'none',
+          }}
+        >
+          <span style={{ fontSize: '2.5rem' }}>{cfg.icon}</span>
+          <span style={{ fontSize: '1.1rem', fontWeight: 800, letterSpacing: '0.02em' }}>
+            {status === 'idle' ? '📲 TOQUE AQUI PARA SCANEAR' :
+             status === 'loading' ? 'Buscando...' :
+             status === 'found' ? '✅ Pedido encontrado!' :
+             status === 'notfound' ? '❌ Não encontrado — tente novamente' :
+             status === 'success' ? '🎉 Entrega registrada!' :
+             '⚠️ Pedido já entregue'}
+          </span>
+          <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>
+            {status === 'idle' ? 'ou aponte o leitor de código de barras' : cfg.texto}
+          </span>
+        </button>
 
-        {/* Input do código de barras */}
-        <div style={{ position: 'relative', maxWidth: '480px', margin: '0 auto' }}>
+        {/* Input — visível e grande, para facilitar no mobile */}
+        <div style={{ position: 'relative' }}>
           <input
             ref={inputRef}
             type="text"
             value={codigoInput}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder="🔍 Leia ou digite o código..."
+            placeholder="Digite ou leia o código aqui..."
             id="barcode-input"
+            inputMode="numeric"
             style={{
               width: '100%', boxSizing: 'border-box',
-              padding: '1rem 1.2rem', fontSize: '1.2rem', fontFamily: 'monospace',
-              borderRadius: '10px', border: '2px solid',
+              padding: '1rem 1rem', fontSize: '1.3rem', fontFamily: 'monospace',
+              borderRadius: '10px', border: '3px solid',
               borderColor: status === 'found' || status === 'success' ? '#4caf50' :
                            status === 'notfound' ? '#f44336' :
                            status === 'already' ? '#ff9800' : '#4f46e5',
-              outline: 'none', background: 'rgba(255,255,255,0.95)',
-              letterSpacing: '0.05em', textAlign: 'center',
-              transition: 'border-color 0.3s ease'
+              outline: 'none', background: 'rgba(255,255,255,0.98)',
+              textAlign: 'center',
+              transition: 'border-color 0.3s ease',
+              color: '#111',
             }}
             autoComplete="off"
             autoCorrect="off"
             spellCheck={false}
           />
+          {codigoInput && (
+            <button
+              onClick={() => { setCodigoInput(''); setStatus('idle'); setPedidoEncontrado(null); inputRef.current?.focus(); }}
+              style={{
+                position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)',
+                background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#999'
+              }}
+            >✕</button>
+          )}
         </div>
 
-        <p style={{ textAlign: 'center', color: '#888', fontSize: '0.75rem', marginTop: '0.75rem' }}>
-          {todasOrdens.length} pedidos carregados • Pressione Enter ou aponte o leitor
+        <p style={{ textAlign: 'center', color: '#aaa', fontSize: '0.75rem', marginTop: '0.5rem', marginBottom: 0 }}>
+          {todasOrdens.length} pedidos carregados
         </p>
       </div>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { box-shadow: 0 4px 15px rgba(79,70,229,0.5); }
+          50% { box-shadow: 0 4px 30px rgba(79,70,229,0.9); transform: scale(1.01); }
+        }
+      `}</style>
+
 
       {/* Card do Pedido Encontrado */}
       {pedidoEncontrado && (status === 'found' || status === 'already') && (
