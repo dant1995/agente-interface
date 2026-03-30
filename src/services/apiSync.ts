@@ -654,6 +654,51 @@ export const apiSync = {
   },
 
   /**
+   * Busca os registros já entregues da aba "Entrega" do Google Sheets.
+   */
+  fetchEntregas: async (): Promise<Order[]> => {
+    try {
+      const response = await fetch(N8N_WEBHOOK_URLS.ENTREGA, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_entregas' }),
+      });
+      if (!response.ok) throw new Error('Falha ao buscar entregas');
+      const rawData = await response.json();
+      let items: any[] = [];
+      if (Array.isArray(rawData)) items = rawData;
+      else if (rawData && typeof rawData === 'object') {
+        items = Object.values(rawData).find(val => Array.isArray(val)) as any[] || [rawData];
+      }
+      return items
+        .filter(item => item['cliente'] || item['Cliente'] || item['CLIENTE'])
+        .map((item: any, index: number) => ({
+          id_pedido: item['id_pedido'] || item['ID Pedido'] || String(item.row_number || index + 1),
+          data: item['dataEntrega'] || item['Data'] || new Date().toISOString(),
+          dataCriacao: item['dataEntrega'] || item['Data'] || new Date().toISOString(),
+          cliente: item['cliente'] || item['Cliente'] || item['CLIENTE'] || '',
+          whatsapp: item['whatsapp'] || item['Whatsapp'] || '',
+          produtoNome: item['produtoNome'] || item['Produto'] || 'Camiseta',
+          produtoId: '',
+          tamanho: item['tamanho'] || item['Tamanho'] || '',
+          cor: item['cor'] || item['Cor'] || '',
+          quantidade: Number(item['quantidade'] || item['Quantidade'] || 1),
+          valorTotal: Number(item['valorTotal'] || item['Total'] || 0),
+          preco: Number(item['valorTotal'] || item['Total'] || 0),
+          custo: 0,
+          lucro: 0,
+          codigo_barra: item['codigo_barra'] || item['Codigo'] || '',
+          status: 'Entregue' as any,
+          pago: true,
+          entregue: true,
+        } as Order));
+    } catch (error) {
+      console.error('Erro buscando entregas:', error);
+      return [];
+    }
+  },
+
+  /**
    * Registra a entrega de um pedido na aba "Entrega" da planilha Google Sheets via n8n.
    * Chamado ao confirmar entrega pelo scanner de código de barras.
    */

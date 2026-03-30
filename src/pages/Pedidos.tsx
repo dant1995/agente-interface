@@ -6,17 +6,39 @@ import { apiSync } from '../services/apiSync';
 
 const Pedidos = () => {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [entregas, setEntregas] = useState<Order[]>([]);
   const [currentFilter, setCurrentFilter] = useState<OrderStatus | 'TODOS'>('TODOS');
   const [visibleCount, setVisibleCount] = useState<number>(10);
   const [searchQuery, setSearchQuery] = useState('');
+  const [loadingEntregas, setLoadingEntregas] = useState(false); // eslint-disable-line @typescript-eslint/no-unused-vars
 
   useEffect(() => {
     loadOrders();
   }, []);
 
+  // Quando o filtro mudar para Entregue, carrega da planilha Entrega
+  useEffect(() => {
+    if (currentFilter === OrderStatus.ENTREGUE && entregas.length === 0) {
+      carregarEntregas();
+    }
+  }, [currentFilter]);
+
   const loadOrders = async () => {
     const data = await storage.getOrders();
-    setOrders(data);
+    // Remove os entregues da lista principal (eles vêm da planilha Entrega)
+    setOrders(data.filter(o => o.status !== OrderStatus.ENTREGUE));
+  };
+
+  const carregarEntregas = async () => {
+    setLoadingEntregas(true);
+    try {
+      const data = await apiSync.fetchEntregas();
+      setEntregas(data);
+    } catch {
+      console.error('Erro ao buscar entregas');
+    } finally {
+      setLoadingEntregas(false);
+    }
   };
 
   const handleSyncN8N = async () => {
@@ -24,12 +46,13 @@ const Pedidos = () => {
       const data = await apiSync.fetchPedidos();
       if (data && data.length > 0) {
         const updatedOrders = await storage.syncExternalOrders(data);
-        setOrders(updatedOrders);
-        alert(`Sincronizado! Total de ${updatedOrders.length} pedidos na lista.`);
+        // Remove entregues da lista principal
+        setOrders(updatedOrders.filter(o => o.status !== OrderStatus.ENTREGUE));
+        alert(`Sincronizado! ${updatedOrders.length} pedidos.`);
       } else {
         alert('A planilha parece estar vazia ou os dados não foram encontrados.');
       }
-    } catch (e) {
+    } catch {
       alert('Erro ao buscar pedidos externos.');
     }
   };
@@ -63,12 +86,18 @@ const Pedidos = () => {
         dataEntrega: new Date().toLocaleDateString('pt-BR'),
         horarioEntrega: new Date().toLocaleTimeString('pt-BR'),
       });
-      loadOrders();
+      // Remove da lista principal e recarrega entregas
+      setOrders(prev => prev.filter(o => o.id_pedido !== order.id_pedido));
+      setEntregas([]);  // Força reload quando voltar para aba Entregue
+      if (currentFilter === OrderStatus.ENTREGUE) carregarEntregas();
     } catch (err) {
       console.error('Erro ao marcar como entregue:', err);
       alert('Erro ao registrar entrega.');
     }
   };
+
+  // Lista ativa: se filtro=ENTREGUE usa planilha Entrega, senão usa pedidos normais
+  const listaAtiva = currentFilter === OrderStatus.ENTREGUE ? entregas : orders;
 
   const statusColors: Record<string, string> = {
     [OrderStatus.RECEBIDO]: 'badge-info',
@@ -80,9 +109,15 @@ const Pedidos = () => {
 
   const availableFilters = ['TODOS', OrderStatus.RECEBIDO, OrderStatus.PRODUCAO, OrderStatus.ESTAMPA_PRONTA, OrderStatus.PRONTA, OrderStatus.ENTREGUE];
 
-  const filteredAndSortedOrders = orders
+  const getStatusCount = (status: string) => {
+    if (status === 'TODOS') return orders.length;
+    if (status === OrderStatus.ENTREGUE) return entregas.length;
+    return orders.filter(o => o.status === status).length;
+  };
+
+  const filteredAndSortedOrders = listaAtiva
     .filter(o => {
-      const matchesFilter = currentFilter === 'TODOS' || o.status === currentFilter;
+      const matchesFilter = currentFilter === 'TODOS' || currentFilter === OrderStatus.ENTREGUE || o.status === currentFilter;
       const matchesSearch = 
         o.cliente.toLowerCase().includes(searchQuery.toLowerCase()) || 
         String(o.id_pedido).toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -98,10 +133,7 @@ const Pedidos = () => {
   const visibleOrders = filteredAndSortedOrders.slice(0, visibleCount);
   const hasMore = visibleCount < filteredAndSortedOrders.length;
 
-  const getStatusCount = (status: string) => {
-    if (status === 'TODOS') return orders.length;
-    return orders.filter(o => o.status === status).length;
-  };
+
 
   return (
     <div className="page-content" style={{ background: '#f5f5f5', minHeight: '100vh', padding: '1rem', paddingBottom: '80px' }}>
