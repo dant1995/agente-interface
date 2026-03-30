@@ -17,7 +17,8 @@ const N8N_WEBHOOK_URLS = {
   LICITACOES: `${BASE_URL}/webhook/licitacoes`,
   LICITACAO_ANALISE: `${BASE_URL}/webhook/licitacao-analise`,
   PNCP: `${BASE_URL}/webhook/buscar-pncp`,
-  ACHADOS_ROBO: `${BASE_URL}/webhook/buscar-achados`
+  ACHADOS_ROBO: `${BASE_URL}/webhook/buscar-achados`,
+  ENTREGA: `${BASE_URL}/webhook/Entrega`,
 };
 
 
@@ -650,5 +651,29 @@ export const apiSync = {
         }];
 
     return sendWebhook(`${BASE_URL}/webhook/estoque`, { linhas });
-  }
+  },
+
+  /**
+   * Registra a entrega de um pedido na aba "Entrega" da planilha Google Sheets via n8n.
+   * Chamado ao confirmar entrega pelo scanner de código de barras.
+   */
+  marcarEntregue: async (dados: {
+    id_pedido: string;
+    cliente: string;
+    whatsapp?: string;
+    produtoNome: string;
+    tamanho: string;
+    cor: string;
+    quantidade: number;
+    valorTotal?: number;
+    codigo_barra?: string;
+    dataEntrega: string;
+    horarioEntrega: string;
+  }) => {
+    return sendWebhook(N8N_WEBHOOK_URLS.ENTREGA, {
+      action: 'registrar_entrega',
+      ...dados,
+      timestamp: new Date().toISOString(),
+    });
+  },
 };
