@@ -661,7 +661,7 @@ export const apiSync = {
       const response = await fetch(N8N_WEBHOOK_URLS.ENTREGA, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'get_entregas' }),
+        body: JSON.stringify({ action: 'get_entrada' }),
       });
       if (!response.ok) throw new Error('Falha ao buscar entregas');
       const rawData = await response.json();
