@@ -7,6 +7,8 @@ import { apiSync } from '../services/apiSync';
 const Pedidos = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [entregas, setEntregas] = useState<Order[]>([]);
+  const [loadingEntregas, setLoadingEntregas] = useState(false);
+  const [erroEntregas, setErroEntregas] = useState('');
   const [currentFilter, setCurrentFilter] = useState<OrderStatus | 'TODOS'>('TODOS');
   const [visibleCount, setVisibleCount] = useState<number>(10);
   const [searchQuery, setSearchQuery] = useState('');
@@ -30,11 +32,16 @@ const Pedidos = () => {
   };
 
   const carregarEntregas = async () => {
+    setLoadingEntregas(true);
+    setErroEntregas('');
     try {
       const data = await apiSync.fetchEntregas();
       setEntregas(data);
+      if (data.length === 0) setErroEntregas('Nenhuma entrega encontrada na planilha.');
     } catch {
-      console.error('Erro ao buscar entregas');
+      setErroEntregas('Erro ao buscar entregas. Verifique o workflow no n8n.');
+    } finally {
+      setLoadingEntregas(false);
     }
   };
 
@@ -174,95 +181,163 @@ const Pedidos = () => {
           </div>
         </div>
 
-        {orders.length === 0 ? (
-          <div style={{ padding: '3rem', textAlign: 'center', color: '#888' }}>
-            <p>Nenhum pedido encontrado.</p>
-          </div>
-        ) : visibleOrders.length === 0 ? (
-          <div style={{ padding: '3rem', textAlign: 'center', color: '#888' }}>
-            <p>Nenhum resultado para "<strong>{searchQuery}</strong>".</p>
+        {/* Aba Entregue: carrega da planilha Entrega         {/* Aba Entregue: carrega da planilha Entrega */}
+        {currentFilter === OrderStatus.ENTREGUE ? (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
+              <button
+                onClick={carregarEntregas}
+                disabled={loadingEntregas}
+                style={{ background: '#4f46e5', color: '#fff', border: 'none', borderRadius: '8px', padding: '0.4rem 0.9rem', fontSize: '0.8rem', cursor: 'pointer', opacity: loadingEntregas ? 0.6 : 1 }}
+              >
+                {loadingEntregas ? '⟳ Carregando...' : '🔄 Recarregar entregas'}
+              </button>
+            </div>
+            {loadingEntregas ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>⏳ Buscando entregas na planilha...</div>
+            ) : erroEntregas ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: '#c0392b' }}>{erroEntregas}</div>
+            ) : visibleOrders.length === 0 ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>Nenhuma entrega registrada ainda.</div>
+            ) : (
+              <div className="ecommerce-table-container">
+                <table className="ecommerce-table">
+                  <thead>
+                    <tr className="table-header">
+                      <th>Produto</th>
+                      <th>Cliente</th>
+                      <th>Total</th>
+                      <th>Data Entrega</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleOrders.map(order => (
+                      <tr key={order.id_pedido} className="table-row">
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+                            <div style={{ width: '36px', height: '36px', background: '#f0f0f0', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>👕</div>
+                            <div>
+                              <div style={{ fontWeight: '500', color: '#333' }}>{order.produtoNome}</div>
+                              <div style={{ fontSize: '0.78rem', color: '#888' }}>{order.cor} • {order.tamanho} • Qtd: {order.quantidade}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: '500' }}>{order.cliente}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#888' }}>{order.whatsapp}</div>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: '500', color: '#2e7d32' }}>
+                            {order.valorTotal ? `R$ ${Number(order.valorTotal).toFixed(2)}` : '—'}
+                          </div>
+                        </td>
+                        <td>
+                          <span className="badge badge-success">Entregue</span>
+                          <div style={{ fontSize: '0.72rem', color: '#888', marginTop: '2px' }}>
+                            {order.data ? new Date(order.data).toLocaleDateString('pt-BR') : '—'}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         ) : (
-          <div className="ecommerce-table-container">
-            <table className="ecommerce-table">
-              <thead>
-                <tr className="table-header">
-                  <th>Produto</th>
-                  <th>Cliente</th>
-                  <th>Preço</th>
-                  <th>Status</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleOrders.map(order => (
-                  <tr key={order.id_pedido} className="table-row">
-                    <td>
-                      <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
-                        <div style={{ width: '40px', height: '40px', background: '#f0f0f0', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
-                          👕
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: '500', color: '#333' }}>{order.produtoNome}</div>
-                          <div style={{ fontSize: '0.8rem', color: '#888' }}>
-                            {order.cor} • {order.tamanho} • Qtd: {order.quantidade}
+          /* Outras abas: exibe pedidos normais */
+          <>
+            {orders.length === 0 ? (
+              <div style={{ padding: '3rem', textAlign: 'center', color: '#888' }}>
+                <p>Nenhum pedido encontrado.</p>
+              </div>
+            ) : visibleOrders.length === 0 ? (
+              <div style={{ padding: '3rem', textAlign: 'center', color: '#888' }}>
+                <p>Nenhum resultado para "<strong>{searchQuery}</strong>".</p>
+              </div>
+            ) : (
+              <div className="ecommerce-table-container">
+                <table className="ecommerce-table">
+                  <thead>
+                    <tr className="table-header">
+                      <th>Produto</th>
+                      <th>Cliente</th>
+                      <th>Preço</th>
+                      <th>Status</th>
+                      <th>Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleOrders.map(order => (
+                      <tr key={order.id_pedido} className="table-row">
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+                            <div style={{ width: '40px', height: '40px', background: '#f0f0f0', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                              👕
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: '500', color: '#333' }}>{order.produtoNome}</div>
+                              <div style={{ fontSize: '0.8rem', color: '#888' }}>
+                                {order.cor} • {order.tamanho} • Qtd: {order.quantidade}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: '500' }}>{order.cliente}</div>
-                      <div style={{ fontSize: '0.75rem', color: '#888' }}>ID: {String(order.id_pedido).substring(0, 8)}</div>
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: '500' }}>
-                        {order.valorTotal ? `R$ ${Number(order.valorTotal).toFixed(2)}` : 'R$ 0,00'}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`badge ${statusColors[order.status]}`}>
-                        {order.status}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                        <select 
-                          className="select-action"
-                          value={order.status}
-                          onChange={(e) => handleStatusChange(order.id_pedido, e.target.value as OrderStatus)}
-                        >
-                          {Object.values(OrderStatus).map(s => (
-                            <option key={s} value={s}>{s}</option>
-                          ))}
-                        </select>
-                        {order.status === OrderStatus.PRONTA && (
-                          <button
-                            onClick={() => handleMarcarEntregue(order)}
-                            style={{
-                              background: 'linear-gradient(135deg,#4caf50,#2e7d32)',
-                              color: '#fff', border: 'none', borderRadius: '6px',
-                              padding: '0.35rem 0.6rem', cursor: 'pointer',
-                              fontSize: '0.78rem', fontWeight: 700,
-                              boxShadow: '0 2px 6px rgba(76,175,80,0.35)',
-                              whiteSpace: 'nowrap'
-                            }}
-                          >
-                            🚚 Marcar Entregue
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: '500' }}>{order.cliente}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#888' }}>ID: {String(order.id_pedido).substring(0, 8)}</div>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: '500' }}>
+                            {order.valorTotal ? `R$ ${Number(order.valorTotal).toFixed(2)}` : 'R$ 0,00'}
+                          </div>
+                        </td>
+                        <td>
+                          <span className={`badge ${statusColors[order.status]}`}>
+                            {order.status}
+                          </span>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                            <select
+                              className="select-action"
+                              value={order.status}
+                              onChange={(e) => handleStatusChange(order.id_pedido, e.target.value as OrderStatus)}
+                            >
+                              {Object.values(OrderStatus).map(s => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+                            {order.status === OrderStatus.PRONTA && (
+                              <button
+                                onClick={() => handleMarcarEntregue(order)}
+                                style={{
+                                  background: 'linear-gradient(135deg,#4caf50,#2e7d32)',
+                                  color: '#fff', border: 'none', borderRadius: '6px',
+                                  padding: '0.35rem 0.6rem', cursor: 'pointer',
+                                  fontSize: '0.78rem', fontWeight: 700,
+                                  boxShadow: '0 2px 6px rgba(76,175,80,0.35)',
+                                  whiteSpace: 'nowrap'
+                                }}
+                              >
+                                🚚 Marcar Entregue
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
 
         {hasMore && (
            <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
-              <button 
-                className="btn btn-secondary" 
+              <button
+                className="btn btn-secondary"
                 onClick={() => setVisibleCount(prev => prev + 10)}
               >
                 Carregar mais
