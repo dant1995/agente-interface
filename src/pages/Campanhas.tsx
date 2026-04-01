@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { storage } from '../services/storage';
 import {
@@ -35,6 +35,9 @@ const Campanhas = () => {
   useEffect(() => { carregar(); }, []);
 
   // ─── Sincronização Automática (Background) ───
+  const campanhasRef = useRef(campanhas);
+  useEffect(() => { campanhasRef.current = campanhas; }, [campanhas]);
+
   useEffect(() => {
     // Intervalo de 1 minuto conforme solicitado pelo usuário
     const timer = setInterval(() => {
@@ -42,10 +45,11 @@ const Campanhas = () => {
     }, 60000);
 
     return () => clearInterval(timer);
-  }, [campanhas.length]); // Reinicia se a lista mudar
+  }, []); // Roda apenas uma vez no mount
 
   const executarSincronizacaoBackground = async () => {
-    const ativas = campanhas.filter(c => c.status === 'disparada');
+    // Usamos o Ref para garantir que pegamos a lista de campanhas MAIS ATUAL
+    const ativas = campanhasRef.current.filter(c => c.status === 'disparada');
     if (ativas.length === 0 || isAutoSyncing) return;
 
     setIsAutoSyncing(true);
