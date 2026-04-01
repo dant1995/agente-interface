@@ -47,9 +47,28 @@ const VendaHistorico = () => {
   };
 
   const totals = sales.reduce((acc, s) => {
-    const method = s.observacoes?.includes('Pagamento:') ? s.observacoes.split(': ')[1] : 'Outros';
-    acc.total += (s.valorTotal || 0);
-    acc[method] = (acc[method] || 0) + (s.valorTotal || 0);
+    const val = Number(s.valorTotal) || 0;
+    acc.total += val;
+    
+    // Normalização inteligente do método de pagamento
+    const obs = String(s.observacoes || '').toLowerCase();
+    const pgto = String(s.formaPagamento || '').toLowerCase();
+    const origem = String(s.origem || '').toLowerCase();
+    
+    const combined = `${obs} ${pgto} ${origem}`;
+
+    if (combined.includes('pix')) {
+      acc.Pix += val;
+    } else if (combined.includes('dinheiro') || combined.includes('cash') || combined.includes('cedula')) {
+      acc.Dinheiro += val;
+    } else if (
+      combined.includes('cartao') || combined.includes('cartão') || 
+      combined.includes('credit') || combined.includes('debit') ||
+      combined.includes('shopee') || combined.includes('tiktok') || combined.includes('online') || combined.includes('marketplace')
+    ) {
+      acc.Cartão += val;
+    }
+    
     return acc;
   }, { total: 0, Pix: 0, Dinheiro: 0, Cartão: 0 });
 

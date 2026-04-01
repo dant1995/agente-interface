@@ -620,7 +620,9 @@ export const apiSync = {
           codigo_barra: item.ID || item.codigo_barra || item.codigo_barras || '',
           pago: true,
           entregue: true,
-          previsaoRecebimento: forecastDate.toISOString()
+          previsaoRecebimento: forecastDate.toISOString(),
+          formaPagamento: String(getValueByKeywords(item, ['FORMA DE PAGAMENTO', 'FORMA_PAGAMENTO', 'PAGAMENTO', 'METODO', 'METHOD', 'FORMA_PAGTO']) || ''),
+          origem: String(getValueByKeywords(item, ['ORIGEM', 'SOURCE', 'TIPO']) || '')
         };
       });
     } catch (error) {

@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { storage } from '../services/storage';
 import { apiSync } from '../services/apiSync';
-import { User, MessageCircle, ShoppingBag, Search, CheckCircle2, RotateCw } from 'lucide-react';
+import { User, MessageCircle, ShoppingBag, Search, CheckCircle2, RotateCw, History } from 'lucide-react';
+import ModalHistoricoChat from '../components/campanhas/ModalHistoricoChat';
 
 interface CustomerSummary {
   nome: string;
@@ -22,6 +23,7 @@ const Clientes = () => {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [visibleCount, setVisibleCount] = useState(20);
+  const [chatTarget, setChatTarget] = useState<{ whatsapp: string, nome: string } | null>(null);
 
   useEffect(() => {
     loadCustomers();
@@ -239,11 +241,18 @@ const Clientes = () => {
                         <MessageCircle size={16} /> WhatsApp
                     </button>
                     <button 
+                        onClick={() => setChatTarget({ whatsapp: customer.whatsapp, nome: customer.nome })}
+                        style={{ flex: 1, background: '#f1f5f9', border: 'none', color: '#475569', padding: '0.6rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
+                    >
+                        <History size={16} /> Histórico
+                    </button>
+                    <button 
                         onClick={() => navigate(`/cliente/${customer.whatsapp}`)}
                         style={{ flex: 1, background: '#f1f5f9', border: 'none', color: '#475569', padding: '0.6rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold' }}
                     >
                         Ver Detalhes
                     </button>
+
                 </div>
                 </div>
             );
@@ -258,6 +267,14 @@ const Clientes = () => {
               </button>
           )}
         </div>
+      )}
+
+      {chatTarget && (
+        <ModalHistoricoChat 
+          whatsapp={chatTarget.whatsapp}
+          nome={chatTarget.nome}
+          onClose={() => setChatTarget(null)}
+        />
       )}
     </div>
   );

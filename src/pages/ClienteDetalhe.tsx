@@ -4,8 +4,9 @@ import { storage } from '../services/storage';
 import { 
   ArrowLeft, Phone, Mail, MoreVertical, 
   MessageCircle, FileText, ShoppingBag, 
-  ChevronRight, Plus, TrendingUp
+  ChevronRight, Plus, TrendingUp, History
 } from 'lucide-react';
+import ModalHistoricoChat from '../components/campanhas/ModalHistoricoChat';
 
 const ClienteDetalhe = () => {
   const { nome } = useParams<{ nome: string }>();
@@ -14,6 +15,7 @@ const ClienteDetalhe = () => {
   const [meta, setMeta] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('Activities');
+  const [showChat, setShowChat] = useState(false);
 
   useEffect(() => {
     if (nome) {
@@ -23,18 +25,26 @@ const ClienteDetalhe = () => {
 
   const loadCustomerData = async () => {
     const allOrders = await storage.getOrders();
-    // Comparação insensível a maiúsculas/minúsculas e espaços
-    const customerOrders = allOrders.filter(o => 
-      o.cliente?.trim().toLowerCase() === nome?.trim().toLowerCase()
-    );
+    const allCustomers = await storage.getCustomers();
     
-    console.log('Orders for customer:', nome, customerOrders);
+    // Tenta achar o cliente pelo WhatsApp (que está no param 'nome') ou pelo Nome
+    const cleanId = nome?.replace(/\D/g, '') || '';
+    
+    const foundCustomer = allCustomers.find(c => {
+      const cWhatsapp = String(c.whatsapp || '').replace(/\D/g, '');
+      return (cleanId && cWhatsapp === cleanId) || c.nome?.toLowerCase() === nome?.toLowerCase();
+    });
 
+    const customerOrders = allOrders.filter(o => {
+      const oWhatsapp = String(o.whatsapp || '').replace(/\D/g, '');
+      return (cleanId && oWhatsapp === cleanId) || o.cliente?.trim().toLowerCase() === nome?.trim().toLowerCase();
+    });
+    
     const totalGasto = customerOrders.reduce((acc, o) => acc + (Number(o.valorTotal) || 0), 0);
     
     setCustomer({
-      nome,
-      whatsapp: customerOrders[0]?.whatsapp || '',
+      nome: foundCustomer?.nome || (cleanId ? cleanId : nome),
+      whatsapp: foundCustomer?.whatsapp || cleanId || customerOrders[0]?.whatsapp || '',
       totalPedidos: customerOrders.length,
       totalGasto
     });
@@ -149,9 +159,9 @@ const ClienteDetalhe = () => {
                         <MessageCircle size={20} color="#10b981" style={{ margin: '0 auto 0.5rem' }} />
                         <div style={{ fontSize: '0.7rem', fontWeight: '600' }}>WhatsApp</div>
                     </div>
-                    <div style={{ background: 'white', padding: '1rem', borderRadius: '16px', textAlign: 'center', border: '1px solid #e2e8f0' }}>
-                        <FileText size={20} color="#6366f1" style={{ margin: '0 auto 0.5rem' }} />
-                        <div style={{ fontSize: '0.7rem', fontWeight: '600' }}>Nota</div>
+                    <div onClick={() => setShowChat(true)} style={{ background: 'white', padding: '1rem', borderRadius: '16px', textAlign: 'center', border: '1px solid #e2e8f0', cursor: 'pointer' }}>
+                        <History size={20} color="#6366f1" style={{ margin: '0 auto 0.5rem' }} />
+                        <div style={{ fontSize: '0.7rem', fontWeight: '600' }}>Histórico</div>
                     </div>
                 </div>
 
@@ -223,6 +233,14 @@ const ClienteDetalhe = () => {
             <Plus size={28} />
         </button>
       </div>
+
+      {showChat && (
+        <ModalHistoricoChat 
+          whatsapp={customer.whatsapp}
+          nome={customer.nome}
+          onClose={() => setShowChat(false)}
+        />
+      )}
     </div>
   );
 };
