@@ -81,8 +81,6 @@ const Campanhas = () => {
 
         // Vendas: Considera Pedidos REAIS ou Data de Compra na aba de Clientes
         const dataCompraPlanilha = (c as any).dataCompra;
-        const temPedido = (orderData?.totalPedidos || 0) > 0 || !!dataCompraPlanilha;
-
         return {
           ...c,
           totalPedidos: orderData?.totalPedidos || (dataCompraPlanilha ? 1 : 0),
@@ -384,7 +382,7 @@ const Campanhas = () => {
 
       {/* Modais */}
       {(showCriar || editando) && <ModalCriar campanha={editando} clientes={clientes} onClose={() => { setShowCriar(false); setEditando(null); }} onSave={handleSave} />}
-      {disparando && <ModalDisparar campanha={disparando} clientes={clientes} onClose={() => { setDisparando(null); reload(); }} onConcluido={reload} />}
+      {disparando && <ModalDisparar campanha={disparando} clientes={clientes} onClose={() => { setDisparando(null); reload(); }} />}
       {rastreando && <ModalRastrear 
         campanha={rastreando} 
         clientes={clientes} 

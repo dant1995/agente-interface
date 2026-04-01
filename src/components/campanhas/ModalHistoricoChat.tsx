@@ -44,7 +44,7 @@ const ModalHistoricoChat = ({ whatsapp, nome, onClose }: Props) => {
 
       const normalized: Message[] = [];
       
-      rawItems.forEach((item, idx) => {
+      rawItems.forEach((item) => {
         // Suporte para n8n com wrapper .json ou direto
         const m = item.json || item;
         

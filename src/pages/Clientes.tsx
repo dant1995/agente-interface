@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { storage } from '../services/storage';
 import { apiSync } from '../services/apiSync';
-import { User, MessageCircle, ShoppingBag, Search, Megaphone, CheckCircle2, RotateCw } from 'lucide-react';
+import { User, MessageCircle, ShoppingBag, Search, CheckCircle2, RotateCw } from 'lucide-react';
 
 interface CustomerSummary {
   nome: string;

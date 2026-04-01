@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Play, Pause, XCircle, Send, Clock, CheckCircle } from 'lucide-react';
+import { Play, Pause, XCircle, Send, Clock } from 'lucide-react';
 import { queueService, type QueueState } from '../../services/queueService';
 import { dark } from './darkTheme';
 
