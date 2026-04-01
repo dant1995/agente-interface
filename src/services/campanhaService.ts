@@ -79,7 +79,7 @@ export const TIPO_CAMPANHA_INFO: Record<TipoCampanha, { label: string; emoji: st
 export const SEGMENTO_INFO: Record<SegmentoTipo, { label: string; color: string; descricao: string }> = {
   todos:         { label: 'Todos os Clientes', color: '#6c63ff', descricao: 'Toda a base' },
   compradores:   { label: 'Já Compraram',      color: '#00d4aa', descricao: 'Clientes ativos' },
-  nunca_comprou: { label: 'Nunca Compraram',   color: '#f5a623', descricao: 'Leads ainda não convertidos' },
+  nunca_comprou: { label: 'Leads (Novos)',     color: '#f5a623', descricao: 'Lista de contatos (sem compra)' },
   vip:           { label: 'Clientes VIP',      color: '#fbbf24', descricao: 'Alto valor gasto' },
   inativos:      { label: 'Inativos +30d',     color: '#94a3b8', descricao: 'Sem compra há mais de 30 dias' },
 };
@@ -188,20 +188,30 @@ export const filtrarClientesPorSegmento = (
   }
 };
 
-// Para campanha inteligente: divide ativos vs inativos
+// Para campanha inteligente: divide ativos vs inativos vs leads
 export const dividirParaCampanhaInteligente = (clientes: ClienteCampanha[]) => {
   const limite = new Date();
   limite.setDate(limite.getDate() - 30);
   const com_whats = clientes.filter(c => String(c.whatsapp || '').replace(/\D/g, '').length >= 10);
-  const ativos   = com_whats.filter(c => {
+  
+  // 1. Leads: Nunca compraram nada e não têm data de compra na planilha
+  const leads = com_whats.filter(c => (c.totalPedidos === 0 && !c.ultimoPedido));
+
+  // 2. Compradores (Base Geral)
+  const compradores = com_whats.filter(c => (c.totalPedidos > 0 || !!c.ultimoPedido));
+
+  // 3. Divide compradores por atividade
+  const ativos = compradores.filter(c => {
     const lastAction = c.ultimoContato || c.ultimoPedido;
     return lastAction && new Date(lastAction) >= limite;
   });
-  const inativos = com_whats.filter(c => {
+
+  const inativos = compradores.filter(c => {
     const lastAction = c.ultimoContato || c.ultimoPedido;
     return !lastAction || new Date(lastAction) < limite;
   });
-  return { ativos, inativos };
+
+  return { ativos, inativos, leads };
 };
 
 // ─── Serviço principal ────────────────────────────────────────────────────────

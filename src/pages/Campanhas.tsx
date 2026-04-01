@@ -79,11 +79,15 @@ const Campanhas = () => {
           finalLastContact = lastContactSupabase;
         }
 
+        // Vendas: Considera Pedidos REAIS ou Data de Compra na aba de Clientes
+        const dataCompraPlanilha = (c as any).dataCompra;
+        const temPedido = (orderData?.totalPedidos || 0) > 0 || !!dataCompraPlanilha;
+
         return {
           ...c,
-          totalPedidos: orderData?.totalPedidos || 0,
+          totalPedidos: orderData?.totalPedidos || (dataCompraPlanilha ? 1 : 0),
           totalGasto: orderData?.totalGasto || 0,
-          ultimoPedido: orderData?.ultimoPedido || (c as any).dataCompra || undefined,
+          ultimoPedido: orderData?.ultimoPedido || dataCompraPlanilha || undefined,
           ultimoContato: finalLastContact,
         };
       });
@@ -149,7 +153,8 @@ const Campanhas = () => {
   };
 
   const criarCampanhaInteligente = () => {
-    const { ativos, inativos } = dividirParaCampanhaInteligente(clientes);
+    const { ativos, inativos, leads } = dividirParaCampanhaInteligente(clientes);
+    
     if (ativos.length > 0) {
       campanhaService.criar({
         nome: `🔥 Aquecimento Ativos (${ativos.length})`,
@@ -161,6 +166,7 @@ const Campanhas = () => {
         followUp: { ativo: true, delayHoras: 24, mensagem: TEMPLATE_FOLLOWUP }
       });
     }
+
     if (inativos.length > 0) {
       campanhaService.criar({
         nome: `⚡ Reativação Inativos (${inativos.length})`,
@@ -172,8 +178,21 @@ const Campanhas = () => {
         followUp: { ativo: true, delayHoras: 48, mensagem: TEMPLATE_FOLLOWUP }
       });
     }
+
+    if (leads.length > 0) {
+      campanhaService.criar({
+        nome: `🎯 Prospecção Leads (${leads.length})`,
+        tipo: 'inteligente',
+        segmento: 'nunca_comprou',
+        valorMinimoVip: 300,
+        limiteHora: 60,
+        mensagem: 'Oi {{nome}}! Vi que você se interessou pelos nossos produtos mas ainda não garantiu o seu 👀. Chegou novidade, quer ver?',
+        followUp: { ativo: true, delayHoras: 24, mensagem: TEMPLATE_FOLLOWUP }
+      });
+    }
+
     reload();
-    alert('Campanhas inteligentes criadas com sucesso!');
+    alert('Campanhas inteligentes criadas com sucesso para os 3 grupos!');
   };
 
   /* ─── Componente Card ─── */
