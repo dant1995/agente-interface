@@ -220,6 +220,7 @@ export const apiSync = {
     }
   },
 
+
   fetchClientesGlobais: async (): Promise<any[]> => {
     try {
       const response = await fetch(N8N_WEBHOOK_URLS.CLIENTES, {
@@ -782,7 +783,9 @@ export const apiSync = {
     try {
       const tel = String(whatsapp).replace(/\D/g, '');
       console.log(`[Chat API] Buscando histórico para ${tel} via ${N8N_WEBHOOK_URLS.CHAT}`);
-      return await sendWebhook(N8N_WEBHOOK_URLS.CHAT, { action: 'get_chat', whatsapp: tel });
+      const res = await sendWebhook(N8N_WEBHOOK_URLS.CHAT, { action: 'get_chat', whatsapp: tel });
+      console.log(`[Chat API] Resposta recebida para ${tel}:`, res);
+      return res;
     } catch (error) {
       console.error('[Chat API] Erro ao buscar histórico:', error);
       return [];

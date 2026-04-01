@@ -27,64 +27,88 @@ const ModalHistoricoChat = ({ whatsapp, nome, onClose }: Props) => {
     try {
       const data = await apiSync.fetchChatHistory(whatsapp);
       
-      // Tenta encontrar o array de dados em diferentes níveis (n8n às vezes envolve em .json ou em um objeto pai)
+      // Tenta encontrar o array de dados em diferentes níveis
+      console.log('[DEBUG CHAT] Dados brutos recebidos:', data);
+      
       let rawItems: any[] = [];
       if (Array.isArray(data)) {
         rawItems = data;
       } else if (data && typeof data === 'object') {
-        const found = Object.values(data).find(v => Array.isArray(v)) as any[];
+        const values = Object.values(data);
+        const found = values.find(v => Array.isArray(v)) as any[];
         if (found) rawItems = found;
         else if (Object.keys(data).length > 0) rawItems = [data];
       }
 
+      console.log(`[DEBUG CHAT] Itens brutos extraídos: ${rawItems.length}`);
+
       const normalized: Message[] = [];
       
-      rawItems.forEach(item => {
-        // Suporte para n8n que às vezes envia [{ json: { ... } }]
+      rawItems.forEach((item, idx) => {
+        // Suporte para n8n com wrapper .json ou direto
         const m = item.json || item;
+        
+        // Tenta extrair o corpo da mensagem de várias fontes
+        const userMsg = m.user_message || m.user_msg || m.cliente_message || m.message_user;
+        const botMsg = m.bot_message || m.bot_msg || m.atendimento_message || m.message_bot;
+        const fallbackMsg = m.body || m.text || m.message || m.mensagem || m.msg;
 
-        // Suporte ao formato específico (bot_message + user_message no mesmo row)
-        if (m.user_message) {
+        if (userMsg) {
           normalized.push({
             fromMe: false,
-            body: String(m.user_message),
+            body: String(userMsg),
             timestamp: m.created_at || m.timestamp || m.data || new Date().toISOString(),
             senderName: m.nomewpp || 'Cliente'
           });
         }
-        if (m.bot_message) {
+        
+        if (botMsg) {
           normalized.push({
             fromMe: true,
-            body: String(m.bot_message),
+            body: String(botMsg),
             timestamp: m.created_at || m.timestamp || m.data || new Date().toISOString(),
             senderName: 'Atendimento'
           });
         }
 
-        // Caso o banco use o formato padrão (uma mensagem por linha)
-        if (!m.user_message && !m.bot_message) {
-          const body = m.body || m.text || m.message || m.mensagem || '';
-          if (body) {
-            normalized.push({
-              fromMe: m.fromMe ?? m.is_me ?? m.authored_by_me ?? (m.senderName?.toLowerCase() === 'bot') ?? (m.message_type === 'outgoing'),
-              body: String(body),
-              timestamp: m.timestamp ?? m.created_at ?? m.data ?? new Date().toISOString(),
-              senderName: m.senderName ?? m.author ?? m.remetente ?? m.nomewpp ?? ''
-            });
-          }
+        // Se não achou nos campos específicos, tenta o campo geral
+        if (!userMsg && !botMsg && fallbackMsg) {
+          normalized.push({
+            fromMe: m.fromMe === true || m.is_me === true || m.message_type === 'outgoing' || String(m.senderName).toLowerCase() === 'bot',
+            body: String(fallbackMsg),
+            timestamp: m.created_at || m.timestamp || m.data || new Date().toISOString(),
+            senderName: m.senderName || m.nomewpp || ''
+          });
         }
       });
 
-      // Ordena por data e remove vazios (se houver)
+      console.log(`[DEBUG CHAT] Mensagens normalizadas: ${normalized.length}`);
+
+      if (normalized.length === 0 && rawItems.length > 0) {
+         console.warn('[DEBUG CHAT] Nenhum campo de mensagem reconhecido nos itens:', rawItems[0]);
+      }
+
       setMessages(normalized
-        .filter(m => m.body.trim().length > 0)
+        .filter(m => m.body && String(m.body).trim().length > 0)
         .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
       );
     } catch (err) {
-      setError('Não foi possível conectar ao servidor de chat.');
+      console.error('[DEBUG CHAT] Erro no loadChat:', err);
+      setError('Falha ao processar histórico do servidor.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const showRawDebug = () => {
+    setLoading(true);
+    apiSync.fetchChatHistory(whatsapp).then(d => {
+       alert("DADOS RECEBIDOS DO N8N PARA " + whatsapp + ":\n\n" + JSON.stringify(d, null, 2).substring(0, 1500));
+       setLoading(false);
+    }).catch(e => {
+       alert("Erro ao buscar dados brutos: " + e.message);
+       setLoading(false);
+    });
   };
 
   useEffect(() => {
@@ -165,10 +189,16 @@ const ModalHistoricoChat = ({ whatsapp, nome, onClose }: Props) => {
                </div>
             </div>
           ) : messages.length === 0 ? (
-            <div style={{ display:'flex', justifyContent:'center', marginTop:'2rem' }}>
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', marginTop:'4rem', gap:15 }}>
                <div style={{ background:'#fff', padding:'0.6rem 1.5rem', borderRadius:10, fontSize:'0.8rem', color:'#666', boxShadow:'0 1px 2px rgba(0,0,0,0.1)' }}>
                   Nenhum histórico encontrado para este número.
                </div>
+               <button 
+                onClick={showRawDebug}
+                style={{ background:'rgba(255,255,255,0.7)', border:'1px solid #999', padding:'6px 12px', borderRadius:8, fontSize:'0.75rem', color:'#333', fontWeight:600, cursor:'pointer' }}
+               >
+                🛠️ Ver dados brutos (Debug)
+               </button>
             </div>
           ) : (
             messages.map((m, i) => {
