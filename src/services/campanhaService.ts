@@ -64,7 +64,7 @@ export interface ClienteCampanha {
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'erp_campanhas_v2';
-const WEBHOOK_URL = 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/campanha';
+const WEBHOOK_URL = 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/chat';
 const getId = () => `camp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
 // ─── Tipos de campanha ────────────────────────────────────────────────────────
@@ -128,7 +128,6 @@ const postWebhook = async (payload: object): Promise<any> => {
       try {
         return text ? JSON.parse(text) : { status: 'success' };
       } catch (e) {
-        // Se não for JSON mas o status for OK (200), consideramos sucesso
         return { status: 'success', raw: text };
       }
     }
@@ -155,12 +154,19 @@ export const filtrarClientesPorSegmento = (
   clientes: ClienteCampanha[],
   segmento: SegmentoTipo,
   valorMinimoVip = 300,
-  config?: ConfigSegmento
+  config?: ConfigSegmento,
+  logsExistentes: ClienteLog[] = [] // Novo parâmetro para evitar duplicidade
 ): ClienteCampanha[] => {
   const com_whats = clientes.filter(c => String(c.whatsapp || '').replace(/\D/g, '').length >= 10);
   
-  // Filtro extra por produto de interesse se configurado
-  let base = com_whats;
+  // 1. Filtrar quem já foi processado com sucesso ou resposta na campanha atual
+  const jaProcessados = new Set(logsExistentes
+    .filter(l => l.status === 'enviado' || l.status === 'respondeu' || l.status === 'comprou' || l.status === 'ignorou')
+    .map(l => String(l.clienteWhatsapp).replace(/\D/g, ''))
+  );
+
+  let base = com_whats.filter(c => !jaProcessados.has(String(c.whatsapp).replace(/\D/g, '')));
+
   if (config?.produtosInteresse && config.produtosInteresse.length > 0) {
     base = base.filter(c => 
       c.produtoInteresse && 
@@ -402,4 +408,14 @@ export const campanhaService = {
     }
     return false;
   },
+
+  verificarHistoricoRespostas: async (campanhaId: string): Promise<boolean> => {
+    // Esta ação solicita ao n8n que faça uma busca profunda no banco de mensagens
+    const res = await postWebhook({ action: 'verificar_historico', campanha_id: campanhaId });
+    if (res && res.success) {
+      // Após a verificação profunda no n8n, sincronizamos os logs atualizados
+      return await campanhaService.sincronizarDadosExternos(campanhaId);
+    }
+    return false;
+  }
 };

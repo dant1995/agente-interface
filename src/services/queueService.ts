@@ -26,6 +26,7 @@ const getInitialState = (): QueueState => {
 
 let currentState = getInitialState();
 const listeners: ((s: QueueState) => void)[] = [];
+let isProcessing = false; // Trava de segurança (Semaforo)
 
 const save = () => {
   localStorage.setItem(QUEUE_KEY, JSON.stringify(currentState));
@@ -45,6 +46,7 @@ export const queueService = {
   getState: () => currentState,
 
   adicionarCampanha: (campanha: Campanha, clientes: ClienteCampanha[]) => {
+    // ... ignorando implementação idêntica anterior por brevidade em replace ...
     const items: QueueItem[] = clientes.map((c, i) => ({
       campanhaId: campanha.id,
       cliente: c,
@@ -71,7 +73,8 @@ export const queueService = {
 
   retomar: () => {
     currentState.status = 'rodando';
-    currentState.proximoEnvio = new Date().toISOString();
+    // Define como 5 segundos atrás para garantir que o monitor processe imediatamente
+    currentState.proximoEnvio = new Date(Date.now() - 5000).toISOString();
     save();
   },
 
@@ -82,23 +85,33 @@ export const queueService = {
 
   // Processa o próximo item
   processarProximo: async () => {
+    // 1. Verificações de bloqueio
+    if (isProcessing) return;
     if (currentState.status !== 'rodando' || currentState.items.length === 0) return;
     
-    const item = currentState.items[0];
-    const campanha = campanhaService.obter(item.campanhaId);
-    
-    if (!campanha) {
-      currentState.items.shift();
-      save();
-      return;
-    }
-
-    const msg = personalizarMensagem(campanha.mensagem, item.cliente);
+    isProcessing = true;
     
     try {
-      await campanhaService.registrarEnvio(campanha, item.cliente, msg);
+      const item = currentState.items[0];
+      const campanha = campanhaService.obter(item.campanhaId);
       
-      // Gerenciamento da Janela Anti-Ban
+      if (!campanha) {
+        currentState.items.shift();
+        save();
+        return;
+      }
+
+      const msg = personalizarMensagem(campanha.mensagem, item.cliente);
+      
+      // 2. Remove da fila IMEDIATAMENTE para evitar que o próximo tick o processe de novo
+      const clienteVez = item.cliente;
+      currentState.items.shift();
+      save();
+
+      // 3. Efetua o envio (isso pode demorar segundos)
+      await campanhaService.registrarEnvio(campanha, clienteVez, msg);
+      
+      // 4. Gerenciamento da Janela Anti-Ban
       const agora = new Date();
       if (!currentState.windowStart) {
         currentState.windowStart = agora.toISOString();
@@ -107,7 +120,6 @@ export const queueService = {
         const windowStart = new Date(currentState.windowStart);
         const timeSinceWindowStart = agora.getTime() - windowStart.getTime();
 
-        // Se já passou 1 hora desde o início da janela, reseta a janela
         if (timeSinceWindowStart > 3600000) {
           currentState.windowStart = agora.toISOString();
           currentState.windowCount = 1;
@@ -116,22 +128,18 @@ export const queueService = {
         }
       }
 
-      // Remove da fila
-      currentState.items.shift();
-      
+      // 5. Calcula o Próximo Envio
       if (currentState.items.length === 0) {
         currentState.status = 'ocioso';
         campanhaService.finalizarCampanha(campanha.id);
       } else {
         const limite = campanha.limiteHora || 60;
         
-        // Se bateu o limite da hora, agenda para 1 hora após o windowStart + margem de segurança
         if (currentState.windowCount >= limite) {
           const windowStart = new Date(currentState.windowStart!);
-          const proximaJanela = new Date(windowStart.getTime() + 3600000 + 300000); // 1h + 5min de margem
+          const proximaJanela = new Date(windowStart.getTime() + 3600000 + 300000); 
           currentState.proximoEnvio = proximaJanela.toISOString();
         } else {
-          // Intervalo normal de 15 segundos
           const proximo = new Date();
           proximo.setSeconds(proximo.getSeconds() + 15);
           currentState.proximoEnvio = proximo.toISOString();
@@ -140,8 +148,9 @@ export const queueService = {
       save();
     } catch (err) {
       console.error("Fila: Erro no envio, pulando...", err);
-      currentState.items.shift();
-      save();
+      // Se houver erro, apenas continua (o cliente já foi removido no passo 2)
+    } finally {
+      isProcessing = false;
     }
   }
 };

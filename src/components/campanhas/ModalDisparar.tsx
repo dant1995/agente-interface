@@ -17,7 +17,13 @@ interface Props {
 
 const ModalDisparar = ({ campanha, clientes, onClose }: Omit<Props, 'onConcluido'>) => {
   const [iniciado, setIniciado] = useState(false);
-  const clientesFiltrados = filtrarClientesPorSegmento(clientes, campanha.segmento, campanha.valorMinimoVip);
+  const clientesFiltrados = filtrarClientesPorSegmento(
+    clientes, 
+    campanha.segmento, 
+    campanha.valorMinimoVip,
+    undefined,
+    campanha.logs || []
+  );
 
   const iniciarFilaGlobal = () => {
     if (clientesFiltrados.length === 0) return;

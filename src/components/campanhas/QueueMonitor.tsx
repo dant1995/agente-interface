@@ -12,10 +12,27 @@ const QueueMonitor = () => {
         return unsub;
     }, []);
 
+    // Sincronização Automática (Busca respostas no n8n enquanto roda)
+    useEffect(() => {
+        if (state.status !== 'rodando' || state.items.length === 0) return;
+        
+        const syncInterval = setInterval(() => {
+            const campanhaId = state.items[0]?.campanhaId;
+            if (campanhaId) {
+                import('../../services/campanhaService').then(m => {
+                    m.campanhaService.sincronizarDadosExternos(campanhaId);
+                });
+            }
+        }, 30000); 
+        
+        return () => clearInterval(syncInterval);
+    }, [state.status, state.items.length]);
+
+    // Timer e Processamento da Fila
     useEffect(() => {
         if (state.status !== 'rodando' || !state.proximoEnvio) return;
 
-        const interval = setInterval(() => {
+        const tick = () => {
             const agora = new Date();
             const proximo = new Date(state.proximoEnvio!);
             const diff = Math.max(0, Math.ceil((proximo.getTime() - agora.getTime()) / 1000));
@@ -24,8 +41,12 @@ const QueueMonitor = () => {
             if (diff <= 0 && state.items.length > 0) {
                 queueService.processarProximo();
             }
-        }, 1000);
+        };
 
+        // Executa uma vez imediatamente ao entrar no estado 'rodando'
+        tick();
+
+        const interval = setInterval(tick, 1000);
         return () => clearInterval(interval);
     }, [state.status, state.proximoEnvio, state.items.length]);
 

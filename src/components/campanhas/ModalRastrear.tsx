@@ -25,6 +25,7 @@ const RESPOSTAS_RAPIDAS = [
 const ModalRastrear = ({ campanha, clientes, onClose, onAtualizado }: Props) => {
   const [filtro, setFiltro] = useState<StatusCliente | 'todos'>('todos');
   const [chatAberto, setChatAberto] = useState<{ whatsapp: string, nome: string } | null>(null);
+  const [sincronizandoProfundo, setSincronizandoProfundo] = useState(false);
 
   const logs = campanha.logs.filter(l => filtro === 'todos' || l.status === filtro);
 
@@ -50,6 +51,23 @@ const ModalRastrear = ({ campanha, clientes, onClose, onAtualizado }: Props) => 
     onAtualizado();
   };
 
+  const executarSincronizacaoProfunda = async () => {
+    setSincronizandoProfundo(true);
+    try {
+      const sucesso = await campanhaService.verificarHistoricoRespostas(campanha.id);
+      if (sucesso) {
+        onAtualizado();
+        alert('Sincronização Profunda concluída! Verificamos o histórico de mensagens para atualizar os status.');
+      } else {
+        alert('Não foi possível completar a sincronização profunda agora.');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSincronizandoProfundo(false);
+    }
+  };
+
   const statusBtns: (StatusCliente | 'todos')[] = ['todos', 'enviado', 'respondeu', 'comprou', 'ignorou'];
   const contagens: Record<string, number> = { todos: campanha.logs.length };
   campanha.logs.forEach(l => { contagens[l.status] = (contagens[l.status] || 0) + 1; });
@@ -63,7 +81,29 @@ const ModalRastrear = ({ campanha, clientes, onClose, onAtualizado }: Props) => 
             <div style={{ color: dark.text, fontWeight:700 }}>📊 Rastreamento — {campanha.nome}</div>
             <div style={{ color: dark.textMuted, fontSize:'0.72rem' }}>{campanha.totalEnviados} enviados · {campanha.totalRespostas} respostas · {campanha.totalVendas} vendas</div>
           </div>
-          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+            <button 
+              onClick={executarSincronizacaoProfunda}
+              disabled={sincronizandoProfundo}
+              style={{ 
+                background: `${dark.warning}15`, 
+                border: `1px solid ${dark.warning}40`, 
+                color: dark.warning, 
+                cursor: sincronizandoProfundo ? 'not-allowed' : 'pointer', 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 5, 
+                fontSize: '0.72rem', 
+                fontWeight: 700,
+                padding: '0.4rem 0.6rem',
+                borderRadius: '8px',
+                transition: 'all 0.2s'
+              }}
+            >
+              <History size={14} className={sincronizandoProfundo ? 'animate-spin' : ''} />
+              {sincronizandoProfundo ? 'Verificando...' : 'Busca Histórica'}
+            </button>
+
             <button 
               onClick={onAtualizado} 
               style={{ background:'transparent', border:'none', color: dark.accent, cursor:'pointer', display:'flex', alignItems:'center', gap:4, fontSize:'0.75rem', fontWeight:600 }}
