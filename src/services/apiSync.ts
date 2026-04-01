@@ -2,7 +2,8 @@ import type { Order, StockItem, FabricacaoItem, CaixaItem } from '../types';
 import { OrderStatus as OrderStatusValue } from '../types';
 export { OrderStatusValue };
 
-const BASE_URL = import.meta.env.VITE_N8N_URL || (import.meta.env.DEV ? '/api-tasks' : '');
+const N8N_HOST = 'https://n8n-n8n.sd8jyi.easypanel.host';
+const BASE_URL = import.meta.env.VITE_N8N_URL || N8N_HOST;
 
 const N8N_WEBHOOK_URLS = {
   NEW_ORDER: `${BASE_URL}/webhook/pedidos`,
