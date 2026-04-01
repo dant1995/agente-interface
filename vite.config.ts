@@ -16,7 +16,7 @@ export default defineConfig({
       '/api-tasks': {
         target: 'https://n8n-n8n.sd8jyi.easypanel.host',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api-tasks/, '/webhook')
+        rewrite: (path) => path.replace(/^\/api-tasks/, '')
       }
     }
   }

@@ -17,8 +17,6 @@ const Clientes = () => {
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
-  const [showCampaignModal, setShowCampaignModal] = useState(false);
-  const [campaignMessage, setCampaignMessage] = useState('Olá! Temos novidades na Lojas Capel. Venha conferir nossa nova coleção! 👕✨');
 
   useEffect(() => {
     loadCustomers();
@@ -78,27 +76,18 @@ const Clientes = () => {
     }
   };
 
-  const startCampaign = () => {
-    if (selectedCustomers.length === 0) return;
-    const firstCustomer = customers.find(c => c.nome === selectedCustomers[0]);
-    if (firstCustomer) {
-        openWhatsApp(firstCustomer.whatsapp, campaignMessage);
-        alert(`Campanha iniciada! Abrindo WhatsApp de ${firstCustomer.nome}. Continue enviando para os demais da lista.`);
-    }
-    setShowCampaignModal(false);
-  };
 
   return (
     <div className="page-content" style={{ background: '#f8fafc', minHeight: '100vh', padding: '1rem', paddingBottom: '120px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h1 className="page-title" style={{ marginBottom: 0 }}>Meus Clientes</h1>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-            {selectedCustomers.length > 0 && (
+          {selectedCustomers.length > 0 && (
                 <button 
-                    onClick={() => setShowCampaignModal(true)}
-                    style={{ background: '#6366f1', color: 'white', border: 'none', padding: '0.4rem 0.8rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                    onClick={() => navigate('/campanhas')}
+                    style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', border: 'none', padding: '0.4rem 0.8rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}
                 >
-                    <Megaphone size={14} /> Campanha ({selectedCustomers.length})
+                    <Megaphone size={14} /> Campanhas ({selectedCustomers.length})
                 </button>
             )}
             <div style={{ background: '#e2e8f0', padding: '0.4rem 0.8rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '600' }}>
@@ -180,40 +169,6 @@ const Clientes = () => {
         </div>
       )}
 
-      {/* Modal de Campanha */}
-      {showCampaignModal && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', zIndex: 1000 }}>
-              <div style={{ background: 'white', borderRadius: '20px', width: '100%', maxWidth: '400px', padding: '1.5rem', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
-                  <h2 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Megaphone style={{ color: '#6366f1' }} /> Disparar Campanha
-                  </h2>
-                  <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1rem' }}>
-                    Personalize a mensagem que será enviada para os {selectedCustomers.length} clientes selecionados.
-                  </p>
-                  
-                  <textarea 
-                    value={campaignMessage}
-                    onChange={(e) => setCampaignMessage(e.target.value)}
-                    style={{ width: '100%', height: '100px', padding: '0.8rem', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '0.9rem', outline: 'none', marginBottom: '1.2rem', resize: 'none' }}
-                  />
-
-                  <div style={{ display: 'flex', gap: '0.8rem' }}>
-                    <button 
-                        onClick={() => setShowCampaignModal(false)}
-                        style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #e2e8f0', background: 'white', fontWeight: '700', color: '#64748b' }}
-                    >
-                        Cancelar
-                    </button>
-                    <button 
-                        onClick={startCampaign}
-                        style={{ flex: 2, padding: '0.8rem', borderRadius: '12px', border: 'none', background: '#6366f1', fontWeight: '700', color: 'white' }}
-                    >
-                        Iniciar Agora
-                    </button>
-                  </div>
-              </div>
-          </div>
-      )}
     </div>
   );
 };

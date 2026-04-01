@@ -2,7 +2,7 @@ import type { Order, StockItem, FabricacaoItem, CaixaItem } from '../types';
 import { OrderStatus as OrderStatusValue } from '../types';
 export { OrderStatusValue };
 
-const BASE_URL = import.meta.env.VITE_N8N_URL || 'https://n8n-n8n.sd8jyi.easypanel.host';
+const BASE_URL = import.meta.env.VITE_N8N_URL || (import.meta.env.DEV ? '/api-tasks' : '');
 
 const N8N_WEBHOOK_URLS = {
   NEW_ORDER: `${BASE_URL}/webhook/pedidos`,
@@ -19,6 +19,8 @@ const N8N_WEBHOOK_URLS = {
   PNCP: `${BASE_URL}/webhook/buscar-pncp`,
   ACHADOS_ROBO: `${BASE_URL}/webhook/buscar-achados`,
   ENTREGA: `${BASE_URL}/webhook/Entrega`,
+  CLIENTES: `${BASE_URL}/webhook/clientes`,
+  CHAT: `${BASE_URL}/webhook/chat`,
 };
 
 
@@ -192,11 +194,14 @@ export const apiSync = {
         const totalPlanilha = parseReal(getValueByKeywords(item, ['TOTAL PAGO', 'PAGO', 'VALOR PAGO', 'TOTAL', 'VALOR']));
         const valorTotal = (totalPlanilha > 0) ? totalPlanilha : (preco * quantidade);
 
+        const rawDate = getValueByKeywords(item, ['DATA', 'CARIMBO', 'CRIADO', 'CARIMBO DE DATA/HORA']);
+        const parsedDate = parseBRDate(rawDate) || new Date();
+
         return {
           id_pedido: item.id || item.row_number || item['ID Pedido'] || item['id_pedido'] || `n8n-${index}`,
-          data: getValueByKeywords(item, ['DATA', 'CARIMBO', 'CRIADO', 'CARIMBO DE DATA/HORA']) || new Date().toISOString(),
+          data: parsedDate.toISOString(),
           cliente: getValueByKeywords(item, ['NOME', 'CLIENTE', 'RESPONSAVEL', 'NOME COMPLETO', 'NOME COMPLETO DO RESPONSAVEL']),
-          whatsapp: getValueByKeywords(item, ['WHATSAPP', 'TELEFONE', 'CELULAR', 'PHONE', 'WPP', 'WHATS']),
+          whatsapp: getValueByKeywords(item, ['WHATSAPP', 'WHATSAP', 'TELEFONE', 'CELULAR', 'PHONE', 'WPP', 'WHATS']),
           status: status as any,
           produtoNome: getValueByKeywords(item, ['PRODUTO', 'DESCRICAO', 'DESC', 'ITEM']) || 'Camiseta Escolar',
           produtoId: getValueByKeywords(item, ['PRODUTO', 'ID PRODUTO', 'SKU']) || '',
@@ -207,11 +212,52 @@ export const apiSync = {
           preco: preco,
           custo: 0,
           codigo_barra: getValueByKeywords(item, ['CODIGO', 'BARRA', 'BARCODE', 'BC']) || '',
-          dataCriacao: getValueByKeywords(item, ['DATA', 'CARIMBO', 'CRIADO', 'CARIMBO DE DATA/HORA']) || new Date().toISOString()
+          dataCriacao: parsedDate.toISOString()
         } as Order;
       });
     } catch (error) {
       console.error('Erro buscando pedidos do n8n:', error);
+      return [];
+    }
+  },
+
+  fetchClientesGlobais: async (): Promise<any[]> => {
+    try {
+      const response = await fetch(N8N_WEBHOOK_URLS.CLIENTES, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_clientes' })
+      });
+      if (!response.ok) throw new Error('Falha ao buscar clientes globais');
+      
+      const rawData = await response.json();
+      let items: any[] = [];
+      if (Array.isArray(rawData)) {
+        items = rawData;
+      } else if (rawData && typeof rawData === 'object') {
+        const found = Object.values(rawData).find(val => Array.isArray(val));
+        if (found) items = found as any[];
+        else items = [rawData];
+      }
+
+      return items.map(item => {
+        const rawDateCompra = getValueByKeywords(item, ['DATA DA COMPRA', 'COMPRA', 'DATA']);
+        const rawDateContato = getValueByKeywords(item, ['ULTIMO CONTATO', 'CONTATO', 'ULTIMA_MSG']);
+        
+        return {
+          nome: getValueByKeywords(item, ['NOME COMPLETO DO RESPONSAVEL', 'NOME', 'CLIENTE']),
+          whatsapp: getValueByKeywords(item, ['WHATSAP', 'WHATSAPP', 'TELEFONE', 'CELULAR']),
+          status: getValueByKeywords(item, ['STATUS', 'ESTADO']),
+          produtoInteresse: getValueByKeywords(item, ['PRODUTO DE INTERESSE', 'INTERESSE', 'PRODUTO']),
+          cidade: getValueByKeywords(item, ['CIDADE', 'LOCAL']),
+          origem: getValueByKeywords(item, ['ORIGEM', 'FONTE']),
+          dataCompra: parseBRDate(rawDateCompra)?.toISOString() || null,
+          ultimoContato: parseBRDate(rawDateContato)?.toISOString() || null,
+          recorrente: getValueByKeywords(item, ['CLIENTE RECORRENTE', 'RECORRENTE', 'VIP']) === 'Sim'
+        };
+      }).filter(c => !!c.nome && !!c.whatsapp);
+    } catch (error) {
+      console.error('Erro buscando clientes globais:', error);
       return [];
     }
   },
@@ -720,5 +766,25 @@ export const apiSync = {
       ...dados,
       timestamp: new Date().toISOString(),
     });
+  },
+
+  fetchChatHistory: async (whatsapp: string) => {
+    try {
+      const tel = String(whatsapp).replace(/\D/g, '');
+      console.log(`[Chat API] Buscando histórico para ${tel} via ${N8N_WEBHOOK_URLS.CHAT}`);
+      return await sendWebhook(N8N_WEBHOOK_URLS.CHAT, { action: 'get_chat', whatsapp: tel });
+    } catch (error) {
+      console.error('[Chat API] Erro ao buscar histórico:', error);
+      return [];
+    }
+  },
+
+  fetchEngagementStats: async () => {
+    try {
+      return await sendWebhook(N8N_WEBHOOK_URLS.CHAT, { action: 'get_engagement' });
+    } catch (error) {
+      console.error('[Chat API] Erro ao buscar engajamento:', error);
+      return {};
+    }
   },
 };
