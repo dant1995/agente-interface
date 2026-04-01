@@ -16,14 +16,13 @@ const KEYS = {
   ORDERS: 'erp_orders',
   SALES: 'erp_sales',
   STOCK: 'erp_stock',
-  FABRICACAO: 'erp_fabricacao'
+  FABRICACAO: 'erp_fabricacao',
+  CUSTOMERS: 'erp_customers'
 };
 
 export const storage = {
   // Products
   getProducts: (): Promise<Product[]> => Promise.resolve(getList(KEYS.PRODUCTS)),
-  // ... (existing code remains but updated for export)
-  // [Note: I'll actually just add the new methods to the existing storage export]
   
   // Stock (Sincronizado da Planilha)
   getStock: (): Promise<StockItem[]> => Promise.resolve(getList(KEYS.STOCK)),
@@ -72,29 +71,17 @@ export const storage = {
   // Orders
   getOrders: async (): Promise<Order[]> => {
     let list = getList<Order>(KEYS.ORDERS);
-    
-    // Attempt to sync from external webhook
-    try {
-      // Assuming apiSync exposes fetchPedidos. To avoid circular dependencies, 
-      // we can do the fetch directly here or rely on the UI to call apiSync then save here.
-      // Let's do the UI approach later, so getOrders returns local storage,
-      // and we expose an addOrdersBatch method to merge.
-    } catch (e) { }
-
     return list;
   },
   
   syncExternalOrders: (externalOrders: Order[]): Promise<Order[]> => {
     const localOrders = getList<Order>(KEYS.ORDERS);
     
-    // Se não houver nada local, salva tudo o que veio do externo
     if (localOrders.length === 0) {
       saveList(KEYS.ORDERS, externalOrders);
       return Promise.resolve(externalOrders);
     }
 
-    // Manter ordens locais que ainda não estão na lista externa (baseado no id_pedido)
-    // Isso evita que vendas recém-feitas sumam do Dashboard antes da planilha atualizar
     const externalIds = new Set(externalOrders.map(o => String(o.id_pedido)));
     const pendingLocals = localOrders.filter(o => 
       String(o.id_pedido).startsWith('VENDA-') && !externalIds.has(String(o.id_pedido))
@@ -145,6 +132,13 @@ export const storage = {
   syncExternalFabricacao: (items: FabricacaoItem[]): Promise<FabricacaoItem[]> => {
     saveList(KEYS.FABRICACAO, items);
     return Promise.resolve(items);
+  },
+
+  // Customers (Geral da Planilha)
+  getCustomers: (): Promise<any[]> => Promise.resolve(getList(KEYS.CUSTOMERS)),
+  syncExternalCustomers: (customers: any[]): Promise<any[]> => {
+    saveList(KEYS.CUSTOMERS, customers);
+    return Promise.resolve(customers);
   },
 
   // Customer Metadata (CRM)

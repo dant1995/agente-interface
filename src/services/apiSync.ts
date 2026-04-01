@@ -242,9 +242,20 @@ export const apiSync = {
         const rawDateCompra = getValueByKeywords(item, ['DATA DA COMPRA', 'COMPRA', 'DATA']);
         const rawDateContato = getValueByKeywords(item, ['ULTIMO CONTATO', 'CONTATO', 'ULTIMA_MSG']);
         
+        let nome = getValueByKeywords(item, ['NOME COMPLETO DO RESPONSAVEL', 'NOME', 'CLIENTE', 'NOME COMPLETO']);
+        let whatsapp = getValueByKeywords(item, ['WHATSAP', 'WHATSAPP', 'TELEFONE', 'CELULAR', 'PHONE']);
+
+        // Se falhar o mapeamento por nome de coluna, tenta pegar pelos valores da Column A e B
+        // n8n às vezes envia como "A": "...", "B": "..."
+        if (!whatsapp && (item.A || item['0'])) whatsapp = item.A || item['0'];
+        if (!nome && (item.B || item['1'])) nome = item.B || item['1'];
+
+        // Limpa o WhatsApp (remover sufixo de ID do WhatsApp e caracteres não numéricos)
+        let cleanWhatsapp = String(whatsapp || '').split('@')[0].replace(/\D/g, '');
+
         return {
-          nome: getValueByKeywords(item, ['NOME COMPLETO DO RESPONSAVEL', 'NOME', 'CLIENTE']),
-          whatsapp: getValueByKeywords(item, ['WHATSAP', 'WHATSAPP', 'TELEFONE', 'CELULAR']),
+          nome: String(nome || 'Sem Nome').trim(),
+          whatsapp: cleanWhatsapp,
           status: getValueByKeywords(item, ['STATUS', 'ESTADO']),
           produtoInteresse: getValueByKeywords(item, ['PRODUTO DE INTERESSE', 'INTERESSE', 'PRODUTO']),
           cidade: getValueByKeywords(item, ['CIDADE', 'LOCAL']),
@@ -253,7 +264,7 @@ export const apiSync = {
           ultimoContato: parseBRDate(rawDateContato)?.toISOString() || null,
           recorrente: getValueByKeywords(item, ['CLIENTE RECORRENTE', 'RECORRENTE', 'VIP']) === 'Sim'
         };
-      }).filter(c => !!c.nome && !!c.whatsapp);
+      }).filter(c => c.whatsapp && c.whatsapp.length > 5);
     } catch (error) {
       console.error('Erro buscando clientes globais:', error);
       return [];
