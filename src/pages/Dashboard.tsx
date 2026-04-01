@@ -197,6 +197,7 @@ const Dashboard = () => {
     { icon: '💰', label: 'Receitas\nDespesas', route: '/gastos', color: '#059669' },
     { icon: '🏛️', label: 'Licitações', route: '/licitacoes', color: '#1E40AF' },
     { icon: '✅', label: 'Tarefas', route: '/tarefas', color: '#10B981' },
+    { icon: '📢', label: 'Campanhas', route: '/campanhas', color: '#F43F5E' },
   ];
 
   const gerenciaItems = [

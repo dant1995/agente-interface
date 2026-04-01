@@ -39,7 +39,7 @@ const ModalHistoricoChat = ({ whatsapp, nome, onClose }: Props) => {
       }
 
       const normalized = items.map(m => ({
-        fromMe: m.fromMe ?? m.is_me ?? m.authored_by_me ?? (m.senderName === 'bot') ?? false,
+        fromMe: m.fromMe ?? m.is_me ?? m.authored_by_me ?? (m.senderName === 'bot'),
         body: m.body ?? m.text ?? m.message ?? m.mensagem ?? '',
         timestamp: m.timestamp ?? m.created_at ?? m.data ?? new Date().toISOString(),
         senderName: m.senderName ?? m.author ?? m.remetente ?? ''
