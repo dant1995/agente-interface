@@ -27,8 +27,8 @@ const Pedidos = () => {
 
   const loadOrders = async () => {
     const data = await storage.getOrders();
-    // Remove os entregues da lista principal (eles vêm da planilha Entrega)
-    setOrders(data.filter(o => o.status !== OrderStatus.ENTREGUE));
+    // Mantém todos os pedidos da planilha principal (incluindo entregues se estiverem lá)
+    setOrders(data);
   };
 
   const carregarEntregas = async () => {
@@ -50,8 +50,8 @@ const Pedidos = () => {
       const data = await apiSync.fetchPedidos();
       if (data && data.length > 0) {
         const updatedOrders = await storage.syncExternalOrders(data);
-        // Remove entregues da lista principal
-        setOrders(updatedOrders.filter(o => o.status !== OrderStatus.ENTREGUE));
+        // Mantém todos os pedidos (incluindo entregues se ainda estiverem na planilha principal)
+        setOrders(updatedOrders);
         alert(`Sincronizado! ${updatedOrders.length} pedidos.`);
       } else {
         alert('A planilha parece estar vazia ou os dados não foram encontrados.');

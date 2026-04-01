@@ -162,7 +162,7 @@ export const apiSync = {
       }
 
       const isTrue = (val: any) => val === true || val === 'TRUE' || val === 'Sim' || val === 'sim' || val === 'checked';
-      const nameKeywords = ['NOME', 'CLIENTE', 'RESPONSAVEL', 'NOME COMPLETO', 'NOME COMPLETO DO RESPONSAVEL', 'NOME COMPLETO DO RESPONSÁVEL'];
+      const nameKeywords = ['NOME', 'CLIENTE', 'RESPONSAVEL', 'NOME COMPLETO', 'RESPONSÁVEL', 'NOME COMPLETO DO RESPONSAVEL', 'NOME COMPLETO DO RESPONSÁVEL', 'SOLICITANTE'];
 
       return items.filter(item => {
         const name = getValueByKeywords(item, nameKeywords);
@@ -173,7 +173,7 @@ export const apiSync = {
         const hasPronta = isTrue(item['camisetas prontas']) || isTrue(item['Pronta']);
         if (hasPronta) {
           status = OrderStatusValue.PRONTA;
-        } else if (isTrue(item['Entregue?']) || isTrue(item['concluido'])) {
+        } else if (isTrue(item['Entregue?']) || isTrue(item['concluido']) || item['Logística'] === 'Entregue') {
           status = OrderStatusValue.ENTREGUE;
         } else if (isTrue(item['Revisão']) || isTrue(item['revisao'])) {
           status = OrderStatusValue.REVISAO;
@@ -184,8 +184,6 @@ export const apiSync = {
         } else if (isTrue(item['Corte']) || isTrue(item['corte'])) {
           status = OrderStatusValue.CORTE;
         } else if (isTrue(item['Pago?'])) {
-          // Mantém como RECEBIDO conforme solicitado pelo usuário,
-          // a menos que já tenha um status de produção marcado.
           status = OrderStatusValue.RECEBIDO;
         }
 
