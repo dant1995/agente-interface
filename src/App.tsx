@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import BottomNav from './components/BottomNav';
+import QueueMonitor from './components/campanhas/QueueMonitor';
 import LockScreen from './pages/LockScreen';
 import { authService } from './services/authService';
 
@@ -58,6 +59,7 @@ function App() {
           <Route path="/campanhas" element={<Campanhas />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <QueueMonitor />
         <BottomNav />
       </div>
     </BrowserRouter>
