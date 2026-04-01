@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { storage } from '../services/storage';
 import { 
   ArrowLeft, Phone, Mail, MoreVertical, 
-  MessageCircle, FileText, ShoppingBag, 
+  MessageCircle, ShoppingBag, 
   ChevronRight, Plus, TrendingUp, History
 } from 'lucide-react';
 import ModalHistoricoChat from '../components/campanhas/ModalHistoricoChat';
