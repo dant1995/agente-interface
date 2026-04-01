@@ -28,9 +28,47 @@ const Campanhas = () => {
   const [disparando, setDisparando] = useState<Campanha | null>(null);
   const [rastreando, setRastreando] = useState<Campanha | null>(null);
   const [loading, setLoading] = useState(true);
+  const [idsSincronizando, setIdsSincronizando] = useState<Set<string>>(new Set());
+  const [isAutoSyncing, setIsAutoSyncing] = useState(false);
   const [stats, setStats] = useState({ totalClientes:0, totalEnviados:0, totalPedidos:0, faturamentoTotal:0 });
 
   useEffect(() => { carregar(); }, []);
+
+  // ─── Sincronização Automática (Background) ───
+  useEffect(() => {
+    // Intervalo de 1 minuto conforme solicitado pelo usuário
+    const timer = setInterval(() => {
+      executarSincronizacaoBackground();
+    }, 60000);
+
+    return () => clearInterval(timer);
+  }, [campanhas.length]); // Reinicia se a lista mudar
+
+  const executarSincronizacaoBackground = async () => {
+    const ativas = campanhas.filter(c => c.status === 'disparada');
+    if (ativas.length === 0 || isAutoSyncing) return;
+
+    setIsAutoSyncing(true);
+    console.log(`[AutoSync] Iniciando ciclo para ${ativas.length} campanhas...`);
+
+    for (const camp of ativas) {
+      try {
+        setIdsSincronizando(prev => new Set(prev).add(camp.id));
+        // Chama a busca histórica profunda no n8n
+        await campanhaService.verificarHistoricoRespostas(camp.id);
+        setIdsSincronizando(prev => {
+          const next = new Set(prev);
+          next.delete(camp.id);
+          return next;
+        });
+      } catch (err) {
+        console.error(`[AutoSync] Erro na campanha ${camp.id}:`, err);
+      }
+    }
+
+    setIsAutoSyncing(false);
+    reload(); // Atualiza a UI com os novos números
+  };
 
   const carregar = async () => {
     try {
@@ -200,6 +238,7 @@ const Campanhas = () => {
     const seg = SEGMENTO_INFO[c.segmento];
     const progresso = c.totalEnviados > 0 ? Math.min(100, (c.totalEnviados / filtrarClientesPorSegmento(clientes, c.segmento, c.valorMinimoVip).length) * 100) : 0;
     const [syncing, setSyncing] = useState(false);
+    const isBackgroundSyncing = idsSincronizando.has(c.id);
 
     const handleSync = async (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -222,8 +261,13 @@ const Campanhas = () => {
               </div>
             </div>
           </div>
-          <div style={{ display:'flex', gap:5 }}>
-            <button onClick={handleSync} disabled={syncing} style={{ background:'transparent', border:'none', color: dark.accent, cursor:'pointer', display:'flex', animation: syncing ? 'spin 1s linear infinite' : 'none' }}>
+          <div style={{ display:'flex', gap:5, alignItems:'center' }}>
+            {isBackgroundSyncing && (
+              <div style={{ color: dark.success, fontSize:'0.6rem', fontWeight:800, display:'flex', alignItems:'center', gap:4, animation:'pulse 1.5s infinite' }}>
+                <Bot size={12} /> SYNC...
+              </div>
+            )}
+            <button onClick={handleSync} disabled={syncing || isBackgroundSyncing} style={{ background:'transparent', border:'none', color: dark.accent, cursor:'pointer', display:'flex', animation: (syncing || isBackgroundSyncing) ? 'spin 1s linear infinite' : 'none' }}>
               <RefreshCw size={15} />
             </button>
             <button onClick={e => { e.stopPropagation(); setEditando(c); }} style={{ background:'transparent', border:'none', color: dark.textMuted }}><Edit3 size={15} /></button>
@@ -316,7 +360,10 @@ const Campanhas = () => {
         <button onClick={() => navigate('/')} style={{ background: dark.card, border:`1px solid ${dark.border}`, color: dark.text, padding:'0.5rem', borderRadius:10, cursor:'pointer' }}><ArrowLeft size={20}/></button>
         <div style={{ textAlign:'center' }}>
           <h2 style={{ fontSize:'1.1rem', fontWeight:800, margin:0, letterSpacing:'-0.02em' }}>Mkt & Campanhas</h2>
-          <div style={{ fontSize:'0.65rem', color: dark.textMuted, fontWeight:600 }}>CONVERSÃO WHATSAPP</div>
+          <div style={{ fontSize:'0.65rem', color: isAutoSyncing ? dark.success : dark.textMuted, fontWeight:600, display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}>
+            {isAutoSyncing && <RefreshCw size={10} style={{ animation: 'spin 2s linear infinite' }} />}
+            {isAutoSyncing ? 'ATUALIZAÇÃO AUTOMÁTICA ATIVA' : 'CONVERSÃO WHATSAPP'}
+          </div>
         </div>
         <button onClick={() => setShowCriar(true)} style={{ background: dark.accent, border:'none', color:'#fff', padding:'0.5rem', borderRadius:10, cursor:'pointer' }}><Plus size={20}/></button>
       </div>

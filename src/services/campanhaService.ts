@@ -68,6 +68,13 @@ const WEBHOOK_CAMPANHA = 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/campanha
 const WEBHOOK_CHAT = 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/chat';
 const getId = () => `camp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
+// Auxiliar para pegar o ISO local (sem o 'Z' que joga 3h pra frente)
+const getLocalISO = () => {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - offset).toISOString().replace('Z', '');
+};
+
 // ─── Tipos de campanha ────────────────────────────────────────────────────────
 export const TIPO_CAMPANHA_INFO: Record<TipoCampanha, { label: string; emoji: string; color: string; descricao: string }> = {
   venda_direta:  { label: 'Venda Direct',  emoji: '🛍️', color: '#6c63ff', descricao: 'Oferta direta para conversão imediata' },
@@ -123,7 +130,7 @@ const mapearLogsDaPlanilha = (rows: any[]): ClienteLog[] => {
     clienteWhatsapp: String(r.cliente_whatsapp || r.whatsapp || r.clienteWhatsapp || '').replace(/\D/g, ''),
     mensagemEnviada: r.mensagem_enviada || r.mensagem || r.mensagemEnviada || '',
     status: (r.status || 'enviado').toLowerCase() as StatusCliente,
-    timestamp: r.timestamp || new Date().toISOString(),
+    timestamp: r.timestamp || getLocalISO(),
     followUpEnviado: r.follow_up_enviado === 'TRUE' || r.follow_up_enviado === true || !!r.followUpEnviado
   }));
 };
@@ -250,7 +257,7 @@ export const campanhaService = {
     const nova: Campanha = {
       ...data,
       id: getId(),
-      criadaEm: new Date().toISOString(),
+      criadaEm: getLocalISO(),
       status: 'rascunho',
       totalEnviados: 0,
       totalRespostas: 0,
@@ -282,7 +289,7 @@ export const campanhaService = {
       clienteWhatsapp: cliente.whatsapp,
       mensagemEnviada,
       status: 'enviado',
-      timestamp: new Date().toISOString(),
+      timestamp: getLocalISO(),
     };
     
     const lista = getAll();
@@ -312,7 +319,7 @@ export const campanhaService = {
       lista[idx].logs.push(log);
       lista[idx].totalEnviados = lista[idx].logs.filter(l => l.status === 'enviado').length;
       lista[idx].status = 'disparada';
-      lista[idx].disparadaEm = lista[idx].disparadaEm || new Date().toISOString();
+      lista[idx].disparadaEm = lista[idx].disparadaEm || getLocalISO();
       saveAll(lista);
 
     } catch (err) {
@@ -352,7 +359,7 @@ export const campanhaService = {
         status: novoStatus,
         total_enviado: lista[idx].totalEnviados,
         observacao: obs || '',
-        timestamp: new Date().toISOString(),
+        timestamp: getLocalISO(),
       });
     }
   },
@@ -365,7 +372,7 @@ export const campanhaService = {
       const logIdx = lista[idx].logs.findIndex(l => l.clienteWhatsapp === whatsapp);
       if (logIdx !== -1) {
         lista[idx].logs[logIdx].followUpEnviado = true;
-        lista[idx].logs[logIdx].followUpTimestamp = new Date().toISOString();
+        lista[idx].logs[logIdx].followUpTimestamp = getLocalISO();
       }
       saveAll(lista);
     }
@@ -381,7 +388,7 @@ export const campanhaService = {
         action: 'registrar_campanha', evento: 'finalizacao',
         campanha_id: id, total_enviados: lista[idx].totalEnviados,
         total_respostas: lista[idx].totalRespostas, total_vendas: lista[idx].totalVendas,
-        timestamp: new Date().toISOString(),
+        timestamp: getLocalISO(),
       });
     }
   },
