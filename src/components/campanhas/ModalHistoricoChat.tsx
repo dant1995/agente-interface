@@ -103,7 +103,15 @@ const ModalHistoricoChat = ({ whatsapp, nome, onClose }: Props) => {
   const showRawDebug = () => {
     setLoading(true);
     apiSync.fetchChatHistory(whatsapp).then(d => {
-       alert("DADOS RECEBIDOS DO N8N PARA " + whatsapp + ":\n\n" + JSON.stringify(d, null, 2).substring(0, 1500));
+       const isClientData = JSON.stringify(d).toLowerCase().includes('cidade') || JSON.stringify(d).toLowerCase().includes('responsavel');
+       let msg = "DADOS RECEBIDOS DO N8N PARA " + whatsapp + ":\n\n";
+       
+       if (isClientData) {
+          msg += "⚠️ ATENÇÃO: O n8n está enviando DADOS DE CLIENTE (Planilha) em vez de MENSAGENS (Supabase).\n";
+          msg += "Verifique seu fluxo n8n e ligue o 'Respond to Webhook' no nó do Supabase.\n\n";
+       }
+       
+       alert(msg + JSON.stringify(d, null, 2).substring(0, 1500));
        setLoading(false);
     }).catch(e => {
        alert("Erro ao buscar dados brutos: " + e.message);
