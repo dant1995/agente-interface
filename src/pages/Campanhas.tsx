@@ -38,7 +38,8 @@ const Campanhas = () => {
       const globalClients = await apiSync.fetchClientesGlobais();
       
       // 1.1 Busca Engajamento Supabase (Data de Último Contato)
-      const engagementStats = await apiSync.fetchEngagementStats();
+      // const engagementStats = await apiSync.fetchEngagementStats();
+      const engagementStats: Record<string, string> = {}; // Temporariamente desativado para evitar erro no n8n do cliente
       
       // 2. Busca Pedidos (Aba Pedidos) - Tenta Storage, se vazio busca real-time
       let orders = await storage.getOrders();
@@ -390,6 +391,9 @@ const Campanhas = () => {
         onAtualizado={async () => {
           await campanhaService.sincronizarDadosExternos(rastreando.id);
           reload();
+          // Força a atualização do objeto que o modal está usando
+          const atualizada = campanhaService.obter(rastreando.id);
+          if (atualizada) setRastreando({ ...atualizada });
         }} 
       />}
     </div>

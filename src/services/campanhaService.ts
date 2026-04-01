@@ -64,7 +64,8 @@ export interface ClienteCampanha {
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'erp_campanhas_v2';
-const WEBHOOK_URL = 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/chat';
+const WEBHOOK_CAMPANHA = 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/campanha';
+const WEBHOOK_CHAT = 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/chat';
 const getId = () => `camp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
 // ─── Tipos de campanha ────────────────────────────────────────────────────────
@@ -114,10 +115,26 @@ const getAll = (): Campanha[] => {
 };
 const saveAll = (campanhas: Campanha[]) => localStorage.setItem(STORAGE_KEY, JSON.stringify(campanhas));
 
+// Auxiliar para mapear dados da planilha (snake_case) para o objeto do App (camelCase)
+const mapearLogsDaPlanilha = (rows: any[]): ClienteLog[] => {
+  if (!Array.isArray(rows)) return [];
+  return rows.map(r => ({
+    clienteNome: r.cliente_nome || r.nome || r.clienteNome || '',
+    clienteWhatsapp: String(r.cliente_whatsapp || r.whatsapp || r.clienteWhatsapp || '').replace(/\D/g, ''),
+    mensagemEnviada: r.mensagem_enviada || r.mensagem || r.mensagemEnviada || '',
+    status: (r.status || 'enviado').toLowerCase() as StatusCliente,
+    timestamp: r.timestamp || new Date().toISOString(),
+    followUpEnviado: r.follow_up_enviado === 'TRUE' || r.follow_up_enviado === true || !!r.followUpEnviado
+  }));
+};
+
 // ─── Webhook ──────────────────────────────────────────────────────────────────
-const postWebhook = async (payload: object): Promise<any> => {
+const postWebhook = async (payload: { action: string; [key: string]: any }): Promise<any> => {
   try {
-    const res = await fetch(WEBHOOK_URL, {
+    // Roteamento inteligente: decidir qual webhook usar baseado na ação
+    const url = payload.action === 'verificar_historico' ? WEBHOOK_CHAT : WEBHOOK_CAMPANHA;
+    
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -126,7 +143,8 @@ const postWebhook = async (payload: object): Promise<any> => {
     if (res.ok) {
       const text = await res.text();
       try {
-        return text ? JSON.parse(text) : { status: 'success' };
+        const data = text ? JSON.parse(text) : { status: 'success' };
+        return data;
       } catch (e) {
         return { status: 'success', raw: text };
       }
@@ -394,14 +412,19 @@ export const campanhaService = {
   // Busca dados atualizados do n8n (ex: se o cliente respondeu e foi gravado na planilha)
   sincronizarDadosExternos: async (campanhaId: string): Promise<boolean> => {
     const res = await postWebhook({ action: 'get_campanha', campanha_id: campanhaId });
-    if (res && res.logs) {
+    
+    // O n8n pode retornar o array direto ou dentro de um objeto
+    const rawLogs = Array.isArray(res) ? res : (res?.logs || []);
+    
+    if (rawLogs && rawLogs.length > 0) {
       const lista = getAll();
       const idx = lista.findIndex(c => c.id === campanhaId);
       if (idx !== -1) {
-        lista[idx].logs = res.logs;
-        lista[idx].totalRespostas = res.totalRespostas || res.logs.filter((l: any) => l.status === 'respondeu' || l.status === 'comprou').length;
-        lista[idx].totalVendas = res.totalVendas || res.logs.filter((l: any) => l.status === 'comprou').length;
-        lista[idx].totalEnviados = res.totalEnviados || res.logs.filter((l: any) => l.status === 'enviado').length;
+        const logsProcessados = mapearLogsDaPlanilha(rawLogs);
+        lista[idx].logs = logsProcessados;
+        lista[idx].totalRespostas = logsProcessados.filter((l: any) => l.status === 'respondeu' || l.status === 'comprou').length;
+        lista[idx].totalVendas = logsProcessados.filter((l: any) => l.status === 'comprou').length;
+        lista[idx].totalEnviados = logsProcessados.length;
         saveAll(lista);
         return true;
       }
@@ -412,10 +435,25 @@ export const campanhaService = {
   verificarHistoricoRespostas: async (campanhaId: string): Promise<boolean> => {
     // Esta ação solicita ao n8n que faça uma busca profunda no banco de mensagens
     const res = await postWebhook({ action: 'verificar_historico', campanha_id: campanhaId });
-    if (res && res.success) {
-      // Após a verificação profunda no n8n, sincronizamos os logs atualizados
-      return await campanhaService.sincronizarDadosExternos(campanhaId);
+    
+    // Se o n8n retornar logs diretos (Array) ou { logs: [...] }
+    const rawLogs = Array.isArray(res) ? res : (res?.logs || []);
+    
+    if (rawLogs && rawLogs.length > 0) {
+      const lista = getAll();
+      const idx = lista.findIndex(c => c.id === campanhaId);
+      if (idx !== -1) {
+        const logsProcessados = mapearLogsDaPlanilha(rawLogs);
+        lista[idx].logs = logsProcessados;
+        lista[idx].totalRespostas = logsProcessados.filter((l: any) => l.status === 'respondeu' || l.status === 'comprou').length;
+        lista[idx].totalVendas = logsProcessados.filter((l: any) => l.status === 'comprou').length;
+        lista[idx].totalEnviados = logsProcessados.length;
+        saveAll(lista);
+        return true;
+      }
     }
-    return false;
+    
+    // Se não veio logs no verificar_historico, tenta sincronizar normal
+    return await campanhaService.sincronizarDadosExternos(campanhaId);
   }
 };

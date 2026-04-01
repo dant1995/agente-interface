@@ -796,9 +796,10 @@ export const apiSync = {
 
   fetchEngagementStats: async () => {
     try {
-      return await sendWebhook(N8N_WEBHOOK_URLS.CHAT, { action: 'get_engagement' });
+      // Enviamos 'global' para que o n8n saiba que não deve filtrar por um telefone específico
+      return await sendWebhook(N8N_WEBHOOK_URLS.CHAT, { action: 'get_engagement', type: 'global' });
     } catch (error) {
-      console.error('[Chat API] Erro ao buscar engajamento:', error);
+      console.error('Erro ao buscar estatísticas de engajamento:', error);
       return {};
     }
   },

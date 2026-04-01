@@ -43,39 +43,51 @@ const ModalHistoricoChat = ({ whatsapp, nome, onClose }: Props) => {
       console.log(`[DEBUG CHAT] Itens brutos extraídos: ${rawItems.length}`);
 
       const normalized: Message[] = [];
-      
+
+      const parseBody = (val: any): string => {
+        if (!val) return '';
+        if (typeof val === 'string') return val;
+        if (typeof val === 'object') {
+          // Tenta pegar campos comuns em objetos de API de chat
+          return val.text || val.body || val.message || val.mensagem || JSON.stringify(val);
+        }
+        return String(val);
+      };
+
       rawItems.forEach((item) => {
         // Suporte para n8n com wrapper .json ou direto
         const m = item.json || item;
         
         // Tenta extrair o corpo da mensagem de várias fontes
-        const userMsg = m.user_message || m.user_msg || m.cliente_message || m.message_user;
-        const botMsg = m.bot_message || m.bot_msg || m.atendimento_message || m.message_bot;
-        const fallbackMsg = m.body || m.text || m.message || m.mensagem || m.msg;
+        const userMsg = parseBody(m.user_message || m.user_msg || m.cliente_message || m.message_user);
+        const botMsg = parseBody(m.bot_message || m.bot_msg || m.atendimento_message || m.message_bot);
+        const fallbackMsg = parseBody(m.body || m.text || m.message || m.mensagem || m.msg);
 
-        if (userMsg) {
+        // Se o registro tem as duas (ex: linha do Supabase com bot_message e user_message)
+        // Adicionamos como dois eventos separados se tiverem conteúdo
+        if (userMsg && userMsg !== '[object Object]') {
           normalized.push({
             fromMe: false,
-            body: String(userMsg),
+            body: userMsg,
             timestamp: m.created_at || m.timestamp || m.data || new Date().toISOString(),
             senderName: m.nomewpp || 'Cliente'
           });
         }
         
-        if (botMsg) {
+        if (botMsg && botMsg !== '[object Object]') {
           normalized.push({
             fromMe: true,
-            body: String(botMsg),
+            body: botMsg,
             timestamp: m.created_at || m.timestamp || m.data || new Date().toISOString(),
             senderName: 'Atendimento'
           });
         }
 
         // Se não achou nos campos específicos, tenta o campo geral
-        if (!userMsg && !botMsg && fallbackMsg) {
+        if (!userMsg && !botMsg && fallbackMsg && fallbackMsg !== '[object Object]') {
           normalized.push({
             fromMe: m.fromMe === true || m.is_me === true || m.message_type === 'outgoing' || String(m.senderName).toLowerCase() === 'bot',
-            body: String(fallbackMsg),
+            body: fallbackMsg,
             timestamp: m.created_at || m.timestamp || m.data || new Date().toISOString(),
             senderName: m.senderName || m.nomewpp || ''
           });
