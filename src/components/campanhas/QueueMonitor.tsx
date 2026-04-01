@@ -29,7 +29,20 @@ const QueueMonitor = () => {
         return () => clearInterval(interval);
     }, [state.status, state.proximoEnvio, state.items.length]);
 
+    const formatarTempo = (segundos: number) => {
+        const h = Math.floor(segundos / 3600);
+        const m = Math.floor((segundos % 3600) / 60);
+        const s = segundos % 60;
+        
+        if (h > 0) return `${h}h ${m}m ${s}s`;
+        if (m > 0) return `${m}m ${s}s`;
+        return `${s}s`;
+    };
+
     if (state.status === 'ocioso' || state.items.length === 0) return null;
+    
+    // Detecta se está em modo descanso (espera > 2 min)
+    const emDescanso = timeLeft > 120;
 
     const total = state.totalOriginal || state.items.length;
     const sent = total - state.items.length;
@@ -57,18 +70,27 @@ const QueueMonitor = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                     <div style={{
                         width: '32px', height: '32px',
-                        background: state.status === 'rodando' ? dark.accentGlow : '#334155',
+                        background: emDescanso ? '#fbbf2430' : (state.status === 'rodando' ? dark.accentGlow : '#334155'),
                         borderRadius: '8px',
                         display: 'flex', alignItems: 'center', justifyContent: 'center'
                     }}>
-                        {state.status === 'rodando' ? 
-                            <Send size={16} className="animate-pulse" style={{ color: dark.accent }} /> : 
-                            <Pause size={16} style={{ color: '#94a3b8' }} />
-                        }
+                        {emDescanso ? (
+                            <Clock size={16} style={{ color: '#fbbf24' }} />
+                        ) : (
+                            state.status === 'rodando' ? (
+                                <Send size={16} className="animate-pulse" style={{ color: dark.accent }} />
+                            ) : (
+                                <Pause size={16} style={{ color: '#94a3b8' }} />
+                            )
+                        )}
                     </div>
                     <div>
-                        <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 'bold' }}>{state.campanhaNome || 'Enviando Campanha'}</div>
-                        <div style={{ color: '#94a3b8', fontSize: '0.7rem' }}>Faltam {state.items.length} de {total} contatos</div>
+                        <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 'bold' }}>
+                            {emDescanso ? 'Modo Anti-Ban (Descanso)' : (state.campanhaNome || 'Enviando Campanha')}
+                        </div>
+                        <div style={{ color: '#94a3b8', fontSize: '0.7rem' }}>
+                            {emDescanso ? 'Aguardando janela de segurança' : `Faltam ${state.items.length} de ${total} contatos`}
+                        </div>
                     </div>
                 </div>
 
@@ -97,9 +119,11 @@ const QueueMonitor = () => {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: dark.accent, fontSize: '0.72rem', fontWeight: 'bold' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: emDescanso ? '#fbbf24' : dark.accent, fontSize: '0.72rem', fontWeight: 'bold' }}>
                     <Clock size={12} />
-                    {state.status === 'rodando' ? `Próximo envio em ${timeLeft}s` : 'Pausado'}
+                    {state.status === 'rodando' ? 
+                        (emDescanso ? `Retomando em ${formatarTempo(timeLeft)}` : `Próximo envio em ${timeLeft}s`) : 
+                        'Pausado'}
                 </div>
                 <div style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: '600' }}>
                     {Math.round(progress)}% Concluído

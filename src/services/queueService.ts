@@ -15,11 +15,13 @@ export interface QueueState {
   totalOriginal?: number;
   proximoEnvio?: string; // ISO string
   limiteHoraRestante?: number;
+  windowCount: number;     // Envios na janela atual
+  windowStart?: string;    // ISO string do início da janela
 }
 
 const getInitialState = (): QueueState => {
   const saved = localStorage.getItem(QUEUE_KEY);
-  return saved ? JSON.parse(saved) : { items: [], status: 'ocioso' };
+  return saved ? JSON.parse(saved) : { items: [], status: 'ocioso', windowCount: 0 };
 };
 
 let currentState = getInitialState();
@@ -55,7 +57,9 @@ export const queueService = {
       campanhaNome: campanha.nome,
       totalOriginal: items.length,
       proximoEnvio: new Date().toISOString(),
-      limiteHoraRestante: campanha.limiteHora || 60
+      limiteHoraRestante: campanha.limiteHora || 60,
+      windowCount: 0,
+      windowStart: undefined
     };
     save();
   },
@@ -72,7 +76,7 @@ export const queueService = {
   },
 
   limpar: () => {
-    currentState = { items: [], status: 'ocioso' };
+    currentState = { items: [], status: 'ocioso', windowCount: 0 };
     save();
   },
 
@@ -94,15 +98,44 @@ export const queueService = {
     try {
       await campanhaService.registrarEnvio(campanha, item.cliente, msg);
       
-      // Remove da fila e agenda próximo
+      // Gerenciamento da Janela Anti-Ban
+      const agora = new Date();
+      if (!currentState.windowStart) {
+        currentState.windowStart = agora.toISOString();
+        currentState.windowCount = 1;
+      } else {
+        const windowStart = new Date(currentState.windowStart);
+        const timeSinceWindowStart = agora.getTime() - windowStart.getTime();
+
+        // Se já passou 1 hora desde o início da janela, reseta a janela
+        if (timeSinceWindowStart > 3600000) {
+          currentState.windowStart = agora.toISOString();
+          currentState.windowCount = 1;
+        } else {
+          currentState.windowCount += 1;
+        }
+      }
+
+      // Remove da fila
       currentState.items.shift();
+      
       if (currentState.items.length === 0) {
         currentState.status = 'ocioso';
         campanhaService.finalizarCampanha(campanha.id);
       } else {
-        const agora = new Date();
-        agora.setSeconds(agora.getSeconds() + 15); // Intervalo padrão 15s
-        currentState.proximoEnvio = agora.toISOString();
+        const limite = campanha.limiteHora || 60;
+        
+        // Se bateu o limite da hora, agenda para 1 hora após o windowStart + margem de segurança
+        if (currentState.windowCount >= limite) {
+          const windowStart = new Date(currentState.windowStart!);
+          const proximaJanela = new Date(windowStart.getTime() + 3600000 + 300000); // 1h + 5min de margem
+          currentState.proximoEnvio = proximaJanela.toISOString();
+        } else {
+          // Intervalo normal de 15 segundos
+          const proximo = new Date();
+          proximo.setSeconds(proximo.getSeconds() + 15);
+          currentState.proximoEnvio = proximo.toISOString();
+        }
       }
       save();
     } catch (err) {
