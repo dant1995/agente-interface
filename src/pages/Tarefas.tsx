@@ -38,6 +38,7 @@ import { GoalRing } from '../components/gestor/GoalRing';
 import { GestorMetasPanel } from '../components/gestor/GestorMetasPanel';
 import { GestorMetasBoard } from '../components/gestor/GestorMetasBoard';
 import { GestorVendasDetalhes } from '../components/gestor/GestorVendasDetalhes';
+import { GestorDailyCheckpoint } from '../components/gestor/GestorDailyCheckpoint';
 import type { GestorConfig } from '../components/gestor/GestorConfiguracoes';
 import { OrderStatus } from '../types';
 import type { Order } from '../types';
@@ -75,6 +76,7 @@ const Tarefas = () => {
   const [showVendasDetalhes, setShowVendasDetalhes] = useState(false);
   const [showMetasPanel, setShowMetasPanel] = useState(false);
   const [showMetasBoard, setShowMetasBoard] = useState(false);
+  const [showDailyCheckpoint, setShowDailyCheckpoint] = useState(false);
   const [vendas, setVendas] = useState<Order[]>([]);
   const [vendasMensal, setVendasMensal] = useState(0);
   const [pedidosAtivos, setPedidosAtivos] = useState(0);
@@ -121,9 +123,9 @@ const Tarefas = () => {
     ];
 
     const [result, caixa, estoque, fabricacao, vendasRaw] = await Promise.all(fetchPromises);
+    
+    console.log('🔍 [DIAGNÓSTICO] Retorno n8n:', { result, caixa, estoque, fabricacao, vendasRaw });
 
-    // Processar tarefas com extrema resiliência e logs de depuração
-    console.log('🔄 Processando retorno do TaskService:', result);
     let tasksArray: Task[] = [];
     if (result && typeof result === 'object') {
       const anyResult = result as any;
@@ -132,8 +134,34 @@ const Tarefas = () => {
                    (anyResult.data || anyResult.items || []);
     }
     
+    console.log('✅ [DIAGNÓSTICO] Tasks Processadas:', tasksArray.length);
+    
+    // Se não vier nada do servidor, tenta carregar do cache local
+    if (tasksArray.length === 0) {
+      const cachedTasks = localStorage.getItem('gestor_last_tasks');
+      if (cachedTasks) {
+        try {
+          tasksArray = JSON.parse(cachedTasks);
+          console.log('📦 [CACHE] Carregando tarefas do armazenamento local.');
+        } catch (e) { console.error('Erro parse cache:', e); }
+      }
+    } else {
+      // Salva no cache se o servidor retornou dados
+      localStorage.setItem('gestor_last_tasks', JSON.stringify(tasksArray));
+    }
+    
     setTasks(tasksArray);
-    setStats(taskService.calculateStats(tasksArray));
+    const newStats = taskService.calculateStats(tasksArray);
+    setStats(newStats);
+    
+    // Lógica de Checkpoint Diário - Dispara se for um novo dia e houver pendências
+    const lastCheckDate = localStorage.getItem('gestor_last_checkpoint_date');
+    const todayStr = new Date().toLocaleDateString('pt-BR');
+    
+    if (lastCheckDate !== todayStr && (newStats.atrasadas > 0 || metas.length > 0)) {
+      setTimeout(() => setShowDailyCheckpoint(true), 1500); // Delay suave para UX
+    }
+
     if (result && (result as any).health) setBusinessHealth((result as any).health);
 
     // Processar indicadores secundários
@@ -215,6 +243,23 @@ const Tarefas = () => {
       localStorage.setItem('gestor_coo_config', JSON.stringify(newConfig));
       setConfig(newConfig);
       console.log('🚀 Piloto Automático: Metas ajustadas por performance!');
+    }
+    setLoading(false);
+  };
+
+  const handleCheckpointFeedback = async (feedback: string) => {
+    try {
+      // Notifica o n8n/Agente sobre o feedback operacional
+      await apiSync.notifyIAChat(`🎯 FEEDBACK OPERACIONAL DO GESTOR: ${feedback}`);
+      
+      const todayStr = new Date().toLocaleDateString('pt-BR');
+      localStorage.setItem('gestor_last_checkpoint_date', todayStr);
+      localStorage.setItem('gestor_last_checkpoint_feedback', feedback);
+      
+      alert('Feedback enviado ao Diretor de Operações!');
+    } catch (e) {
+      console.error('Erro ao enviar feedback:', e);
+      alert('Conectado, mas o feedback não pôde ser enviado.');
     }
   };
 
@@ -758,6 +803,15 @@ const Tarefas = () => {
           stats={stats}
           pedidosAtivos={pedidosAtivos}
           tasks={tasks}
+        />
+      )}
+
+      {showDailyCheckpoint && (
+        <GestorDailyCheckpoint 
+          stats={stats}
+          goals={[...metas, ...(config?.customMetas || [])]}
+          onClose={() => setShowDailyCheckpoint(false)}
+          onFeedback={handleCheckpointFeedback}
         />
       )}
 
