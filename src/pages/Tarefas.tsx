@@ -16,7 +16,7 @@ import {
   Box,
   Factory,
   TrendingUp, 
-  ShieldCheck, 
+  ShieldCheck,
   Zap,
   RotateCw,
   ChevronRight,
@@ -35,6 +35,7 @@ import { GestorHistoricoPlanos } from '../components/gestor/GestorHistoricoPlano
 import { GestorDRE } from '../components/gestor/GestorDRE';
 import { GestorConfiguracoes } from '../components/gestor/GestorConfiguracoes';
 import { GoalRing } from '../components/gestor/GoalRing';
+import { GestorMetasPanel } from '../components/gestor/GestorMetasPanel';
 import { GestorVendasDetalhes } from '../components/gestor/GestorVendasDetalhes';
 import type { GestorConfig } from '../components/gestor/GestorConfiguracoes';
 import { OrderStatus } from '../types';
@@ -71,6 +72,7 @@ const Tarefas = () => {
   const [showDRE, setShowDRE] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [showVendasDetalhes, setShowVendasDetalhes] = useState(false);
+  const [showMetasPanel, setShowMetasPanel] = useState(false);
   const [vendas, setVendas] = useState<Order[]>([]);
   const [vendasMensal, setVendasMensal] = useState(0);
   const [pedidosAtivos, setPedidosAtivos] = useState(0);
@@ -716,7 +718,20 @@ const Tarefas = () => {
           />
         )}
 
-        {showVendasDetalhes && (
+        {/* Painéis Laterais */}
+      {showMetasPanel && config && (
+        <GestorMetasPanel 
+          config={config} 
+          onClose={() => setShowMetasPanel(false)}
+          onSave={(newConfig) => {
+            localStorage.setItem('gestor_coo_config', JSON.stringify(newConfig));
+            setConfig(newConfig);
+            setShowMetasPanel(false);
+          }}
+        />
+      )}
+
+      {showVendasDetalhes && (
           <GestorVendasDetalhes
             onClose={() => setShowVendasDetalhes(false)}
             vendas={vendas}
@@ -910,17 +925,29 @@ const Tarefas = () => {
         )}
 
         {/* Metas Ativas — Anéis de Performance Style Apple Watch */}
-        <div style={{ marginBottom: '1.5rem' }}>
+        <div 
+          onClick={() => setShowMetasPanel(true)} 
+          style={{ marginBottom: '1.5rem', cursor: 'pointer' }}
+        >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', padding: '0 0.5rem' }}>
             <h2 style={{ fontSize: '1rem', fontWeight: '800', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
               <Target size={18} color="#7C3AED" />
               Objetivos & Performance
             </h2>
-            {config?.autoAdjust && (
-              <span style={{ fontSize: '0.6rem', fontWeight: '800', color: '#7C3AED', background: '#7C3AED10', padding: '0.2rem 0.5rem', borderRadius: '10px' }}>
-                🚀 Piloto Automático ON
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              {config?.autoAdjust && (
+                <span style={{ fontSize: '0.6rem', fontWeight: '800', color: '#7C3AED', background: '#7C3AED10', padding: '0.2rem 0.5rem', borderRadius: '10px' }}>
+                  🚀 Piloto ON
+                </span>
+              )}
+              <span style={{ 
+                fontSize: '0.65rem', fontWeight: '700', color: '#3B82F6', 
+                background: '#3B82F610', padding: '0.2rem 0.5rem', borderRadius: '8px',
+                display: 'flex', alignItems: 'center', gap: '0.2rem'
+              }}>
+                <Plus size={10} /> Personalizar
               </span>
-            )}
+            </div>
           </div>
           
           <div style={{ 
