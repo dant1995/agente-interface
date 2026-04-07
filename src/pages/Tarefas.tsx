@@ -34,6 +34,7 @@ import { GestorPrevisaoCaixa } from '../components/gestor/GestorPrevisaoCaixa';
 import { GestorHistoricoPlanos } from '../components/gestor/GestorHistoricoPlanos';
 import { GestorDRE } from '../components/gestor/GestorDRE';
 import { GestorConfiguracoes } from '../components/gestor/GestorConfiguracoes';
+import { GoalRing } from '../components/gestor/GoalRing';
 import { GestorVendasDetalhes } from '../components/gestor/GestorVendasDetalhes';
 import type { GestorConfig } from '../components/gestor/GestorConfiguracoes';
 import { OrderStatus } from '../types';
@@ -151,6 +152,7 @@ const Tarefas = () => {
         return sum;
       }, 0);
       setVendasMensal(totalValue);
+      checkAutoPilot(totalValue, (vendasRaw as Order[]) || []);
 
       // Contagem de Pedidos Ativos (não entregues)
       const todosPedidos = (vendasRaw as any[]) || [];
@@ -159,6 +161,49 @@ const Tarefas = () => {
     }
     
     setLoading(false);
+  };
+
+  const checkAutoPilot = (mensal: number, allVendas: Order[]) => {
+    if (!config?.autoAdjust) return;
+
+    const hoje = new Date();
+    hoje.setHours(0,0,0,0);
+    const inicioSemana = new Date(hoje);
+    inicioSemana.setDate(hoje.getDate() - hoje.getDay());
+
+    const diario = allVendas.reduce((acc, v) => {
+      const d = new Date(v.data);
+      return (d >= hoje) ? acc + (v.valorTotal || 0) : acc;
+    }, 0);
+
+    const semanal = allVendas.reduce((acc, v) => {
+      const d = new Date(v.data);
+      return (d >= inicioSemana) ? acc + (v.valorTotal || 0) : acc;
+    }, 0);
+
+    let needsUpdate = false;
+    const newConfig = { ...config };
+
+    if (diario > (config.minVendasDiaria || 1000) * 1.1) {
+      newConfig.minVendasDiaria = Math.round((config.minVendasDiaria || 1000) * 1.05);
+      needsUpdate = true;
+    }
+
+    if (semanal > (config.minVendasSemanal || 7000) * 1.1) {
+      newConfig.minVendasSemanal = Math.round((config.minVendasSemanal || 7000) * 1.05);
+      needsUpdate = true;
+    }
+
+    if (mensal > (config.minVendasMensal || 30000) * 1.1) {
+      newConfig.minVendasMensal = Math.round((config.minVendasMensal || 30000) * 1.05);
+      needsUpdate = true;
+    }
+
+    if (needsUpdate) {
+      localStorage.setItem('gestor_coo_config', JSON.stringify(newConfig));
+      setConfig(newConfig);
+      console.log('🚀 Piloto Automático: Metas ajustadas por performance!');
+    }
   };
 
   const handleRefreshIA = async () => {
@@ -864,54 +909,63 @@ const Tarefas = () => {
           </div>
         )}
 
-        {/* Metas Ativas */}
-        <div style={{ 
-          background: 'white', 
-          borderRadius: '16px', 
-          padding: '1.25rem', 
-          boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-          marginBottom: '1.5rem'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h2 style={{ fontSize: '1rem', fontWeight: '600', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Target size={18} color="#3B82F6" />
-              Metas & Performance
+        {/* Metas Ativas — Anéis de Performance Style Apple Watch */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', padding: '0 0.5rem' }}>
+            <h2 style={{ fontSize: '1rem', fontWeight: '800', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+              <Target size={18} color="#7C3AED" />
+              Objetivos & Performance
             </h2>
+            {config?.autoAdjust && (
+              <span style={{ fontSize: '0.6rem', fontWeight: '800', color: '#7C3AED', background: '#7C3AED10', padding: '0.2rem 0.5rem', borderRadius: '10px' }}>
+                🚀 Piloto Automático ON
+              </span>
+            )}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {/* Adicionando Meta de Faturamento dinâmico se quiser, ou manter as metas atuais */}
-            <div style={{ marginBottom: '0.5rem', padding: '0.75rem', background: '#F8FAFC', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '0.4rem' }}>
-                <span style={{ fontWeight: '700', color: '#1E293B' }}>Meta de Faturamento Mensal</span>
-                <span style={{ fontWeight: '800', color: '#3B82F6' }}>{Math.round((caixaSummary.entrada / 50000) * 100)}%</span>
-              </div>
-              <div style={{ height: '10px', background: '#E2E8F0', borderRadius: '5px', overflow: 'hidden' }}>
-                <div style={{ 
-                  height: '100%', 
-                  width: `${Math.min((caixaSummary.entrada / 50000) * 100, 100)}%`, 
-                  background: 'linear-gradient(90deg, #10B981, #34D399)',
-                  borderRadius: '5px'
-                }} />
-              </div>
-              <p style={{ margin: '0.4rem 0 0', fontSize: '0.6rem', color: '#64748B' }}>Meta: R$ 50.000,00 | Atual: R$ {caixaSummary.entrada.toLocaleString('pt-BR')}</p>
-            </div>
-            {metas.map(meta => (
-              <div key={meta.id}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '0.4rem' }}>
-                  <span style={{ fontWeight: '500', color: '#475569' }}>{meta.nome}</span>
-                  <span style={{ fontWeight: '600', color: '#1E293B' }}>{Math.round((meta.concluidas / meta.objetivo) * 100)}%</span>
-                </div>
-                <div style={{ height: '8px', background: '#F1F5F9', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{ 
-                    height: '100%', 
-                    width: `${(meta.concluidas / meta.objetivo) * 100}%`, 
-                    background: 'linear-gradient(90deg, #3B82F6, #60A5FA)',
-                    borderRadius: '4px',
-                    transition: 'width 0.5s ease-out'
-                  }} />
-                </div>
-              </div>
-            ))}
+          
+          <div style={{ 
+            display: 'flex', 
+            gap: '0.75rem', 
+            overflowX: 'auto', 
+            paddingBottom: '0.5rem',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none'
+          }}>
+            {/* Anel de Vendas Mensais */}
+            <GoalRing 
+              label="Vendas Mês"
+              value={`R$ ${(vendasMensal / 1000).toFixed(1)}k`}
+              percent={(vendasMensal / (config?.minVendasMensal || 30000)) * 100}
+              color="#7C3AED"
+              icon={<TrendingUp size={16} />}
+            />
+
+            {/* Anel de Pedidos Ativos */}
+            <GoalRing 
+              label="Pedidos"
+              value={`${pedidosAtivos} ativos`}
+              percent={(pedidosAtivos / 20) * 100} // Meta de 20 pedidos simultâneos
+              color="#3B82F6"
+              icon={<Package size={16} />}
+            />
+
+            {/* Anel de Tarefas */}
+            <GoalRing 
+              label="Tarefas"
+              value={`${stats.concluidas}/${stats.total}`}
+              percent={stats.total > 0 ? (stats.concluidas / stats.total) * 100 : 0}
+              color="#10B981"
+              icon={<CheckSquare size={16} />}
+            />
+
+             {/* Anel de Estoque */}
+             <GoalRing 
+              label="Estoques"
+              value={estoqueCritico === 0 ? 'Tudo OK' : `${estoqueCritico} Críticos`}
+              percent={Math.max(0, 100 - (estoqueCritico * 5))}
+              color="#F59E0B"
+              icon={<Box size={16} />}
+            />
           </div>
         </div>
 

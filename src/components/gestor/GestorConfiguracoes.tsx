@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, Save, BookOpen, Target, X } from 'lucide-react';
+import { Settings, Save, BookOpen, Target, X, TrendingUp, Zap } from 'lucide-react';
 
 export interface GestorConfig {
   minSaldoVerde: number;
@@ -7,7 +7,10 @@ export interface GestorConfig {
   maxGargaloProducao: number;
   minTaxaTarefas: number;
   minVendasMensal: number;
+  minVendasDiaria?: number;
+  minVendasSemanal?: number;
   manualOperacao: string;
+  autoAdjust?: boolean;
 }
 
 const DEFAULT_CONFIG: GestorConfig = {
@@ -16,7 +19,10 @@ const DEFAULT_CONFIG: GestorConfig = {
   maxGargaloProducao: 5,
   minTaxaTarefas: 70,
   minVendasMensal: 30000,
+  minVendasDiaria: 1000,
+  minVendasSemanal: 7000,
   manualOperacao: '',
+  autoAdjust: true,
 };
 
 interface GestorConfiguracoesProps {
@@ -106,33 +112,94 @@ export const GestorConfiguracoes = ({ onClose, onSave }: GestorConfiguracoesProp
         {/* Content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
           {activeTab === 'metas' ? (
-            <>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div>
-                  <label style={labelStyle}>Saldo Verde (min R$)</label>
-                  <input type="number" style={inputStyle} value={config.minSaldoVerde}
-                    onChange={e => setConfig({...config, minSaldoVerde: Number(e.target.value)})} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div style={{ 
+                background: 'linear-gradient(135deg, #7C3AED, #6D28D9)', 
+                padding: '1rem', 
+                borderRadius: '16px', 
+                color: 'white',
+                boxShadow: '0 4px 12px rgba(124, 58, 237, 0.2)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                  <TrendingUp size={16} />
+                  <span style={{ fontSize: '0.85rem', fontWeight: '800' }}>Piloto Automático Ativo</span>
                 </div>
-                <div>
-                  <label style={labelStyle}>Estoque Crítico (máx)</label>
-                  <input type="number" style={inputStyle} value={config.maxEstoqueCritico}
-                    onChange={e => setConfig({...config, maxEstoqueCritico: Number(e.target.value)})} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Gargalo Produção (máx)</label>
-                  <input type="number" style={inputStyle} value={config.maxGargaloProducao}
-                    onChange={e => setConfig({...config, maxGargaloProducao: Number(e.target.value)})} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Mín. Vendas (R$)</label>
-                  <input type="number" style={inputStyle} value={config.minVendasMensal}
-                    onChange={e => setConfig({...config, minVendasMensal: Number(e.target.value)})} />
+                <p style={{ margin: 0, fontSize: '0.65rem', opacity: 0.9, lineHeight: '1.3' }}>
+                  O sistema ajustará suas metas em 5% sempre que você bater um recorde diário ou semanal.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <h4 style={{ margin: 0, fontSize: '0.75rem', fontWeight: '800', color: '#1E293B', textTransform: 'uppercase' }}>Vendas & Faturamento</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+                   <div>
+                    <label style={labelStyle}>Diário (R$)</label>
+                    <input type="number" style={inputStyle} value={config.minVendasDiaria || 1000}
+                      onChange={e => setConfig({...config, minVendasDiaria: Number(e.target.value)})} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Semanal (R$)</label>
+                    <input type="number" style={inputStyle} value={config.minVendasSemanal || 7000}
+                      onChange={e => setConfig({...config, minVendasSemanal: Number(e.target.value)})} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Mensal (R$)</label>
+                    <input type="number" style={inputStyle} value={config.minVendasMensal}
+                      onChange={e => setConfig({...config, minVendasMensal: Number(e.target.value)})} />
+                  </div>
                 </div>
               </div>
-              <p style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '0.5rem' }}>
-                * Estas metas definem como as cores e a nota (0-100) do dashboard são calculadas.
-              </p>
-            </>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <h4 style={{ margin: 0, fontSize: '0.75rem', fontWeight: '800', color: '#1E293B', textTransform: 'uppercase' }}>Operação & Saúde</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <div>
+                    <label style={labelStyle}>Saldo Mín (R$)</label>
+                    <input type="number" style={inputStyle} value={config.minSaldoVerde}
+                      onChange={e => setConfig({...config, minSaldoVerde: Number(e.target.value)})} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Estoque (Máx Crítico)</label>
+                    <input type="number" style={inputStyle} value={config.maxEstoqueCritico}
+                      onChange={e => setConfig({...config, maxEstoqueCritico: Number(e.target.value)})} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Produção (Máx Gargalo)</label>
+                    <input type="number" style={inputStyle} value={config.maxGargaloProducao}
+                      onChange={e => setConfig({...config, maxGargaloProducao: Number(e.target.value)})} />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ 
+                padding: '0.75rem', 
+                background: '#F8FAFC', 
+                borderRadius: '12px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                border: '1px solid #E2E8F0'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div style={{ 
+                    width: '32px', height: '32px', borderRadius: '8px', background: '#7C3AED10', 
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED' 
+                  }}>
+                    <Zap size={14} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#1E293B' }}>Permitir Ajustes da IA</div>
+                    <div style={{ fontSize: '0.6rem', color: '#94A3B8' }}>A IA ajustará metas baseada em análise real</div>
+                  </div>
+                </div>
+                <input 
+                  type="checkbox" 
+                  checked={config.autoAdjust || true}
+                  onChange={e => setConfig({...config, autoAdjust: e.target.checked})}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                />
+              </div>
+            </div>
           ) : (
             <>
               <label style={labelStyle}>Manual de Operação / Conhecimento</label>

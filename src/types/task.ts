@@ -27,6 +27,17 @@ export interface Meta {
   concluidas: number;
 }
 
+export interface BusinessGoal {
+  id: string;
+  tipo: 'vendas' | 'producao' | 'financeiro' | 'tarefas';
+  periodo: 'diario' | 'semanal' | 'mensal';
+  valorAlvo: number;
+  valorAtual: number;
+  label: string;
+  unidade: 'BRL' | 'un' | '%';
+  autoAdjust: boolean;
+}
+
 export interface TaskStats {
   total: number;
   concluidas: number;
