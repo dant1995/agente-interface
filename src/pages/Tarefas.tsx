@@ -120,14 +120,22 @@ const Tarefas = () => {
 
     const [result, caixa, estoque, fabricacao, vendasRaw] = await Promise.all(fetchPromises);
 
-    // Processar tarefas
-    const tasksArray = Array.isArray((result as any).tasks) ? (result as any).tasks : [];
+    // Processar tarefas com extrema resiliência e logs de depuração
+    console.log('🔄 Processando retorno do TaskService:', result);
+    let tasksArray: Task[] = [];
+    if (result && typeof result === 'object') {
+      const anyResult = result as any;
+      tasksArray = Array.isArray(anyResult.tasks) ? anyResult.tasks : 
+                   Array.isArray(anyResult) ? anyResult : 
+                   (anyResult.data || anyResult.items || []);
+    }
+    
     setTasks(tasksArray);
     setStats(taskService.calculateStats(tasksArray));
-    if ((result as any).health) setBusinessHealth((result as any).health);
+    if (result && (result as any).health) setBusinessHealth((result as any).health);
 
     // Processar indicadores secundários
-    if (caixa) setCaixaSummary((caixa as any).summary);
+    if (caixa && (caixa as any).summary) setCaixaSummary((caixa as any).summary);
     if (Array.isArray(vendasRaw)) setVendas(vendasRaw as Order[]);
     
     if (estoque) {
@@ -719,9 +727,16 @@ const Tarefas = () => {
         )}
 
         {/* Painéis Laterais */}
-      {showMetasPanel && config && (
+      {showMetasPanel && (
         <GestorMetasPanel 
-          config={config} 
+          config={config || {
+            minVendasMensal: 30000,
+            minVendasSemanal: 7000,
+            minVendasDiaria: 1000,
+            maxEstoqueCritico: 10,
+            maxGargaloProducao: 5,
+            autoAdjust: true
+          }} 
           onClose={() => setShowMetasPanel(false)}
           onSave={(newConfig) => {
             localStorage.setItem('gestor_coo_config', JSON.stringify(newConfig));
