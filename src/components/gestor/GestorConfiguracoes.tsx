@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Settings, Save, BookOpen, Target, X, TrendingUp, Zap } from 'lucide-react';
+import type { BusinessGoal } from '../../types/task';
 
 export interface GestorConfig {
   minSaldoVerde: number;
@@ -11,6 +12,7 @@ export interface GestorConfig {
   minVendasSemanal?: number;
   manualOperacao: string;
   autoAdjust?: boolean;
+  customMetas?: BusinessGoal[];
 }
 
 const DEFAULT_CONFIG: GestorConfig = {
@@ -23,6 +25,7 @@ const DEFAULT_CONFIG: GestorConfig = {
   minVendasSemanal: 7000,
   manualOperacao: '',
   autoAdjust: true,
+  customMetas: []
 };
 
 interface GestorConfiguracoesProps {

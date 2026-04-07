@@ -738,8 +738,23 @@ const Tarefas = () => {
       {showMetasBoard && (
         <GestorMetasBoard 
           onClose={() => setShowMetasBoard(false)}
+          onSave={(newConfig) => {
+            localStorage.setItem('gestor_coo_config', JSON.stringify(newConfig));
+            setConfig(newConfig);
+          }}
           vendasMensal={vendasMensal}
-          config={config || {}}
+          config={config || {
+            minSaldoVerde: 5000,
+            maxEstoqueCritico: 10,
+            maxGargaloProducao: 5,
+            minTaxaTarefas: 80,
+            minVendasMensal: 30000,
+            minVendasDiaria: 1000,
+            minVendasSemanal: 7000,
+            manualOperacao: '',
+            autoAdjust: true,
+            customMetas: []
+          }}
           stats={stats}
           pedidosAtivos={pedidosAtivos}
         />
