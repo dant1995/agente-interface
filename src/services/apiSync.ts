@@ -12,7 +12,7 @@ const N8N_WEBHOOK_URLS = {
   NEW_CONTAS: `${BASE_URL}/webhook/contas`,
   GASTOS: `${BASE_URL}/webhook/gastos`,
   CAIXA: `${BASE_URL}/webhook/caixa`,
-  STRATEGY: `${BASE_URL}/webhook/analise_estrategica`,
+  STRATEGY: `${BASE_URL}/webhook/coo_lojascapel_v4_webhook`,
   ESTOQUE: `${BASE_URL}/webhook/estoque`,
   IA_CHAT: `${BASE_URL}/webhook/contas`,
   LICITACOES: `${BASE_URL}/webhook/licitacoes`,
@@ -22,11 +22,19 @@ const N8N_WEBHOOK_URLS = {
   ENTREGA: `${BASE_URL}/webhook/Entrega`,
   CLIENTES: `${BASE_URL}/webhook/clientes`,
   CHAT: `${BASE_URL}/webhook/chat`,
+  PERFORMANCE_PRODUTOS: `${BASE_URL}/webhook/performance-optimized`,
 };
 
 
 
-const normalizeString = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+const normalizeString = (str: string) => {
+  if (!str) return '';
+  return str.toLowerCase()
+    .normalize('NFD') // Decompoem caracteres acentuados (ex: 'ç' -> 'c' + 'cedilha')
+    .replace(/[\u0300-\u036f]/g, '') // Remove os acentos/cedilha
+    .replace(/[^a-z0-9]/g, '') // Remove o restante (espaços, caracteres especiais)
+    .trim();
+};
 
 const parseReal = (val: any): number => {
   if (!val) return 0;
@@ -162,13 +170,11 @@ export const apiSync = {
         else items = [rawData];
       }
 
-      const isTrue = (val: any) => val === true || val === 'TRUE' || val === 'Sim' || val === 'sim' || val === 'checked';
-      const nameKeywords = ['NOME', 'CLIENTE', 'RESPONSAVEL', 'NOME COMPLETO', 'RESPONSÁVEL', 'NOME COMPLETO DO RESPONSAVEL', 'NOME COMPLETO DO RESPONSÁVEL', 'SOLICITANTE'];
+      const isTrue = (val: any) => val === true || val === 'TRUE' || val === 'Sim' || val === 'sim' || val === 'checked' || val === 'ok' || val === 'Checked';
+      const nameKeywords = ['NOME', 'CLIENTE', 'RESPONSAVEL', 'NOME COMPLETO', 'SOLICITANTE', 'BUYER', 'NAME'];
 
-      return items.filter(item => {
-        const name = getValueByKeywords(item, nameKeywords);
-        return !!name;
-      }).map((item, index) => {
+      // Removemos o filtro rígido de nome para garantir que o pedido apareça mesmo se a coluna mudar
+      return items.map((item, index) => {
         let status: any = OrderStatusValue.RECEBIDO;
 
         const hasPronta = isTrue(item['camisetas prontas']) || isTrue(item['Pronta']);
@@ -199,13 +205,13 @@ export const apiSync = {
         return {
           id_pedido: item.id || item.row_number || item['ID Pedido'] || item['id_pedido'] || `n8n-${index}`,
           data: parsedDate.toISOString(),
-          cliente: getValueByKeywords(item, ['NOME', 'CLIENTE', 'RESPONSAVEL', 'NOME COMPLETO', 'NOME COMPLETO DO RESPONSAVEL']),
-          whatsapp: getValueByKeywords(item, ['WHATSAPP', 'WHATSAP', 'TELEFONE', 'CELULAR', 'PHONE', 'WPP', 'WHATS']),
+          cliente: String(getValueByKeywords(item, nameKeywords) || 'Checkout/Direto'),
+          whatsapp: String(getValueByKeywords(item, ['WHATSAPP', 'WHATSAP', 'TELEFONE', 'CELULAR', 'PHONE', 'WPP', 'WHATS']) || ''),
           status: status as any,
-          produtoNome: getValueByKeywords(item, ['PRODUTO', 'DESCRICAO', 'DESC', 'ITEM']) || 'Camiseta Escolar',
-          produtoId: getValueByKeywords(item, ['PRODUTO', 'ID PRODUTO', 'SKU']) || '',
-          tamanho: getValueByKeywords(item, ['TAMANHO', 'TAM', 'SIZE', 'TAMNHO']) || 'M',
-          cor: getValueByKeywords(item, ['COR', 'COLOR']) || 'Preta',
+          produtoNome: String(getValueByKeywords(item, ['PRODUTO', 'DESCRICAO', 'DESC', 'ITEM']) || 'Camiseta Escolar'),
+          produtoId: String(getValueByKeywords(item, ['PRODUTO', 'ID PRODUTO', 'SKU']) || ''),
+          tamanho: String(getValueByKeywords(item, ['TAMANHO', 'TAM', 'SIZE', 'TAMNHO']) || 'M'),
+          cor: String(getValueByKeywords(item, ['COR', 'COLOR']) || 'Preta'),
           quantidade: quantidade,
           valorTotal: valorTotal,
           preco: preco,
@@ -464,6 +470,13 @@ export const apiSync = {
           codigoBarra: item['Codigo de barra'] || item['codigo_barra'] || '',
           // Tenta pegar de qualquer coluna de imagem comum
           imagem: item['foto_base64'] || item['imagem'] || item['Foto'] || item['url imagem'] || item['URL Imagem'] || '',
+          sku: item['SKU'] || item['sku'] || '',
+          tipo: item['Tipo'] || item['tipo'] || 'Estoque Próprio',
+          precoConcorrente: parseReal(item['Preço Concorrente'] || item['preco_concorrente']),
+          frete: parseReal(item['Frete'] || item['frete']),
+          taxaPlataforma: parseReal(item['Taxa Plataforma'] || item['taxa_plataforma'] || 18),
+          margemMinima: parseReal(item['Margem Minima'] || item['margem_minima'] || 10),
+          fornecedorId: item['ID Fornecedor'] || item['fornecedor_id'] || '',
         }));
     } catch (error) {
       console.error('Erro buscando estoque:', error);
@@ -471,8 +484,7 @@ export const apiSync = {
     }
   },
 
-  fetchContas: async (force = false): Promise<any[]> => {
-    if (!force && !canSync('contas', 1000)) return [];
+  fetchContas: async (): Promise<any[]> => {
     try {
       const response = await fetch(N8N_WEBHOOK_URLS.NEW_CONTAS, {
         method: 'POST',
@@ -529,8 +541,7 @@ export const apiSync = {
     });
   },
 
-  fetchFabricacao: async (force = false): Promise<FabricacaoItem[]> => {
-    if (!force && !canSync('fabricacao', 1000)) return [];
+  fetchFabricacao: async (): Promise<FabricacaoItem[]> => {
     try {
       const response = await fetch(N8N_WEBHOOK_URLS.ORDER_PRODUCTION, {
         method: 'POST',
@@ -567,8 +578,7 @@ export const apiSync = {
     }
   },
 
-  fetchVendas: async (force = false): Promise<Order[]> => {
-    if (!force && !canSync('vendas', 1000)) return [];
+  fetchVendas: async (): Promise<Order[]> => {
     try {
       const response = await fetch(N8N_WEBHOOK_URLS.NEW_SALE, {
         method: 'POST',
@@ -584,13 +594,8 @@ export const apiSync = {
       } else if (rawData && typeof rawData === 'object') {
         items = Object.values(rawData).find(val => Array.isArray(val)) as any[] || [rawData];
       }
-      const marketplaceItems = items.filter(item => {
-        const origem = normalizeString(String(getValueByKeywords(item, ['ORIGEM', 'SOURCE', 'TIPO']) || ''));
-        const validSources = ['online', 'shopee', 'tiktok'];
-        return validSources.some(s => origem.includes(s)) || (origem === ''); // Mantém se vazio para não perder dados legados
-      });
-
-      return marketplaceItems.map((item: any, index: number) => {
+      // Mapeamento de todas as vendas (removido filtro de marketplace para incluir físico/balcão)
+      return (items || []).map((item: any, index: number) => {
         const baseDateStr = getValueByKeywords(item, ['DATA', 'CARIMBO', 'CRIADO']);
         const baseDate = parseBRDate(baseDateStr) || new Date();
         const forecastDate = new Date(baseDate);
@@ -598,8 +603,12 @@ export const apiSync = {
         
         const precoVenda = parseReal(getValueByKeywords(item, ['VALOR UNITARIO', 'PRECO', 'PRICE', 'UNITARIO', 'VALOR UNITÁRIO']));
         const qtdVenda = Number(getValueByKeywords(item, ['QUANTIDADE', 'QTD', 'AMOUNT']) || 1);
-        const totalVendaPlanilha = parseReal(getValueByKeywords(item, ['COM DESCONTO', 'PREVISAO DE RECEBIMENTO', 'TOTAL', 'TOTAL PAGO', 'VALOR PAGO', 'PAGO']));
-        const finalValue = totalVendaPlanilha > 0 ? totalVendaPlanilha : (precoVenda * qtdVenda);
+        
+        // Prioriza o valor com desconto, se não houver, usa o preço unitário * quantidade
+        const comDesconto = parseReal(getValueByKeywords(item, ['COM DESCONTO', 'TOTAL', 'TOTAL PAGO', 'VALOR PAGO', 'PAGO']));
+        const previsaoRecebimento = parseReal(getValueByKeywords(item, ['PREVISAO DE RECEBIMENTO']));
+        
+        const finalValue = comDesconto > 0 ? comDesconto : (precoVenda * qtdVenda > 0 ? precoVenda * qtdVenda : previsaoRecebimento);
 
         return {
           id_pedido: String(item.ID || item.id || item.row_number || `venda-${index}`),
@@ -622,7 +631,14 @@ export const apiSync = {
           entregue: true,
           previsaoRecebimento: forecastDate.toISOString(),
           formaPagamento: String(getValueByKeywords(item, ['FORMA DE PAGAMENTO', 'FORMA_PAGAMENTO', 'PAGAMENTO', 'METODO', 'METHOD', 'FORMA_PAGTO']) || ''),
-          origem: String(getValueByKeywords(item, ['ORIGEM', 'SOURCE', 'TIPO']) || '')
+          origem: (() => {
+            const org = normalizeString(String(getValueByKeywords(item, ['ORIGEM', 'SOURCE', 'TIPO']) || ''));
+            if (org.includes('shopee')) return 'Shopee';
+            if (org.includes('tiktok')) return 'TikTok';
+            if (org.includes('site') || org.includes('online')) return 'Site';
+            if (org.includes('fixico') || org.includes('fisco') || org.includes('balcao') || org.includes('loja') || org.includes('fisico')) return 'Físico/Loja';
+            return org || 'Venda Direta';
+          })()
         };
       });
     } catch (error) {
@@ -663,7 +679,14 @@ export const apiSync = {
     fornecedor: string;
     imagem: string;
     imagem2: string;
-    variacoes: Array<{ tamanho: string; cor: string; codigoBarra: string; quantidade: number }>;
+    sku: string;
+    tipo: string;
+    precoConcorrente: string;
+    frete: string;
+    taxaPlataforma: string;
+    margemMinima: string;
+    fornecedorId: string;
+    variacoes: Array<{ tamanho: string; cor: string; codigoBarra: string; quantidade: number; imagem?: string }>;
   }) => {
     const data = new Date().toLocaleDateString('pt-BR');
     // Envia uma linha por variação (mesma estrutura da planilha)
@@ -687,6 +710,13 @@ export const apiSync = {
           'Fornecedor': produto.fornecedor || '',
           'Categoria': produto.categoria || '',
           'Descricao': produto.descricao || '',
+          'SKU': produto.sku || '',
+          'Tipo': produto.tipo || 'Estoque Próprio',
+          'Preço Concorrente': Number(produto.precoConcorrente || 0),
+          'Frete': Number(produto.frete || 0),
+          'Taxa Plataforma': Number(produto.taxaPlataforma || 18),
+          'Margem Minima': Number(produto.margemMinima || 10),
+          'ID Fornecedor': produto.fornecedorId || '',
           timestamp: new Date().toISOString()
         }))
       : [{
@@ -779,6 +809,26 @@ export const apiSync = {
       ...dados,
       timestamp: new Date().toISOString(),
     });
+  },
+
+  fetchProdutosPerformance: async (): Promise<any> => {
+    try {
+      console.time('SyncPerformanceN8N');
+      const response = await fetch(N8N_WEBHOOK_URLS.PERFORMANCE_PRODUTOS, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_performance' })
+      });
+      console.timeEnd('SyncPerformanceN8N');
+      
+      if (!response.ok) throw new Error('Falha ao buscar performance da planilha');
+      const rawData = await response.json();
+      return Array.isArray(rawData) ? rawData : (Object.values(rawData).find(v => Array.isArray(v)) as any[] || []);
+    } catch (error) {
+      console.timeEnd('SyncPerformanceN8N');
+      console.error('Erro buscando performance:', error);
+      return [];
+    }
   },
 
   fetchChatHistory: async (whatsapp: string) => {

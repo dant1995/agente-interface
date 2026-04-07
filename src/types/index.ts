@@ -1,15 +1,56 @@
-// Product Interface
 export interface Product {
   id: string; // Internal UUID
   nome: string;
+  sku: string;
+  tipo: 'Estoque Próprio' | 'Dropshipping';
   tamanho: string;
   cor: string;
   custo: number;
   preco: number;
-  lucro: number;
   estoque: number;
   codigo_barra: string;
   imagem?: string;
+  fornecedorId?: string;
+  
+  // Métricas de Performance
+  vendasPeriodo?: number;
+  views?: number;
+  cliques?: number;
+  pedidos: number;
+  carrinho?: number;
+  unidades?: number;
+  ctr?: number;
+  conversao?: number;
+  lucro?: number;
+
+  // Campos Estratégicos (Consultor de Vendas)
+  concorrenteMin?: number;
+  concorrenteMedia?: number;
+  concorrenteMax?: number;
+  taxaMark?: number;
+  freteFixo?: number;
+  margemDesejada?: number;
+}
+
+export interface Supplier {
+  id: string;
+  nome: string;
+  tipo: 'Nacional' | 'Internacional';
+  prazoEnvio: string;
+  contato: string;
+  linkCatalogo: string;
+  ultimaCompra?: string;
+  avaliacao?: number;
+}
+
+export interface MetricHistory {
+  productId: string;
+  data: string;
+  views: number;
+  cliques: number;
+  vendas: number;
+  nota: number;
+  classificacao: 'Ruim' | 'Médio' | 'Bom';
 }
 
 // Order Status Enum pattern without using 'enum' keyword to pass erasableSyntaxOnly
@@ -57,6 +98,7 @@ export interface Order {
   previsaoRecebimento?: string; // New field for sales forecast
   observacoes?: string;
   metodoPagamento?: 'Pix' | 'Dinheiro' | 'Cartão';
+  origem?: string;
 }
 
 // Sale Interface (for Vendas/PDV)

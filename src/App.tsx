@@ -25,6 +25,10 @@ import LicitacaoDetalhe from './pages/LicitacaoDetalhe';
 import Tarefas from './pages/Tarefas';
 import Entregas from './pages/Entregas';
 import Campanhas from './pages/Campanhas';
+import AnaliseProduto from './pages/AnaliseProduto';
+import GestaoProdutos from './pages/GestaoProdutos';
+import Fornecedores from './pages/Fornecedores';
+import TikTokPost from './pages/TiktokPost';
 
 function App() {
   const [unlocked, setUnlocked] = useState(authService.isUnlocked());
@@ -57,6 +61,10 @@ function App() {
           <Route path="/tarefas" element={<Tarefas />} />
           <Route path="/entregas" element={<Entregas />} />
           <Route path="/campanhas" element={<Campanhas />} />
+          <Route path="/analise-produto" element={<AnaliseProduto />} />
+          <Route path="/gestao-produtos" element={<GestaoProdutos />} />
+          <Route path="/fornecedores" element={<Fornecedores />} />
+          <Route path="/tiktok" element={<TikTokPost />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <QueueMonitor />

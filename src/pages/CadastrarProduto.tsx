@@ -12,6 +12,8 @@ interface Variacao {
 
 interface NovoProduto {
   nome: string;
+  sku: string;
+  tipo: 'Estoque Próprio' | 'Dropshipping';
   preco: string;
   precoDesconto: string;
   custo: string;
@@ -24,6 +26,11 @@ interface NovoProduto {
   estoqueMinimo: string;
   estoqueTotal: string;
   fornecedor: string;
+  fornecedorId: string;
+  precoConcorrente: string;
+  frete: string;
+  taxaPlataforma: string;
+  margemMinima: string;
   imagem: string;
   imagem2: string;
   variacoes: Variacao[];
@@ -83,10 +90,14 @@ const detectBarcode = async (file: File): Promise<string | null> => {
 export const CadastrarProduto = ({ onClose, onSave }: Props) => {
   const [step, setStep] = useState<'foto' | 'info' | 'variacoes' | 'confirmar'>('foto');
   const [produto, setProduto] = useState<NovoProduto>({
-    nome: '', preco: '', precoDesconto: '', custo: '',
+    nome: '', sku: '', tipo: 'Estoque Próprio', 
+    preco: '', precoDesconto: '', custo: '',
     cor: '', tamanho: 'M', codigoBarra: '',
     origem: 'Físico', categoria: 'Camiseta', descricao: '',
-    estoqueMinimo: '5', estoqueTotal: '1', fornecedor: '', imagem: '', imagem2: '', variacoes: []
+    estoqueMinimo: '5', estoqueTotal: '1', fornecedor: '', 
+    fornecedorId: '', precoConcorrente: '', frete: '', 
+    taxaPlataforma: '18', margemMinima: '10',
+    imagem: '', imagem2: '', variacoes: []
   });
   const [variacaoAtual, setVariacaoAtual] = useState<Variacao>({
     id: Date.now().toString(), tamanho: 'M', cor: '', codigoBarra: '', quantidade: 1, imagem: ''
@@ -359,6 +370,22 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
                   onChange={e => setProduto(p => ({ ...p, nome: e.target.value }))} />
               </div>
 
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                <div>
+                  <label style={labelStyle}>SKU *</label>
+                  <input style={inputStyle} placeholder="SKU-123" value={produto.sku}
+                    onChange={e => setProduto(p => ({ ...p, sku: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Tipo de Produto</label>
+                  <select style={inputStyle} value={produto.tipo}
+                    onChange={e => setProduto(p => ({ ...p, tipo: e.target.value as any }))}>
+                    <option value="Estoque Próprio">Estoque Próprio</option>
+                    <option value="Dropshipping">Dropshipping</option>
+                  </select>
+                </div>
+              </div>
+
               <div>
                 <label style={labelStyle}>Código de Barras (Principal)</label>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -453,9 +480,35 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
               </div>
 
               <div>
-                <label style={labelStyle}>🏭 Fornecedor</label>
-                <input style={inputStyle} placeholder="Nome do fornecedor" value={produto.fornecedor}
+                <label style={labelStyle}>🏭 Fornecedor / ID</label>
+                <input style={inputStyle} placeholder="Nome ou ID do fornecedor" value={produto.fornecedor}
                   onChange={e => setProduto(p => ({ ...p, fornecedor: e.target.value }))} />
+              </div>
+
+              <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.8rem', textTransform: 'uppercase' }}>
+                    📊 Dados para Precificação Inteligente
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', marginBottom: '0.8rem' }}>
+                    <div>
+                        <label style={labelStyle}>Preço Concorrente (R$)</label>
+                        <input style={inputStyle} type="number" value={produto.precoConcorrente} onChange={e => setProduto(p => ({ ...p, precoConcorrente: e.target.value }))} />
+                    </div>
+                    <div>
+                        <label style={labelStyle}>Frete (opcional R$)</label>
+                        <input style={inputStyle} type="number" value={produto.frete} onChange={e => setProduto(p => ({ ...p, frete: e.target.value }))} />
+                    </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                    <div>
+                        <label style={labelStyle}>Taxa Plataforma (%)</label>
+                        <input style={inputStyle} type="number" value={produto.taxaPlataforma} onChange={e => setProduto(p => ({ ...p, taxaPlataforma: e.target.value }))} />
+                    </div>
+                    <div>
+                        <label style={labelStyle}>Margem Mínima (R$)</label>
+                        <input style={inputStyle} type="number" value={produto.margemMinima} onChange={e => setProduto(p => ({ ...p, margemMinima: e.target.value }))} />
+                    </div>
+                </div>
               </div>
 
               <div>

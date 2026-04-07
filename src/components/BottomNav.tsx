@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, FileText, Factory, Package, ShoppingBag, Tag, CheckSquare, Truck } from 'lucide-react';
+import { LayoutDashboard, FileText, Factory, Package, ShoppingBag, Tag, Truck, Briefcase } from 'lucide-react';
 
 const BottomNav = () => {
   return (
@@ -29,8 +29,8 @@ const BottomNav = () => {
         <span>Etiquetas</span>
       </NavLink>
       <NavLink to="/tarefas" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-        <CheckSquare size={20} />
-        <span>Tarefas</span>
+        <Briefcase size={20} />
+        <span>Gestor</span>
       </NavLink>
       <NavLink to="/entregas" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
         <Truck size={20} />

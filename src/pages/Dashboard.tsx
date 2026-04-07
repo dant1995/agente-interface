@@ -196,12 +196,13 @@ const Dashboard = () => {
     { icon: '🧾', label: 'Histórico\nVendas', route: '/vendas-historico', color: '#6366F1' },
     { icon: '💰', label: 'Receitas\nDespesas', route: '/gastos', color: '#059669' },
     { icon: '🏛️', label: 'Licitações', route: '/licitacoes', color: '#1E40AF' },
-    { icon: '✅', label: 'Tarefas', route: '/tarefas', color: '#10B981' },
     { icon: '📢', label: 'Campanhas', route: '/campanhas', color: '#F43F5E' },
+    { icon: '🎬', label: 'TikTok\nSync', route: '/tiktok', color: '#000000' },
   ];
 
   const gerenciaItems = [
     { icon: '🤖', label: 'Capel IA', route: '/chat-ia', color: '#6366F1' },
+    { icon: '💎', label: 'Gestão\nProd.', route: '/gestao-produtos', color: '#10B981' },
     { icon: '📊', label: 'Relatórios', route: '/relatorios', color: '#8B5CF6' },
     { icon: '🔒', label: 'Bloquear', action: handleLogout, color: '#64748B' },
   ];

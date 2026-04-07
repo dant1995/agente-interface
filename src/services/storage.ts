@@ -1,4 +1,4 @@
-import type { Product, Order, Sale, StockItem, FabricacaoItem } from '../types';
+import type { Product, Order, Sale, StockItem, FabricacaoItem, Supplier, MetricHistory } from '../types';
 
 // Generic Local Storage Helper
 const getList = <T>(key: string): T[] => {
@@ -17,7 +17,10 @@ const KEYS = {
   SALES: 'erp_sales',
   STOCK: 'erp_stock',
   FABRICACAO: 'erp_fabricacao',
-  CUSTOMERS: 'erp_customers'
+  CUSTOMERS: 'erp_customers',
+  ANALISES: 'erp_analises_produtos',
+  SUPPLIERS: 'erp_suppliers',
+  METRICS_HISTORY: 'erp_metrics_history'
 };
 
 export const storage = {
@@ -57,6 +60,10 @@ export const storage = {
     list.push(product);
     saveList(KEYS.PRODUCTS, list);
     return Promise.resolve(product);
+  },
+  syncProducts: (products: Product[]): Promise<Product[]> => {
+    saveList(KEYS.PRODUCTS, products);
+    return Promise.resolve(products);
   },
   updateProductStock: (id: string, qtySold: number): Promise<void> => {
     const list = getList<Product>(KEYS.PRODUCTS);
@@ -150,5 +157,44 @@ export const storage = {
   updateCustomerMetadata: (name: string, data: any): void => {
     const key = `customer_meta_${name}`;
     localStorage.setItem(key, JSON.stringify(data));
+  },
+
+  // Análises de Produto
+  getAnalises: (): Promise<any[]> => Promise.resolve(getList(KEYS.ANALISES)),
+  addAnalise: (analise: any): Promise<any> => {
+    const list = getList<any>(KEYS.ANALISES);
+    list.unshift(analise); // Adiciona no início
+    saveList(KEYS.ANALISES, list.slice(0, 50)); // Mantém as últimas 50
+    return Promise.resolve(analise);
+  },
+
+  // Fornecedores
+  getSuppliers: (): Promise<Supplier[]> => Promise.resolve(getList(KEYS.SUPPLIERS)),
+  addSupplier: (supplier: Supplier): Promise<Supplier> => {
+    const list = getList<Supplier>(KEYS.SUPPLIERS);
+    list.push(supplier);
+    saveList(KEYS.SUPPLIERS, list);
+    return Promise.resolve(supplier);
+  },
+  deleteSupplier: (id: string): Promise<void> => {
+    const list = getList<Supplier>(KEYS.SUPPLIERS);
+    const filtered = list.filter(s => s.id !== id);
+    saveList(KEYS.SUPPLIERS, filtered);
+    return Promise.resolve();
+  },
+
+  // Histórico de Métricas
+  getMetricsHistory: (productId?: string): Promise<MetricHistory[]> => {
+    const list = getList<MetricHistory>(KEYS.METRICS_HISTORY);
+    if (productId) {
+      return Promise.resolve(list.filter(m => m.productId === productId));
+    }
+    return Promise.resolve(list);
+  },
+  addMetricHistory: (metric: MetricHistory): Promise<MetricHistory> => {
+    const list = getList<MetricHistory>(KEYS.METRICS_HISTORY);
+    list.unshift(metric);
+    saveList(KEYS.METRICS_HISTORY, list);
+    return Promise.resolve(metric);
   }
 };

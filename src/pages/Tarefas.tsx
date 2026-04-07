@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   CheckSquare, 
   Clock, 
@@ -6,18 +7,40 @@ import {
   Plus, 
   Search, 
   Filter, 
-  MoreHorizontal,
   Target,
   BarChart3,
   Calendar,
-  MessageSquare,
-  ArrowRight
+  ArrowRight,
+  Briefcase,
+  Wallet,
+  Box,
+  Factory,
+  TrendingUp, 
+  ShieldCheck, 
+  Zap,
+  RotateCw,
+  ChevronRight,
+  ShoppingBag,
+  Package
 } from 'lucide-react';
 import { taskService } from '../services/taskService_v2';
 import { apiSync } from '../services/apiSync';
-import type { Task, TaskStatus, TaskStats, Meta, TaskPriority } from '../types/task';
+import type { Task, TaskStatus, TaskStats, Meta, TaskPriority, BusinessHealth } from '../types/task';
+import { GestorDetailPanel } from '../components/gestor/GestorDetailPanel';
+import type { PanelType } from '../components/gestor/GestorDetailPanel';
+import { GestorAgente } from '../components/gestor/GestorAgente';
+import { BusinessScoreCard } from '../components/gestor/BusinessScoreCard';
+import { GestorPrevisaoCaixa } from '../components/gestor/GestorPrevisaoCaixa';
+import { GestorHistoricoPlanos } from '../components/gestor/GestorHistoricoPlanos';
+import { GestorDRE } from '../components/gestor/GestorDRE';
+import { GestorConfiguracoes } from '../components/gestor/GestorConfiguracoes';
+import { GestorVendasDetalhes } from '../components/gestor/GestorVendasDetalhes';
+import type { GestorConfig } from '../components/gestor/GestorConfiguracoes';
+import { OrderStatus } from '../types';
+import type { Order } from '../types';
 
 const Tarefas = () => {
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [metas] = useState<Meta[]>([
     { id: '1', nome: 'Produção Semanal', objetivo: 50, concluidas: 32 },
@@ -29,40 +52,148 @@ const Tarefas = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  
+  // Estados para o Relatório da IA
+  const [aiReport, setAiReport] = useState<string | null>(null);
+  const [reportDate, setReportDate] = useState<string | null>(null);
+  const [businessHealth, setBusinessHealth] = useState<BusinessHealth | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  // Novos estados do Gestor
+  const [caixaSummary, setCaixaSummary] = useState({ entrada: 0, saida: 0, saldo: 0 });
+  const [estoqueCritico, setEstoqueCritico] = useState(0);
+  const [producaoGargalo, setProducaoGargalo] = useState(0);
+  const [activePanel, setActivePanel] = useState<PanelType>(null);
+  const [showAgente, setShowAgente] = useState(false);
+  const [showPrevisao, setShowPrevisao] = useState(false);
+  const [showHistorico, setShowHistorico] = useState(false);
+  const [showDRE, setShowDRE] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
+  const [showVendasDetalhes, setShowVendasDetalhes] = useState(false);
+  const [vendas, setVendas] = useState<Order[]>([]);
+  const [vendasMensal, setVendasMensal] = useState(0);
+  const [pedidosAtivos, setPedidosAtivos] = useState(0);
+  const [config, setConfig] = useState<GestorConfig | undefined>(() => {
+    try {
+      const saved = localStorage.getItem('gestor_coo_config');
+      return saved ? JSON.parse(saved) : undefined;
+    } catch (e) {
+      console.warn('Erro ao ler config do localStorage:', e);
+      return undefined;
+    }
+  });
 
   useEffect(() => {
     loadData();
+    // Carregar último relatório e saúde salvos
+    const saved = localStorage.getItem('lojascapel_ai_report');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      setAiReport(parsed.text);
+      setReportDate(parsed.date);
+      if (parsed.health) setBusinessHealth(parsed.health);
+    }
+
+    // Auto-sync a cada 5 minutos
+    const interval = setInterval(() => {
+      console.log('🔄 Auto-sync: Atualizando dados do Gestor...');
+      loadData();
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const loadData = async () => {
     setLoading(true);
-    try {
-      const fetchedTasks = await taskService.getTasks();
-      // Garantir que fetchedTasks seja sempre um array
-      const tasksArray = Array.isArray(fetchedTasks) ? fetchedTasks : [];
-      setTasks(tasksArray);
-      setStats(taskService.calculateStats(tasksArray));
-    } catch (error) {
-      console.error('Failed to load tasks:', error);
-      setTasks([]);
+    
+    // Disparar todas as requisições em paralelo para evitar bloqueio sequencial
+    const fetchPromises = [
+      taskService.getTasks().catch(e => { console.error('Erro tarefas:', e); return { tasks: [] }; }),
+      apiSync.fetchCaixa().catch(e => { console.warn('Erro caixa:', e); return null; }),
+      apiSync.fetchEstoque().catch(e => { console.warn('Erro estoque:', e); return null; }),
+      apiSync.fetchFabricacao().catch(e => { console.warn('Erro fabricação:', e); return null; }),
+      apiSync.fetchVendas().catch(e => { console.warn('Erro vendas:', e); return []; })
+    ];
+
+    const [result, caixa, estoque, fabricacao, vendasRaw] = await Promise.all(fetchPromises);
+
+    // Processar tarefas
+    const tasksArray = Array.isArray((result as any).tasks) ? (result as any).tasks : [];
+    setTasks(tasksArray);
+    setStats(taskService.calculateStats(tasksArray));
+    if ((result as any).health) setBusinessHealth((result as any).health);
+
+    // Processar indicadores secundários
+    if (caixa) setCaixaSummary((caixa as any).summary);
+    if (Array.isArray(vendasRaw)) setVendas(vendasRaw as Order[]);
+    
+    if (estoque) {
+      const critico = ((estoque as any[]) || []).filter((i: any) => (i.estoque || 0) <= (i.estoqueMinimo || 5)).length;
+      setEstoqueCritico(critico);
     }
+    if (fabricacao) {
+      const gargalo = ((fabricacao as any[]) || []).filter((f: any) => f.quantidade > (f.revisao || 0)).length;
+      setProducaoGargalo(gargalo);
+    }
+
+    if (Array.isArray(vendasRaw)) {
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
+      startDate.setHours(0, 0, 0, 0);
+
+      const totalValue = (vendasRaw as any[]).reduce((sum, v) => {
+        if (!v || !v.data) return sum;
+        try {
+          const saleDate = new Date(v.data);
+          if (isNaN(saleDate.getTime())) return sum;
+          if (saleDate >= startDate) return sum + (v.valorTotal || 0);
+        } catch (e) { console.warn('Erro data venda:', e); }
+        return sum;
+      }, 0);
+      setVendasMensal(totalValue);
+
+      // Contagem de Pedidos Ativos (não entregues)
+      const todosPedidos = (vendasRaw as any[]) || [];
+      const ativos = todosPedidos.filter((v: any) => v.status !== OrderStatus.ENTREGUE).length;
+      setPedidosAtivos(ativos);
+    }
+    
     setLoading(false);
   };
 
-  const handleStatusChange = async (id: string, currentStatus: TaskStatus) => {
-    const nextStatus: Record<TaskStatus, TaskStatus> = {
-      'pendente': 'em andamento',
-      'em andamento': 'concluída',
-      'concluída': 'pendente',
-      'atrasada': 'em andamento'
-    };
-    
-    const newStatus = nextStatus[currentStatus];
-    const success = await taskService.updateTaskStatus(id, newStatus);
-    if (success) {
-      loadData();
+  const handleRefreshIA = async () => {
+    setIsAnalyzing(true);
+    await loadData();
+    try {
+      const response = await apiSync.fetchStrategy();
+      
+      const content = response?.output || response?.text || response?.mensagemIA || response?.message || response?.ai_report;
+      const health = response?.business_health;
+
+      if (content && typeof content === 'string') {
+        const now = new Date().toLocaleString('pt-BR');
+        setAiReport(content);
+        setReportDate(now);
+        if (health) setBusinessHealth(health);
+        
+        localStorage.setItem('lojascapel_ai_report', JSON.stringify({
+          text: content,
+          date: now,
+          health: health
+        }));
+      }
+      
+      await loadData();
+      alert('Análise do Diretor de Operações concluída!');
+    } catch (e) {
+      console.error('Erro na sincronização:', e);
+      alert('Erro ao processar análise estratégica. Verifique se o n8n está ativo.');
+    } finally {
+      setIsAnalyzing(false);
     }
   };
+
+
 
   const getPriorityColor = (priority: TaskPriority) => {
     switch (priority) {
@@ -85,10 +216,27 @@ const Tarefas = () => {
 
   const isTaskAtrasada = (t: Task) => {
     if (t.status === 'concluída') return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const dueDate = new Date(t.dataConclusao);
-    return dueDate < today || t.status === 'atrasada';
+    // Verifica por data de vencimento
+    if (t.dataConclusao) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      let dueDate: Date;
+      if (!isNaN(Number(t.dataConclusao)) && String(t.dataConclusao).length >= 10) {
+        dueDate = new Date(Number(t.dataConclusao));
+      } else {
+        dueDate = new Date(t.dataConclusao);
+      }
+      if (!isNaN(dueDate.getTime()) && dueDate < today) return true;
+    }
+    // Verifica por status explicitamente 'atrasada'
+    if (t.status === 'atrasada') return true;
+    // Tarefa pendente/em andamento criada há mais de 14 dias sem conclusão
+    if (t.createdAt) {
+      const createdAt = new Date(isNaN(Number(t.createdAt)) ? t.createdAt : Number(t.createdAt));
+      const ageInDays = (Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
+      if (ageInDays > 14) return true;
+    }
+    return false;
   };
 
   const filteredTasks = (Array.isArray(tasks) ? tasks : []).filter(t => {
@@ -98,13 +246,87 @@ const Tarefas = () => {
     if (filter === 'atrasada') {
       matchesFilter = isTaskAtrasada(t);
     } else if (filter === 'pendente' || filter === 'em andamento') {
-      // Se estiver atrasada, não mostra no filtro de pendente comum
       matchesFilter = t.status === filter && !isTaskAtrasada(t);
     }
 
     const matchesSearch = taskTitle.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesFilter && matchesSearch;
   });
+
+  // Parser de data robusto — suporta timestamp em ms, ISO e strings brasileiras
+  const formatTaskDate = (raw: string | undefined): string => {
+    if (!raw) return '';
+    try {
+      // ClickUp retorna timestamp em ms como string numérica
+      if (!isNaN(Number(raw)) && String(raw).length >= 10) {
+        return new Date(Number(raw)).toLocaleDateString('pt-BR');
+      }
+      const d = new Date(raw);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleDateString('pt-BR');
+    } catch { return ''; }
+  };
+
+  const getDaysUntilDue = (raw: string | undefined): number | null => {
+    if (!raw) return null;
+    try {
+      let d: Date;
+      if (!isNaN(Number(raw)) && String(raw).length >= 10) {
+        d = new Date(Number(raw));
+      } else {
+        d = new Date(raw);
+      }
+      if (isNaN(d.getTime())) return null;
+      const today = new Date(); today.setHours(0,0,0,0);
+      d.setHours(0,0,0,0);
+      return Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    } catch { return null; }
+  };
+
+  // Detectar departamento pelo nome da tarefa (heurística simples)
+  const getDepartamento = (taskName: string): { label: string; color: string; key: string } => {
+    const n = taskName.toLowerCase();
+    if (n.includes('caixa') || n.includes('pagar') || n.includes('saldo') || n.includes('capital') || n.includes('precific')) {
+      return { label: '💰 Financeiro', color: '#10B981', key: 'financeiro' };
+    }
+    if (n.includes('producao') || n.includes('produção') || n.includes('calça') || n.includes('costura') || n.includes('estoque') || n.includes('urgente') || n.includes('compra')) {
+      return { label: '🏭 Produção', color: '#8B5CF6', key: 'producao' };
+    }
+    return { label: '📋 Geral', color: '#64748B', key: 'geral' };
+  };
+
+  // Calcular distribuição de tarefas por departamento
+  const getDeptStats = () => {
+    const counts = { financeiro: 0, producao: 0, geral: 0 };
+    (Array.isArray(tasks) ? tasks : []).forEach(t => {
+      const dept = getDepartamento(t.tarefas);
+      counts[dept.key as keyof typeof counts]++;
+    });
+    return counts;
+  };
+
+  // Marcar tarefa como concluída com feedback visual otimista
+  const handleToggleTask = async (task: Task) => {
+    const nextStatus: Record<TaskStatus, TaskStatus> = {
+      'pendente': 'em andamento',
+      'em andamento': 'concluída',
+      'concluída': 'pendente',
+      'atrasada': 'em andamento'
+    };
+    const newStatus = nextStatus[task.status];
+    // Atualiza local imediatamente (feedback otimista)
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
+    setStats(taskService.calculateStats(
+      tasks.map(t => t.id === task.id ? { ...t, status: newStatus } : t)
+    ));
+    // Sincroniza com backend
+    const success = await taskService.updateTaskStatus(task.id, newStatus);
+    if (!success) {
+      // Reverter se falhou
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: task.status } : t));
+    }
+  };
+
 
   return (
     <div style={{ background: '#F8FAFC', minHeight: '100vh', paddingBottom: '90px' }}>
@@ -119,27 +341,63 @@ const Tarefas = () => {
         <div style={{ position: 'relative', zIndex: 1 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <div>
-              <h1 style={{ fontSize: '1.75rem', fontWeight: '700', margin: 0 }}>Minhas Tarefas</h1>
-              <p style={{ opacity: 0.7, fontSize: '0.875rem', marginTop: '0.25rem' }}>Gestão inteligente & automação</p>
+              <h1 style={{ fontSize: '1.75rem', fontWeight: '700', margin: 0, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <Briefcase size={28} color="#3B82F6" />
+                Gestor de Negócios
+              </h1>
+              <p style={{ opacity: 0.7, fontSize: '0.875rem', marginTop: '0.25rem' }}>Inteligência Estratégica & Comando</p>
             </div>
             <div style={{ display: 'flex', gap: '0.75rem' }}>
               <button 
-                onClick={async () => {
-                  if (window.confirm('Solicitar que a IA analise seu negócio e sugira novas tarefas agora?')) {
-                    setLoading(true);
-                    try {
-                      await apiSync.fetchStrategy();
-                      alert('Análise solicitada! As tarefas aparecerão em instantes se o limite de 10 pendentes permitir.');
-                      loadData();
-                    } catch (e) {
-                      alert('Erro ao processar análise.');
-                    } finally {
-                      setLoading(false);
-                    }
-                  }
-                }}
+                onClick={loadData}
+                disabled={loading}
                 style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '12px',
                   background: 'rgba(255, 255, 255, 0.1)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.3s ease',
+                  backdropFilter: 'blur(10px)'
+                }}
+                title="Sincronizar todos os dados"
+              >
+                <RotateCw size={20} className={loading ? 'animate-spin' : ''} />
+              </button>
+              
+              {/* Botão COO Digital */}
+              <button 
+                onClick={() => setShowAgente(true)}
+                style={{
+                  background: 'linear-gradient(135deg, #7C3AED, #6D28D9)',
+                  border: 'none',
+                  color: 'white',
+                  borderRadius: '12px',
+                  padding: '0.75rem 1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(109, 40, 217, 0.5)',
+                  fontSize: '0.8rem'
+                }}
+                title="Abrir COO Digital — Agente Conversacional"
+              >
+                <span>🧠</span>
+                <span>COO</span>
+              </button>
+
+              <button 
+                onClick={handleRefreshIA}
+                disabled={isAnalyzing}
+                style={{
+                  background: isAnalyzing ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.1)',
                   border: '1px solid rgba(255, 255, 255, 0.2)',
                   color: 'white',
                   borderRadius: '12px',
@@ -148,13 +406,17 @@ const Tarefas = () => {
                   alignItems: 'center',
                   gap: '0.5rem',
                   fontWeight: '600',
-                  cursor: 'pointer',
-                  backdropFilter: 'blur(10px)'
+                  cursor: isAnalyzing ? 'not-allowed' : 'pointer',
+                  backdropFilter: 'blur(10px)',
+                  transition: 'all 0.3s ease',
+                  fontSize: '0.8rem'
                 }}
+                title="Análise rápida da IA"
               >
-                <span style={{ filter: 'grayscale(1)' }}>🤖</span>
+                <span>{isAnalyzing ? '⏳' : '⚡'}</span>
                 <span>IA</span>
               </button>
+
               <button 
                 onClick={() => setShowNewTaskModal(true)}
                 style={{
@@ -206,6 +468,402 @@ const Tarefas = () => {
       {/* Seção de Conteúdo */}
       <div style={{ marginTop: '-2.5rem', padding: '0 1rem', position: 'relative', zIndex: 2 }}>
         
+        {/* Painel Central de Comandos (Kpis Reais) */}
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', 
+          gap: '0.75rem', 
+          marginBottom: '1.25rem' 
+        }}>
+          {/* Widget Financeiro — Clicável */}
+          <div
+            onClick={() => setActivePanel('caixa')}
+            style={{
+              background: 'white',
+              borderRadius: '16px',
+              padding: '1rem',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+              border: '1px solid #E2E8F0',
+              position: 'relative',
+              overflow: 'hidden',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748B', fontSize: '0.65rem', fontWeight: '700', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+              <Wallet size={14} color="#10B981" />
+              <span>Saldo Caixa</span>
+              <ChevronRight size={12} style={{ marginLeft: 'auto', color: '#CBD5E1' }} />
+            </div>
+            <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#1E293B' }}>
+              R$ {caixaSummary.saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </div>
+            <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.4rem', fontSize: '0.6rem' }}>
+              <span style={{ color: '#10B981' }}>↑ R$ {caixaSummary.entrada.toLocaleString('pt-BR')}</span>
+              <span style={{ color: '#EF4444' }}>↓ R$ {caixaSummary.saida.toLocaleString('pt-BR')}</span>
+            </div>
+          </div>
+
+          {/* Widget Estoque — Clicável */}
+          <div
+            onClick={() => setActivePanel('estoque')}
+            style={{
+              background: 'white',
+              borderRadius: '16px',
+              padding: '1rem',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+              border: estoqueCritico > 0 ? '1px solid #FEE2E2' : '1px solid #E2E8F0',
+              position: 'relative',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748B', fontSize: '0.65rem', fontWeight: '700', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+              <Box size={14} color="#F59E0B" />
+              <span>Estoque Crítico</span>
+              <ChevronRight size={12} style={{ marginLeft: 'auto', color: '#CBD5E1' }} />
+            </div>
+            <div style={{ fontSize: '1.4rem', fontWeight: '800', color: estoqueCritico > 0 ? '#EF4444' : '#1E293B' }}>
+              {estoqueCritico}
+            </div>
+            <p style={{ margin: 0, fontSize: '0.6rem', color: '#64748B' }}>Produtos abaixo do min.</p>
+          </div>
+
+          {/* Widget Produção — Clicável */}
+          <div
+            onClick={() => setActivePanel('producao')}
+            style={{
+              background: 'white',
+              borderRadius: '16px',
+              padding: '1rem',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+              border: '1px solid #E2E8F0',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748B', fontSize: '0.65rem', fontWeight: '700', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+              <Factory size={14} color="#8B5CF6" />
+              <span>Gargalo Produção</span>
+              <ChevronRight size={12} style={{ marginLeft: 'auto', color: '#CBD5E1' }} />
+            </div>
+            <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#1E293B' }}>
+              {producaoGargalo}
+            </div>
+            <p style={{ margin: 0, fontSize: '0.6rem', color: '#64748B' }}>Ordens não finalizadas</p>
+          </div>
+
+          {/* Widget Vendas */}
+          <div
+            onClick={() => setShowVendasDetalhes(true)}
+            style={{
+              background: 'white',
+              borderRadius: '16px',
+              padding: '1rem',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+              border: '1px solid #E2E8F0',
+              cursor: 'pointer'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748B', fontSize: '0.65rem', fontWeight: '700', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+              <ShoppingBag size={14} color="#D97706" />
+              <span>Vendas (30d)</span>
+            </div>
+            <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#1E293B' }}>
+              R$ {(vendasMensal / 1000).toFixed(1)}k
+            </div>
+            <p style={{ margin: 0, fontSize: '0.6rem', color: '#059669', fontWeight: '600' }}>
+              ↑ Meta: R$ {(config?.minVendasMensal || 30000) / 1000}k
+            </p>
+          </div>
+
+          {/* Widget Pedidios Ativos — Clicável */}
+          <div
+            onClick={() => navigate('/pedidos')}
+            style={{
+              background: 'white',
+              borderRadius: '16px',
+              padding: '1rem',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+              border: '1px solid #E2E8F0',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748B', fontSize: '0.65rem', fontWeight: '700', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+              <Package size={14} color="#3B82F6" />
+              <span>Pedidos Ativos</span>
+              <ChevronRight size={12} style={{ marginLeft: 'auto', color: '#CBD5E1' }} />
+            </div>
+            <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#1E293B' }}>
+              {pedidosAtivos}
+            </div>
+            <p style={{ margin: 0, fontSize: '0.6rem', color: '#64748B' }}>Ordens em aberto</p>
+          </div>
+        </div>
+
+        {/* Score de Saúde + Acesso a DRE / Previsão / Histórico */}
+        <BusinessScoreCard
+          saldo={caixaSummary.saldo}
+          estoqueCritico={estoqueCritico}
+          producaoGargalo={producaoGargalo}
+          vendasMensal={vendasMensal}
+          totalTasks={stats.total}
+          tasksConcluidas={stats.concluidas}
+          tasksAtrasadas={stats.atrasadas}
+          config={config}
+          onClickDRE={() => setShowDRE(true)}
+          onClickPrevisao={() => setShowPrevisao(true)}
+          onClickHistorico={() => setShowHistorico(true)}
+          onClickConfig={() => setShowConfig(true)}
+          onClickVendas={() => setShowVendasDetalhes(true)}
+        />
+
+        {/* Painel de Detalhe do Gestor */}
+        <GestorDetailPanel
+          panel={activePanel}
+          onClose={() => setActivePanel(null)}
+          caixaSummary={caixaSummary}
+          estoqueCritico={estoqueCritico}
+          producaoGargalo={producaoGargalo}
+        />
+
+        {/* COO Digital — Agente Conversacional */}
+        {showAgente && (
+          <GestorAgente
+            onClose={() => setShowAgente(false)}
+            caixaSummary={caixaSummary}
+            estoqueCritico={estoqueCritico}
+            producaoGargalo={producaoGargalo}
+            totalTasks={stats.total}
+          />
+        )}
+
+        {/* Previsão de Caixa */}
+        {showPrevisao && (
+          <GestorPrevisaoCaixa
+            saldoAtual={caixaSummary.saldo}
+            onClose={() => setShowPrevisao(false)}
+          />
+        )}
+
+        {/* Histórico de Planos */}
+        {showHistorico && (
+          <GestorHistoricoPlanos
+            onClose={() => setShowHistorico(false)}
+            onNewSession={() => setShowAgente(true)}
+          />
+        )}
+
+        {/* DRE Simplificado */}
+        {showDRE && (
+          <GestorDRE
+            onClose={() => setShowDRE(false)}
+            caixaSummary={caixaSummary}
+          />
+        )}
+
+        {/* Configurações do Gestor */}
+        {showConfig && (
+          <GestorConfiguracoes
+            onClose={() => setShowConfig(false)}
+            onSave={(newCfg) => setConfig(newCfg)}
+          />
+        )}
+
+        {showVendasDetalhes && (
+          <GestorVendasDetalhes
+            onClose={() => setShowVendasDetalhes(false)}
+            vendas={vendas}
+            metaVendas={config?.minVendasMensal || 30000}
+          />
+        )}
+        {/* Distribuição por Departamento */}
+        {tasks.length > 0 && (() => {
+          const deptStats = getDeptStats();
+          const total = tasks.length;
+          const depts = [
+            { label: '💰 Financeiro', key: 'financeiro', color: '#10B981', count: deptStats.financeiro },
+            { label: '🏭 Produção', key: 'producao', color: '#8B5CF6', count: deptStats.producao },
+            { label: '📋 Geral', key: 'geral', color: '#64748B', count: deptStats.geral },
+          ];
+          return (
+            <div style={{
+              background: 'white',
+              borderRadius: '16px',
+              padding: '1rem',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+              border: '1px solid #E2E8F0',
+              marginBottom: '1.25rem'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  🎯 Distribuição por Área
+                </span>
+                <span style={{ fontSize: '0.65rem', color: '#94A3B8' }}>{total} tarefas</span>
+              </div>
+              {/* Barra empilhada */}
+              <div style={{ display: 'flex', height: '10px', borderRadius: '6px', overflow: 'hidden', marginBottom: '0.75rem', gap: '2px' }}>
+                {depts.filter(d => d.count > 0).map(d => (
+                  <div key={d.key} style={{
+                    flex: d.count / total,
+                    background: d.color,
+                    borderRadius: '3px',
+                    transition: 'flex 0.4s ease'
+                  }} />
+                ))}
+              </div>
+              {/* Legenda */}
+              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                {depts.map(d => (
+                  <button key={d.key}
+                    onClick={() => setFilter(d.key === 'financeiro' || d.key === 'producao' ? 'todas' : 'todas')}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                  >
+                    <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: d.color, flexShrink: 0 }} />
+                    <span style={{ fontSize: '0.7rem', color: '#64748B' }}>{d.label}</span>
+                    <span style={{ fontSize: '0.7rem', fontWeight: '800', color: d.color }}>{d.count}</span>
+                    <span style={{ fontSize: '0.65rem', color: '#94A3B8' }}>({Math.round((d.count / total) * 100)}%)</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+        {/* Dashboard de Saúde Rápido */}
+        {businessHealth && (
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(3, 1fr)', 
+            gap: '0.75rem', 
+            marginBottom: '1rem' 
+          }}>
+            {[
+              { 
+                label: 'Financeiro', 
+                value: businessHealth.financial, 
+                icon: <TrendingUp size={14} />, 
+                color: businessHealth.financial === 'estável' ? '#10B981' : businessHealth.financial === 'alerta' ? '#F59E0B' : '#EF4444' 
+              },
+              { 
+                label: 'Logística', 
+                value: businessHealth.stock, 
+                icon: <ShieldCheck size={14} />, 
+                color: businessHealth.stock === 'em dia' ? '#10B981' : '#EF4444' 
+              },
+              { 
+                label: 'Fluxo Ops', 
+                value: businessHealth.production, 
+                icon: <Zap size={14} />, 
+                color: businessHealth.production === 'normal' ? '#10B981' : '#F59E0B' 
+              }
+            ].map((item, i) => (
+              <div key={i} style={{
+                background: `${item.color}08`,
+                borderRadius: '12px',
+                padding: '0.6rem',
+                border: `1px solid ${item.color}15`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.4rem'
+              }}>
+                <div style={{ color: item.color }}>{item.icon}</div>
+                <span style={{ fontSize: '0.65rem', fontWeight: '700', color: item.color, textTransform: 'uppercase' }}>{item.value}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        
+        {/* Relatório da IA - Diretor de Operações */}
+        {aiReport && (
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.7)',
+            backdropFilter: 'blur(20px)',
+            borderRadius: '20px',
+            padding: '1.5rem',
+            marginBottom: '1.5rem',
+            border: '1px solid rgba(255, 255, 255, 0.3)',
+            boxShadow: '0 8px 32px rgba(31, 38, 135, 0.07)',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+            <div style={{ 
+              position: 'absolute', 
+              top: 0, 
+              left: 0, 
+              width: '4px', 
+              height: '100%', 
+              background: 'linear-gradient(to bottom, #3B82F6, #60A5FA)' 
+            }} />
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{ 
+                  width: '40px', 
+                  height: '40px', 
+                  borderRadius: '12px', 
+                  background: 'linear-gradient(135deg, #3B82F6, #2563EB)', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  fontSize: '1.4rem',
+                  boxShadow: '0 4px 10px rgba(59, 130, 246, 0.3)'
+                }}>🧠</div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '800', color: '#1E293B', letterSpacing: '-0.3px' }}>Comando Central IA</h3>
+                  <p style={{ margin: 0, fontSize: '0.65rem', color: '#64748B', fontWeight: '600' }}>ANÁLISE ESTRATÉGICA ATIVA: {reportDate}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setAiReport(null)}
+                style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: '4px' }}
+              >
+                <Plus size={18} style={{ transform: 'rotate(45deg)' }} />
+              </button>
+            </div>
+
+            <div style={{ 
+              fontSize: '0.825rem', 
+              color: '#334155', 
+              lineHeight: '1.6', 
+              whiteSpace: 'pre-wrap',
+              maxHeight: '300px',
+              overflowY: 'auto',
+              paddingRight: '5px'
+            }}>
+              {aiReport}
+            </div>
+
+            <div style={{ 
+              marginTop: '1.25rem', 
+              paddingTop: '1rem', 
+              borderTop: '1px dashed #E2E8F0',
+              display: 'flex',
+              justifyContent: 'flex-end'
+            }}>
+              <button 
+                onClick={() => {
+                  if (window.confirm('Deseja limpar este relatório?')) {
+                    setAiReport(null);
+                    localStorage.removeItem('lojascapel_ai_report');
+                  }
+                }}
+                style={{ 
+                  fontSize: '0.7rem', 
+                  color: '#94A3B8', 
+                  background: 'none', 
+                  border: 'none', 
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Limpar histórico
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Metas Ativas */}
         <div style={{ 
           background: 'white', 
@@ -217,10 +875,26 @@ const Tarefas = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h2 style={{ fontSize: '1rem', fontWeight: '600', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Target size={18} color="#3B82F6" />
-              Progresso de Metas
+              Metas & Performance
             </h2>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {/* Adicionando Meta de Faturamento dinâmico se quiser, ou manter as metas atuais */}
+            <div style={{ marginBottom: '0.5rem', padding: '0.75rem', background: '#F8FAFC', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '0.4rem' }}>
+                <span style={{ fontWeight: '700', color: '#1E293B' }}>Meta de Faturamento Mensal</span>
+                <span style={{ fontWeight: '800', color: '#3B82F6' }}>{Math.round((caixaSummary.entrada / 50000) * 100)}%</span>
+              </div>
+              <div style={{ height: '10px', background: '#E2E8F0', borderRadius: '5px', overflow: 'hidden' }}>
+                <div style={{ 
+                  height: '100%', 
+                  width: `${Math.min((caixaSummary.entrada / 50000) * 100, 100)}%`, 
+                  background: 'linear-gradient(90deg, #10B981, #34D399)',
+                  borderRadius: '5px'
+                }} />
+              </div>
+              <p style={{ margin: '0.4rem 0 0', fontSize: '0.6rem', color: '#64748B' }}>Meta: R$ 50.000,00 | Atual: R$ {caixaSummary.entrada.toLocaleString('pt-BR')}</p>
+            </div>
             {metas.map(meta => (
               <div key={meta.id}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '0.4rem' }}>
@@ -241,40 +915,53 @@ const Tarefas = () => {
           </div>
         </div>
 
-        {/* Filtros de Status (Chips) */}
+        {/* Filtros de Status com contadores */}
         <div style={{ 
           display: 'flex', 
           gap: '0.5rem', 
           overflowX: 'auto', 
           paddingBottom: '0.75rem', 
           marginBottom: '0.75rem',
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none'
+          scrollbarWidth: 'none'
         }}>
           {[
-            { id: 'todas', label: 'Todas', color: '#64748B' },
-            { id: 'pendente', label: 'Pendentes', color: '#64748B' },
-            { id: 'em andamento', label: 'Em curso', color: '#3B82F6' },
-            { id: 'concluída', label: 'Feitas', color: '#10B981' },
-            { id: 'atrasada', label: 'Atrasadas', color: '#EF4444' },
+            { id: 'todas',       label: 'Tudo',       color: '#64748B', count: tasks.length },
+            { id: 'pendente',    label: 'Ordens',     color: '#64748B', count: tasks.filter(t => t.status === 'pendente' && !isTaskAtrasada(t)).length },
+            { id: 'em andamento',label: 'Executando', color: '#3B82F6', count: tasks.filter(t => t.status === 'em andamento').length },
+            { id: 'concluída',   label: 'Resolvidos', color: '#10B981', count: tasks.filter(t => t.status === 'concluída').length },
+            { id: 'atrasada',    label: 'Críticos',   color: '#EF4444', count: tasks.filter(t => isTaskAtrasada(t)).length },
           ].map((chip) => (
             <button 
               key={chip.id}
               onClick={() => setFilter(chip.id as TaskStatus | 'todas')}
               style={{
-                padding: '0.4rem 1rem',
+                padding: '0.4rem 0.9rem',
                 borderRadius: '20px',
                 border: filter === chip.id ? `1.5px solid ${chip.color}` : '1.5px solid #E2E8F0',
-                background: filter === chip.id ? `${chip.color}10` : 'white',
+                background: filter === chip.id ? `${chip.color}15` : 'white',
                 color: filter === chip.id ? chip.color : '#64748B',
                 fontSize: '0.75rem',
                 fontWeight: '600',
                 whiteSpace: 'nowrap',
                 cursor: 'pointer',
-                transition: 'all 0.2s'
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem'
               }}
             >
               {chip.label}
+              {chip.count > 0 && (
+                <span style={{
+                  background: filter === chip.id ? chip.color : '#E2E8F0',
+                  color: filter === chip.id ? 'white' : '#64748B',
+                  borderRadius: '10px',
+                  padding: '0 5px',
+                  fontSize: '0.6rem',
+                  fontWeight: '800',
+                  lineHeight: '1.6'
+                }}>{chip.count}</span>
+              )}
             </button>
           ))}
         </div>
@@ -312,130 +999,200 @@ const Tarefas = () => {
           </button>
         </div>
 
-        {/* Lista de Tarefas */}
+        {/* Lista de Tarefas - Cards Ricos */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '2rem', color: '#94A3B8' }}>Carregando tarefas...</div>
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#94A3B8' }}>
+              <RotateCw size={24} className="animate-spin" style={{ margin: '0 auto 0.5rem', display: 'block' }} />
+              Carregando tarefas...
+            </div>
           ) : filteredTasks.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '3rem', background: 'white', borderRadius: '16px', color: '#94A3B8' }}>
               <CheckSquare size={48} style={{ marginBottom: '1rem', opacity: 0.2 }} />
               <p>Nenhuma tarefa encontrada.</p>
             </div>
           ) : (
-            filteredTasks.map(task => (
-              <div 
-                key={task.id}
-                style={{
-                  background: 'white',
-                  borderRadius: '16px',
-                  padding: '1rem',
-                  boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
-                  border: '1px solid #F1F5F9',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '1rem',
-                  position: 'relative'
-                }}
-              >
-                <button 
-                  onClick={() => handleStatusChange(task.id, task.status)}
+            filteredTasks.map(task => {
+              const daysLeft = getDaysUntilDue(task.dataConclusao);
+              const isAtrasada = isTaskAtrasada(task);
+              const dept = getDepartamento(task.tarefas);
+              const urgencyColor = task.status === 'concluída' ? '#10B981'
+                : isAtrasada ? '#EF4444'
+                : (daysLeft !== null && daysLeft <= 2) ? '#F59E0B'
+                : '#E2E8F0';
+              const dateStr = formatTaskDate(task.dataConclusao);
+
+              return (
+                <div 
+                  key={task.id}
                   style={{
-                    width: '28px',
-                    height: '28px',
-                    borderRadius: '8px',
-                    border: `2px solid ${getStatusColor(task.status)}`,
-                    background: task.status === 'concluída' ? getStatusColor(task.status) : 'transparent',
+                    background: 'white',
+                    borderRadius: '16px',
+                    padding: '1rem',
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
+                    border: `1px solid ${isAtrasada ? '#FECACA' : '#F1F5F9'}`,
+                    borderLeft: `4px solid ${urgencyColor}`,
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    color: 'white',
-                    flexShrink: 0
+                    gap: '0.75rem',
+                    position: 'relative',
+                    transition: 'box-shadow 0.2s'
                   }}
                 >
-                  {task.status === 'concluída' ? <CheckSquare size={16} /> : null}
-                </button>
 
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                    <span style={{ 
-                      fontSize: '0.925rem', 
-                      fontWeight: '600', 
-                      color: task.status === 'concluída' ? '#94A3B8' : '#1E293B',
-                      textDecoration: task.status === 'concluída' ? 'line-through' : 'none'
-                    }}>
-                      {task.tarefas}
-                    </span>
+                  {/* Checkbox */}
+                  <button 
+                    onClick={() => handleToggleTask(task)}
+                    style={{
+                      width: '26px',
+                      height: '26px',
+                      borderRadius: '7px',
+                      border: `2px solid ${task.status === 'concluída' ? '#10B981' : '#CBD5E1'}`,
+                      background: task.status === 'concluída' ? '#10B981' : 'transparent',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      color: 'white',
+                      flexShrink: 0,
+                      alignSelf: 'center'
+                    }}
+                  >
+                    {task.status === 'concluída' ? <CheckSquare size={14} /> : null}
+                  </button>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {/* Linha 1: Nome + Prioridade */}
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
+                      <span style={{ 
+                        fontSize: '0.9rem', 
+                        fontWeight: '600', 
+                        color: task.status === 'concluída' ? '#94A3B8' : '#1E293B',
+                        textDecoration: task.status === 'concluída' ? 'line-through' : 'none',
+                        flex: 1,
+                        lineHeight: '1.3'
+                      }}>
+                        {task.tarefas}
+                      </span>
+                      <span style={{ 
+                        fontSize: '0.6rem', 
+                        padding: '0.2rem 0.45rem', 
+                        borderRadius: '6px', 
+                        background: `${getPriorityColor(task.prioridade)}15`, 
+                        color: getPriorityColor(task.prioridade),
+                        fontWeight: '800',
+                        textTransform: 'uppercase',
+                        flexShrink: 0
+                      }}>
+                        {task.prioridade}
+                      </span>
+                    </div>
+
+                    {/* Linha 2: Meta-infos */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                      {/* Departamento */}
+                      <span style={{ 
+                        fontSize: '0.6rem', 
+                        color: dept.color, 
+                        fontWeight: '700',
+                        background: `${dept.color}10`,
+                        padding: '0.15rem 0.4rem',
+                        borderRadius: '4px'
+                      }}>
+                        {dept.label}
+                      </span>
+
+                      {/* Data */}
+                      {dateStr && (
+                        <span style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '0.2rem',
+                          fontSize: '0.7rem',
+                          color: isAtrasada ? '#EF4444' : '#64748B',
+                          fontWeight: isAtrasada ? '700' : '500'
+                        }}>
+                          <Calendar size={12} />
+                          {dateStr}
+                          {daysLeft !== null && (
+                            <span style={{ 
+                              marginLeft: '2px',
+                              fontWeight: '700',
+                              color: isAtrasada ? '#EF4444' : daysLeft <= 2 ? '#F59E0B' : '#94A3B8'
+                            }}>
+                              {isAtrasada ? '⚠ Atrasada' : daysLeft === 0 ? 'Hoje' : daysLeft === 1 ? 'Amanhã' : `${daysLeft}d`}
+                            </span>
+                          )}
+                        </span>
+                      )}
+
+                      {/* Estimativa de tempo */}
+                      {task.timeEstimate && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.7rem', color: '#3B82F6', fontWeight: '600' }}>
+                          <Clock size={12} />
+                          {Math.floor(task.timeEstimate / 3600000)}h{Math.floor((task.timeEstimate % 3600000) / 60000) > 0 ? `${Math.floor((task.timeEstimate % 3600000) / 60000)}m` : ''}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Status badge */}
+                  <div style={{ flexShrink: 0, alignSelf: 'center' }}>
                     <span style={{ 
                       fontSize: '0.65rem', 
-                      padding: '0.2rem 0.5rem', 
-                      borderRadius: '6px', 
-                      background: `${getPriorityColor(task.prioridade)}15`, 
-                      color: getPriorityColor(task.prioridade),
-                      fontWeight: '700',
-                      textTransform: 'uppercase'
+                      fontWeight: '700', 
+                      color: getStatusColor(task.status),
+                      background: `${getStatusColor(task.status)}10`,
+                      padding: '0.25rem 0.5rem',
+                      borderRadius: '8px',
+                      textTransform: 'capitalize',
+                      display: 'block',
+                      textAlign: 'center',
+                      whiteSpace: 'nowrap'
                     }}>
-                      {task.prioridade}
+                      {task.status === 'pendente' ? 'Pendente'
+                        : task.status === 'em andamento' ? 'Em curso'
+                        : task.status === 'concluída' ? '✓ Feita'
+                        : '⚠ Atrasada'}
                     </span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.75rem', color: '#64748B' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                      <Calendar size={14} />
-                      {new Date(task.dataConclusao).toLocaleDateString('pt-BR')}
-                    </span>
-                    {task.horarioEntrega && (
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                        <Clock size={14} />
-                        {task.horarioEntrega}
-                      </span>
-                    )}
-                  </div>
                 </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
-                  <span style={{ 
-                    fontSize: '0.7rem', 
-                    fontWeight: '600', 
-                    color: getStatusColor(task.status),
-                    textTransform: 'capitalize'
-                  }}>
-                    {task.status}
-                  </span>
-                  <button style={{ background: 'transparent', border: 'none', color: '#CBD5E1', cursor: 'pointer' }}>
-                    <MoreHorizontal size={20} />
-                  </button>
-                </div>
-
-                {/* Automação indicator */}
-                {task.status === 'atrasada' && (
-                  <div style={{ 
-                    position: 'absolute', 
-                    bottom: '-8px', 
-                    right: '1rem', 
-                    background: '#FEF2F2', 
-                    border: '1px solid #FECACA', 
-                    padding: '0.25rem 0.5rem', 
-                    borderRadius: '8px',
-                    fontSize: '0.65rem',
-                    color: '#B91C1C',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.25rem'
-                  }}>
-                    <MessageSquare size={12} />
-                    WhatsApp enviado
-                  </div>
-                )}
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
 
-      {/* Sugestão da IA - Inteligência */}
+      {/* Banner de Alerta Proativo */}
+      {estoqueCritico > 20 && (
+        <div style={{ 
+          margin: '0 1rem 1rem',
+          background: 'linear-gradient(135deg, #FEF2F2, #FEE2E2)',
+          borderRadius: '16px',
+          padding: '1rem 1.25rem',
+          border: '1px solid #FECACA',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem'
+        }}>
+          <span style={{ fontSize: '1.5rem' }}>🚨</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#991B1B' }}>Alerta Crítico de Estoque</div>
+            <p style={{ margin: 0, fontSize: '0.72rem', color: '#B91C1C', lineHeight: '1.4' }}>
+              {estoqueCritico} produtos abaixo do mínimo. Risco de ruptura de produção. Acione seu fornecedor.
+            </p>
+          </div>
+          <button 
+            onClick={() => setFilter('atrasada')}
+            style={{ background: '#EF4444', border: 'none', color: 'white', padding: '0.4rem 0.75rem', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '700', cursor: 'pointer' }}
+          >Ver tarefas</button>
+        </div>
+      )}
+
+      {/* Sugestão da IA */}
       {stats.atrasadas > 2 && (
         <div style={{ 
-          margin: '1.5rem 1rem', 
+          margin: '0 1rem 1.5rem', 
           background: 'linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)', 
           borderRadius: '16px', 
           padding: '1.25rem',
@@ -444,36 +1201,24 @@ const Tarefas = () => {
           gap: '1rem'
         }}>
           <div style={{ 
-            width: '40px', 
-            height: '40px', 
-            background: 'white', 
-            borderRadius: '12px', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            fontSize: '1.25rem',
-            flexShrink: 0
+            width: '40px', height: '40px', 
+            background: 'white', borderRadius: '12px', 
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '1.25rem', flexShrink: 0
           }}>🤖</div>
           <div>
             <div style={{ fontSize: '0.875rem', fontWeight: '700', color: '#1E40AF', marginBottom: '0.25rem' }}>Dica da IA</div>
             <p style={{ fontSize: '0.8rem', color: '#1E3A8A', margin: 0, lineHeight: '1.4' }}>
-              Você tem {stats.atrasadas} tarefas atrasadas. Sugiro focar na conclusão destas antes de criar novas para manter sua produtividade alta.
+              Você tem {stats.atrasadas} tarefas atrasadas. Sugiro focar na conclusão destas antes de criar novas.
             </p>
-            <button style={{ 
-              marginTop: '0.75rem', 
-              background: '#1E40AF', 
-              border: 'none', 
-              color: 'white', 
-              padding: '0.4rem 0.8rem', 
-              borderRadius: '8px', 
-              fontSize: '0.75rem', 
-              fontWeight: '600',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.3rem'
-            }}>
-              Ver prioridades <ArrowRight size={14} />
-            </button>
+            <button 
+              onClick={() => setFilter('atrasada')}
+              style={{ 
+                marginTop: '0.75rem', background: '#1E40AF', border: 'none', 
+                color: 'white', padding: '0.4rem 0.8rem', borderRadius: '8px', 
+                fontSize: '0.75rem', fontWeight: '600',
+                display: 'flex', alignItems: 'center', gap: '0.3rem'
+              }}>Ver prioridades <ArrowRight size={14} /></button>
           </div>
         </div>
       )}
@@ -564,5 +1309,16 @@ const Tarefas = () => {
     </div>
   );
 };
+
+// Adição de estilos globais para as animações
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes pulse {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.1); opacity: 0.7; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+`;
+document.head.appendChild(style);
 
 export default Tarefas;

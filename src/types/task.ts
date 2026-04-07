@@ -10,6 +10,14 @@ export interface Task {
   horarioEntrega: string; // horario de entrega
   createdAt: string;
   metaId?: string;
+  timeEstimate?: number; // em milissegundos
+}
+
+export interface BusinessHealth {
+  financial: 'estável' | 'alerta' | 'crítico';
+  stock: 'em dia' | 'baixo' | 'gargalo';
+  production: 'normal' | 'atrasada';
+  overview?: string;
 }
 
 export interface Meta {
