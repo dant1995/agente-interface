@@ -41,12 +41,15 @@ const Produtos = () => {
     const newProduct: Product = {
       id: uuidv4(),
       nome,
+      sku: `SKU-${nome.substring(0,3).toUpperCase()}-${Date.now().toString().slice(-4)}`,
+      tipo: 'Estoque Próprio',
       tamanho,
       cor,
       custo: costNum,
       preco: priceNum,
       lucro: calculateProfit(priceNum, costNum),
       estoque: parseInt(estoque) || 0,
+      pedidos: 0,
       codigo_barra: randomBarcode
     };
 

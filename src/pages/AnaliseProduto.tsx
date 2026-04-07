@@ -11,7 +11,6 @@ import {
   Eye, 
   MousePointer2,
   Save,
-  Trash2,
   Star
 } from 'lucide-react';
 import { storage } from '../services/storage';
@@ -265,6 +264,12 @@ const AnaliseProduto = () => {
                 Margem Mínima (R$)
               </label>
               <input type="number" value={margemMinima} onChange={(e) => setMargemMinima(Number(e.target.value))} style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.4rem' }}>
+                Frete Médio (R$)
+              </label>
+              <input type="number" value={frete} onChange={(e) => setFrete(Number(e.target.value))} style={inputStyle} />
             </div>
           </div>
 
