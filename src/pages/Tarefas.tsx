@@ -804,7 +804,98 @@ const Tarefas = () => {
                     <span style={{ fontSize: '0.65rem', color: '#94A3B8' }}>({Math.round((d.count / total) * 100)}%)</span>
                   </button>
                 ))}
+               </div>
+          
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(4, 1fr)', 
+            gap: '0.75rem', 
+            marginBottom: '1.5rem' 
+          }}>
+            <GoalRing 
+              percent={Math.min(100, (vendasMensal / (config?.minVendasMensal || 30000)) * 100)}
+              value={`R$ ${(vendasMensal / 1000).toFixed(1)}k`}
+              label="Vendas Mês"
+              icon={<TrendingUp size={20} />}
+              color="#7C3AED"
+            />
+            <GoalRing 
+              percent={Math.min(100, (pedidosAtivos / 30) * 100)}
+              value={`${pedidosAtivos} ativos`}
+              label="Pedidos"
+              icon={<Box size={20} />}
+              color="#3B82F6"
+            />
+            <GoalRing 
+              percent={Math.min(100, (stats.concluidas / (stats.total || 1)) * 100)}
+              value={`${stats.concluidas}/${stats.total}`}
+              label="Tarefas"
+              icon={<CheckSquare size={20} />}
+              color="#10B981"
+            />
+            <GoalRing 
+              percent={82}
+              value="82 Críticos"
+              label="Estoques"
+              icon={<Package size={20} />}
+              color="#F59E0B"
+            />
+          </div>
+
+          {/* Lista de Metas Detalhada */}
+          <div style={{ background: 'white', borderRadius: '16px', padding: '1rem', border: '1px solid #F1F5F9', marginBottom: '1.5rem' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', marginBottom: '1rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              🎯 Detalhamento de Objetivos
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {[
+                { nome: 'Meta Diária de Vendas', valor: vendasMensal / 30, objetivo: config?.minVendasDiaria || 1000, color: '#7C3AED' },
+                { nome: 'Meta Semanal de Vendas', valor: vendasMensal / 4, objetivo: config?.minVendasSemanal || 7000, color: '#7C3AED' },
+                { nome: 'Meta Mensal de Faturamento', valor: vendasMensal, objetivo: config?.minVendasMensal || 30000, color: '#7C3AED' },
+                { nome: 'Eficiência de Produção', valor: stats.concluidas, objetivo: stats.total || 5, color: '#10B981' }
+              ].map((meta, i) => {
+                const progresso = Math.min(100, (meta.valor / meta.objetivo) * 100);
+                return (
+                  <div key={i} style={{ borderBottom: i === 3 ? 'none' : '1px solid #F1F5F9', paddingBottom: i === 3 ? 0 : '0.75rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#1E293B' }}>{meta.nome}</span>
+                      <span style={{ fontSize: '0.7rem', fontWeight: '800', color: meta.color }}>
+                        R$ {meta.valor.toLocaleString('pt-BR', { minimumFractionDigits: 0 })} / <span style={{ opacity: 0.6 }}>R$ {meta.objetivo.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                      </span>
+                    </div>
+                    <div style={{ height: '6px', background: '#F1F5F9', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${progresso}%`, background: meta.color, borderRadius: '3px', transition: 'width 1s ease' }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Insights da IA baseados no PDF */}
+          {config?.manualOperacao && (
+            <div style={{ 
+              background: 'linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%)', 
+              borderRadius: '16px', padding: '1rem', border: '1px solid #C7D2FE',
+              marginBottom: '1.5rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <Zap size={18} color="#4F46E5" fill="#4F46E5" />
+                <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#3730A3' }}>Estratégia Recomendada (Pós-Análise)</span>
               </div>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: '#4338CA', lineHeight: '1.4', fontWeight: '500' }}>
+                {config.manualOperacao.substring(0, 150)}...
+              </p>
+              <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                {['Frequência F1', 'Nicho Gemini', 'Plus Size / Power Fit'].map(tag => (
+                  <span key={tag} style={{ fontSize: '0.6rem', background: 'white', color: '#4F46E5', padding: '0.2rem 0.6rem', borderRadius: '6px', fontWeight: '700', border: '1px solid #C7D2FE' }}>
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
             </div>
           );
         })()}

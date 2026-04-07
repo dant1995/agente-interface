@@ -17,11 +17,22 @@ export const GestorMetasPanel = ({ onClose, config, onSave }: GestorMetasPanelPr
     if (!file) return;
 
     setIsAnalyzing(true);
-    // Simulação de envio para n8n para análise de IA
+    // Simulação inteligente baseada no contexto do usuário (F1, Gemini, etc)
     setTimeout(() => {
-      alert(`IA: Analisei o arquivo "${file.name}". \n\nBaseado nos dados, sugiro elevar a meta mensal para R$ ${(localConfig.minVendasMensal * 1.2).toLocaleString('pt-BR')}. \n\nDeseja aplicar?`);
+      const suggestedMetas = {
+        mensal: 6000,
+        insights: 'FOCO ESTRATÉGICO: 1. Linha F1/Racing (Alta demanda/Zero concorrência). 2. Estampas Signo Gêmeos/Gemini. 3. Nicho Plus Size 787. 4. Estética Baddie para público jovem.'
+      };
+      
+      if(window.confirm(`IA ANALISOU: Encontrei oportunidades em "Roupa F1", "Signo Gemini" e "Plus Size" no seu arquivo.\n\nSugiro elevar a meta para R$ ${suggestedMetas.mensal} e focar nesses nichos.\n\nDeseja aplicar essas diretrizes?`)) {
+        setLocalConfig({
+          ...localConfig,
+          minVendasMensal: suggestedMetas.mensal,
+          manualOperacao: suggestedMetas.insights
+        });
+      }
       setIsAnalyzing(false);
-    }, 2000);
+    }, 2500);
   };
 
   const save = () => {
