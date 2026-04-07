@@ -11,10 +11,13 @@ import {
   Trash2,
   Edit2,
   Flag,
-  Save
+  Save,
+  Rocket,
+  Loader2
 } from 'lucide-react';
 import type { BusinessGoal } from '../../types/task';
 import type { GestorConfig } from './GestorConfiguracoes';
+import { taskService } from '../../services/taskService_v2';
 
 interface MetaCardProps {
   goal: BusinessGoal;
@@ -102,6 +105,7 @@ interface GestorMetasBoardProps {
 export const GestorMetasBoard = ({ onClose, onSave, vendasMensal, config, stats, pedidosAtivos }: GestorMetasBoardProps) => {
   const [goals, setGoals] = useState<BusinessGoal[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [editingGoal, setEditingGoal] = useState<BusinessGoal | null>(null);
   
   // Estado para o formulário
@@ -175,6 +179,37 @@ export const GestorMetasBoard = ({ onClose, onSave, vendasMensal, config, stats,
     setIsModalOpen(false);
   };
 
+  const handleSyncClickUp = async () => {
+    if (!window.confirm(`Deseja enviar as ${goals.length} metas estratégicas para o ClickUp?`)) return;
+    
+    setIsSyncing(true);
+    let sucessos = 0;
+
+    try {
+      for (const goal of goals) {
+        const mappedPriority: any = 
+          goal.periodo === 'diario' ? 'alta' : 
+          goal.periodo === 'semanal' ? 'media' : 'baixa';
+
+        const success = await taskService.createTask({
+          tarefas: `[META STRATEGY] ${goal.label}`,
+          prioridade: mappedPriority,
+          status: 'pendente',
+          dataConclusao: new Date().toISOString()
+        });
+
+        if (success) sucessos++;
+      }
+
+      alert(`✅ Sincronização concluída! ${sucessos} metas enviadas para o ClickUp.`);
+    } catch (e) {
+      console.error('Erro na sincronização ClickUp:', e);
+      alert('❌ Erro ao sincronizar com ClickUp. Verifique o console.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleDeleteGoal = (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir esta meta estratégica?')) {
       const newCustomMetas = (config.customMetas || []).filter(g => g.id !== id);
@@ -190,6 +225,8 @@ export const GestorMetasBoard = ({ onClose, onSave, vendasMensal, config, stats,
       <style>{`
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
       `}</style>
       
       {/* Header */}
@@ -200,7 +237,36 @@ export const GestorMetasBoard = ({ onClose, onSave, vendasMensal, config, stats,
           </h2>
           <p style={{ color: 'rgba(255, 255, 255, 0.6)', margin: '0.25rem 0 0 0', fontSize: '0.85rem' }}>Painel de Comando Sniper • Gerenciamento Operacional</p>
         </div>
-        <button onClick={onClose} style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={24} /></button>
+        
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <button 
+            onClick={handleSyncClickUp}
+            disabled={isSyncing}
+            style={{ 
+              background: 'linear-gradient(135deg, #7C3AED, #6D28D9)', 
+              border: 'none', 
+              borderRadius: '12px', 
+              padding: '0.6rem 1.25rem', 
+              color: 'white', 
+              fontWeight: '800', 
+              fontSize: '0.85rem',
+              cursor: isSyncing ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.6rem',
+              boxShadow: '0 4px 15px rgba(124, 58, 237, 0.3)',
+              opacity: isSyncing ? 0.7 : 1,
+              transition: 'all 0.2s'
+            }}
+          >
+            {isSyncing ? <Loader2 size={18} className="animate-spin" /> : <Rocket size={18} />}
+            {isSyncing ? 'Sincronizando...' : 'Sincronizar ClickUp'}
+          </button>
+          
+          <button onClick={onClose} style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <X size={24} />
+          </button>
+        </div>
       </div>
       
       {/* Colunas */}
