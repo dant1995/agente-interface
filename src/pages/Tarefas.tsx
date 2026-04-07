@@ -36,6 +36,7 @@ import { GestorDRE } from '../components/gestor/GestorDRE';
 import { GestorConfiguracoes } from '../components/gestor/GestorConfiguracoes';
 import { GoalRing } from '../components/gestor/GoalRing';
 import { GestorMetasPanel } from '../components/gestor/GestorMetasPanel';
+import { GestorMetasBoard } from '../components/gestor/GestorMetasBoard';
 import { GestorVendasDetalhes } from '../components/gestor/GestorVendasDetalhes';
 import type { GestorConfig } from '../components/gestor/GestorConfiguracoes';
 import { OrderStatus } from '../types';
@@ -73,6 +74,7 @@ const Tarefas = () => {
   const [showConfig, setShowConfig] = useState(false);
   const [showVendasDetalhes, setShowVendasDetalhes] = useState(false);
   const [showMetasPanel, setShowMetasPanel] = useState(false);
+  const [showMetasBoard, setShowMetasBoard] = useState(false);
   const [vendas, setVendas] = useState<Order[]>([]);
   const [vendasMensal, setVendasMensal] = useState(0);
   const [pedidosAtivos, setPedidosAtivos] = useState(0);
@@ -500,15 +502,21 @@ const Tarefas = () => {
               { label: 'Total', value: stats.total, icon: <CheckSquare size={16} />, color: '#fff' },
               { label: 'Concluídas', value: stats.concluidas, icon: <Target size={16} />, color: '#10B981' },
               { label: 'Atrasadas', value: stats.atrasadas, icon: <AlertCircle size={16} />, color: '#EF4444' },
-              { label: 'Metas', value: metas.length, icon: <BarChart3 size={16} />, color: '#F59E0B' },
+              { label: 'Metas', value: metas.length, icon: <BarChart3 size={16} />, color: '#F59E0B', isMetas: true },
             ].map((item, i) => (
-              <div key={i} style={{
-                background: 'rgba(255, 255, 255, 0.1)',
-                backdropFilter: 'blur(10px)',
-                borderRadius: '12px',
-                padding: '0.75rem',
-                border: '1px solid rgba(255, 255, 255, 0.1)'
-              }}>
+              <div 
+                key={i} 
+                onClick={() => item.isMetas && setShowMetasBoard(true)}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  backdropFilter: 'blur(10px)',
+                  borderRadius: '12px',
+                  padding: '0.75rem',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  cursor: item.isMetas ? 'pointer' : 'default',
+                  transition: 'all 0.2s ease'
+                }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', opacity: 0.8, fontSize: '0.7rem', marginBottom: '0.25rem' }}>
                   {item.icon}
                   <span>{item.label}</span>
@@ -727,6 +735,16 @@ const Tarefas = () => {
         )}
 
         {/* Painéis Laterais */}
+      {showMetasBoard && (
+        <GestorMetasBoard 
+          onClose={() => setShowMetasBoard(false)}
+          vendasMensal={vendasMensal}
+          config={config || {}}
+          stats={stats}
+          pedidosAtivos={pedidosAtivos}
+        />
+      )}
+
       {showMetasPanel && (
         <GestorMetasPanel 
           config={config || {
