@@ -100,9 +100,10 @@ interface GestorMetasBoardProps {
   config: GestorConfig;
   stats: any;
   pedidosAtivos: number;
+  tasks: any[];
 }
 
-export const GestorMetasBoard = ({ onClose, onSave, vendasMensal, config, stats, pedidosAtivos }: GestorMetasBoardProps) => {
+export const GestorMetasBoard = ({ onClose, onSave, vendasMensal, config, stats, pedidosAtivos, tasks }: GestorMetasBoardProps) => {
   const [goals, setGoals] = useState<BusinessGoal[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -179,13 +180,15 @@ export const GestorMetasBoard = ({ onClose, onSave, vendasMensal, config, stats,
     setIsModalOpen(false);
   };
 
-  const handleSyncClickUp = async () => {
-    if (!window.confirm(`Deseja enviar as ${goals.length} metas estratégicas para o ClickUp?`)) return;
+  const handleGlobalSync = async () => {
+    if (!window.confirm(`Deseja sincronizar tudo (${goals.length} metas e tarefas faltantes) com o ClickUp?`)) return;
     
     setIsSyncing(true);
-    let sucessos = 0;
+    let metasSucesso = 0;
+    let tarefasSucesso = 0;
 
     try {
+      // 1. Sincronizar Metas
       for (const goal of goals) {
         const mappedPriority: any = 
           goal.periodo === 'diario' ? 'alta' : 
@@ -197,14 +200,28 @@ export const GestorMetasBoard = ({ onClose, onSave, vendasMensal, config, stats,
           status: 'pendente',
           dataConclusao: new Date().toISOString()
         });
-
-        if (success) sucessos++;
+        if (success) metasSucesso++;
       }
 
-      alert(`✅ Sincronização concluída! ${sucessos} metas enviadas para o ClickUp.`);
+      // 2. Sincronizar Tarefas Faltantes (IDs que não são do ClickUp)
+      const pendingTasks = tasks.filter(t => 
+        String(t.id).startsWith('n8n-') || !isNaN(Number(t.id)) || String(t.id).length < 5
+      );
+
+      for (const task of pendingTasks) {
+        const success = await taskService.createTask({
+          tarefas: task.tarefas,
+          prioridade: task.prioridade,
+          status: 'pendente',
+          dataConclusao: task.dataConclusao || new Date().toISOString()
+        });
+        if (success) tarefasSucesso++;
+      }
+
+      alert(`✅ Sincronização Mestra concluída!\n🎯 Metas: ${metasSucesso}\n📋 Tarefas Novas: ${tarefasSucesso}\nTudo pronto no ClickUp!`);
     } catch (e) {
-      console.error('Erro na sincronização ClickUp:', e);
-      alert('❌ Erro ao sincronizar com ClickUp. Verifique o console.');
+      console.error('Erro na sincronização Global:', e);
+      alert('❌ Erro ao sincronizar tudo. Verifique sua conexão.');
     } finally {
       setIsSyncing(false);
     }
@@ -238,15 +255,15 @@ export const GestorMetasBoard = ({ onClose, onSave, vendasMensal, config, stats,
           <p style={{ color: 'rgba(255, 255, 255, 0.6)', margin: '0.25rem 0 0 0', fontSize: '0.85rem' }}>Painel de Comando Sniper • Gerenciamento Operacional</p>
         </div>
         
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
           <button 
-            onClick={handleSyncClickUp}
+            onClick={handleGlobalSync}
             disabled={isSyncing}
             style={{ 
               background: 'linear-gradient(135deg, #7C3AED, #6D28D9)', 
               border: 'none', 
               borderRadius: '12px', 
-              padding: '0.6rem 1.25rem', 
+              padding: '0.6rem 1.5rem', 
               color: 'white', 
               fontWeight: '800', 
               fontSize: '0.85rem',
@@ -260,7 +277,7 @@ export const GestorMetasBoard = ({ onClose, onSave, vendasMensal, config, stats,
             }}
           >
             {isSyncing ? <Loader2 size={18} className="animate-spin" /> : <Rocket size={18} />}
-            {isSyncing ? 'Sincronizando...' : 'Sincronizar ClickUp'}
+            {isSyncing ? 'Sincronizando Tudo...' : 'Sincronizar Tudo (ClickUp)'}
           </button>
           
           <button onClick={onClose} style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

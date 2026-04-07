@@ -757,6 +757,7 @@ const Tarefas = () => {
           }}
           stats={stats}
           pedidosAtivos={pedidosAtivos}
+          tasks={tasks}
         />
       )}
 
