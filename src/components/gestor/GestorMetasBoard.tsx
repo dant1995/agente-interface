@@ -7,7 +7,6 @@ import {
   Package, 
   Zap, 
   Target, 
-  AlertCircle,
   Flag
 } from 'lucide-react';
 
