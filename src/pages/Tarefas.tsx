@@ -735,6 +735,9 @@ const Tarefas = () => {
             minVendasDiaria: 1000,
             maxEstoqueCritico: 10,
             maxGargaloProducao: 5,
+            minSaldoVerde: 5000,
+            minTaxaTarefas: 80,
+            manualOperacao: '',
             autoAdjust: true
           }} 
           onClose={() => setShowMetasPanel(false)}
