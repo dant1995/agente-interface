@@ -206,15 +206,15 @@ export const apiSync = {
           status = OrderStatusValue.RECEBIDO;
         }
 
-        const preco = parseReal(getValueByKeywords(item, ['VALOR UNITARIO', 'PRECO UNITARIO', 'PRECO', 'PRICE', 'UNITARIO', 'VALOR UNITÁRIO']));
-        const quantidade = Number(getValueByKeywords(item, ['QUANTIDADE', 'QTD', 'AMOUNT']) || 1);
-        const totalPlanilha = parseReal(getValueByKeywords(item, ['TOTAL PAGO', 'PAGO', 'VALOR PAGO', 'TOTAL', 'VALOR']));
+        const preco = parseReal(getValueByKeywords(item, ['VALOR UNITARIO', 'PRECO UNITARIO', 'PRECO', 'PREÇO', 'PRICE', 'UNITARIO', 'VALOR UNITÁRIO', 'VALOR UNIT', 'VALOR UN']));
+        const quantidade = Number(getValueByKeywords(item, ['QUANTIDADE', 'QTD', 'QTDE', 'PEÇAS', 'PECAS', 'AMOUNT', 'QUANT']) || 1);
+        const totalPlanilha = parseReal(getValueByKeywords(item, ['TOTAL PAGO', 'PAGO', 'VALOR PAGO', 'TOTAL', 'VALOR', 'SUBTOTAL', 'TOTAL GERAL', 'VALOR TOTAL']));
         const valorTotal = (totalPlanilha > 0) ? totalPlanilha : (preco * quantidade);
 
         const rawDate = getValueByKeywords(item, ['DATA', 'CARIMBO', 'CRIADO', 'CARIMBO DE DATA/HORA']);
         const parsedDate = parseBRDate(rawDate) || new Date();
 
-        const custo = parseReal(getValueByKeywords(item, ['CUSTO', 'COST', 'VALOR CUSTO'])) || 15;
+        const custo = parseReal(getValueByKeywords(item, ['CUSTO', 'COST', 'VALOR CUSTO', 'CUSTO UNITARIO', 'CUSTO UN'])) || 15;
         const lucroCalculado = valorTotal - (custo * quantidade);
 
         return {

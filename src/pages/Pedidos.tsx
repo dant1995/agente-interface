@@ -156,7 +156,16 @@ const Pedidos = () => {
 
   const variationSummary = getVariationSummary();
   const totalItems = variationSummary.reduce((acc, curr) => acc + curr.count, 0);
-  const totalProfit = filteredAndSortedOrders.reduce((acc, curr) => acc + Number(curr.lucro || 0), 0);
+  const totalProfit = filteredAndSortedOrders.reduce((acc, curr) => {
+    // Failsafe: se o lucro for 0, mas tivermos preço e custo, calcula na hora
+    let profit = Number(curr.lucro || 0);
+    if (profit === 0 && (curr.preco || 0) > 0) {
+      const vTotal = curr.valorTotal || (curr.preco * curr.quantidade);
+      const cTotal = (curr.custo || 15) * curr.quantidade;
+      profit = vTotal - cTotal;
+    }
+    return acc + profit;
+  }, 0);
 
   const getDayDiff = (dateStr: string) => {
     if (!dateStr) return 0;
