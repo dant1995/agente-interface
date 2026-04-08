@@ -395,7 +395,7 @@ export const apiSync = {
 
         return { data, categoria, entrada, saida };
       })
-      .filter(i => i.entrada > 0 || i.saida > 0);
+      .filter((i: CaixaItem) => i.entrada > 0 || i.saida > 0);
 
       const totalEntradaSheet = caixaItems.reduce((acc: number, i: CaixaItem) => acc + i.entrada, 0);
       const totalSaidaSheet = caixaItems.reduce((acc: number, i: CaixaItem) => acc + i.saida, 0);
