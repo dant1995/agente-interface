@@ -137,6 +137,43 @@ const Pedidos = () => {
   const visibleOrders = filteredAndSortedOrders.slice(0, visibleCount);
   const hasMore = visibleCount < filteredAndSortedOrders.length;
 
+  // Lógica de Resumo de Variações (Agrupado por Cor + Tamanho)
+  const getVariationSummary = () => {
+    const summary: Record<string, { count: number, cor: string, tamanho: string }> = {};
+    
+    filteredAndSortedOrders.forEach(o => {
+      const key = `${o.cor}-${o.tamanho}`.toLowerCase();
+      if (!summary[key]) {
+        summary[key] = { count: 0, cor: o.cor, tamanho: o.tamanho };
+      }
+      summary[key].count += Number(o.quantidade || 0);
+    });
+
+    return Object.values(summary).sort((a, b) => b.count - a.count);
+  };
+
+  const variationSummary = getVariationSummary();
+  const totalItems = variationSummary.reduce((acc, curr) => acc + curr.count, 0);
+
+  const getColorHex = (colorName: string) => {
+    const colors: Record<string, string> = {
+      'preto': '#1a1a1a',
+      'branco': '#ffffff',
+      'vermelho': '#ef4444',
+      'azul': '#3b82f6',
+      'verde': '#22c55e',
+      'amarelo': '#f59e0b',
+      'rosa': '#ec4899',
+      'roxo': '#8b5cf6',
+      'cinza': '#64748b',
+      'laranja': '#f97316',
+      'marrom': '#78350f',
+      'bege': '#f5f5dc',
+    };
+    const key = colorName.toLowerCase().trim();
+    return colors[key] || '#e2e8f0';
+  };
+
 
 
   return (
@@ -164,6 +201,65 @@ const Pedidos = () => {
             </button>
           ))}
         </div>
+
+        {/* Novo Resumo de Variações em Cards Premium */}
+        {variationSummary.length > 0 && (
+          <div style={{ marginBottom: '1.5rem', marginTop: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+              <h3 style={{ fontSize: '0.85rem', fontWeight: '800', color: '#1e293b', textTransform: 'uppercase', letterSpacing: '0.025em', margin: 0 }}>
+                Resumo de Produção
+              </h3>
+              <div style={{ background: '#4f46e515', color: '#4f46e5', padding: '0.3rem 0.75rem', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '800' }}>
+                Total: {totalItems} peças
+              </div>
+            </div>
+            
+            <div style={{ 
+              display: 'flex', 
+              gap: '0.75rem', 
+              overflowX: 'auto', 
+              paddingBottom: '0.75rem',
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none'
+            }}>
+              {variationSummary.map((item, idx) => (
+                <div 
+                  key={idx}
+                  style={{
+                    background: 'white',
+                    minWidth: '120px',
+                    padding: '0.75rem 1rem',
+                    borderRadius: '12px',
+                    border: '1px solid #f1f5f9',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                    flexShrink: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.35rem',
+                    transition: 'transform 0.2s',
+                    cursor: 'default'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ 
+                      width: '10px', 
+                      height: '10px', 
+                      borderRadius: '50%', 
+                      background: getColorHex(item.cor),
+                      border: item.cor.toLowerCase().includes('branco') ? '1px solid #e2e8f0' : 'none'
+                    }} />
+                    <span style={{ fontSize: '1.1rem', fontWeight: '900', color: '#1e293b' }}>
+                      {item.count}<small style={{ fontSize: '0.7rem', marginLeft: '2px', opacity: 0.6 }}>x</small>
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748b', whiteSpace: 'nowrap' }}>
+                    {item.tamanho} • {item.cor}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="toolbar-filter">
           <input 
