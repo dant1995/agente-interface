@@ -156,7 +156,7 @@ const Pedidos = () => {
 
   const variationSummary = getVariationSummary();
   const totalItems = variationSummary.reduce((acc, curr) => acc + curr.count, 0);
-  const totalProfit = filteredAndSortedOrders.reduce((acc, curr) => acc + (Number(curr.lucro || 0) * Number(curr.quantidade || 1)), 0);
+  const totalProfit = filteredAndSortedOrders.reduce((acc, curr) => acc + Number(curr.lucro || 0), 0);
 
   const getDayDiff = (dateStr: string) => {
     if (!dateStr) return 0;

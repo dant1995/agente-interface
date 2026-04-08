@@ -202,6 +202,9 @@ export const apiSync = {
         const rawDate = getValueByKeywords(item, ['DATA', 'CARIMBO', 'CRIADO', 'CARIMBO DE DATA/HORA']);
         const parsedDate = parseBRDate(rawDate) || new Date();
 
+        const custo = parseReal(getValueByKeywords(item, ['CUSTO', 'COST', 'VALOR CUSTO'])) || 15;
+        const lucroCalculado = valorTotal - (custo * quantidade);
+
         return {
           id_pedido: item.id || item.row_number || item['ID Pedido'] || item['id_pedido'] || `n8n-${index}`,
           data: parsedDate.toISOString(),
@@ -215,7 +218,8 @@ export const apiSync = {
           quantidade: quantidade,
           valorTotal: valorTotal,
           preco: preco,
-          custo: 0,
+          custo: custo,
+          lucro: parseReal(getValueByKeywords(item, ['LUCRO', 'PROFIT', 'MARGEM'])) || lucroCalculado,
           codigo_barra: getValueByKeywords(item, ['CODIGO', 'BARRA', 'BARCODE', 'BC']) || '',
           dataCriacao: parsedDate.toISOString()
         } as Order;
@@ -625,7 +629,7 @@ export const apiSync = {
           valorTotal: finalValue,
           preco: precoVenda,
           custo: 15,
-          lucro: finalValue - 15,
+          lucro: finalValue - (15 * qtdVenda),
           codigo_barra: item.ID || item.codigo_barra || item.codigo_barras || '',
           pago: true,
           entregue: true,
