@@ -249,8 +249,10 @@ const Tarefas = () => {
 
   const handleCheckpointFeedback = async (feedback: string) => {
     try {
-      // Notifica o n8n/Agente sobre o feedback operacional
-      await apiSync.notifyIAChat(`🎯 FEEDBACK OPERACIONAL DO GESTOR: ${feedback}`);
+      await apiSync.notifyIAChat({ 
+        message: `🎯 FEEDBACK OPERACIONAL DO GESTOR: ${feedback}`,
+        timestamp: new Date().toISOString()
+      });
       
       const todayStr = new Date().toLocaleDateString('pt-BR');
       localStorage.setItem('gestor_last_checkpoint_date', todayStr);

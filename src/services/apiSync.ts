@@ -134,7 +134,8 @@ export const apiSync = {
   },
 
   notifyIAChat: async (context: any) => {
-    return sendWebhook(N8N_WEBHOOK_URLS.IA_CHAT, { action: 'ia_chat', ...context });
+    const payload = typeof context === 'string' ? { message: context } : context;
+    return sendWebhook(N8N_WEBHOOK_URLS.IA_CHAT, { action: 'ia_chat', ...payload });
   },
 
   notifyOrderInProduction: async (order: any) => {
