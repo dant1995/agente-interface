@@ -3,6 +3,7 @@ import type { Order } from '../types';
 import { OrderStatus } from '../types';
 import { storage } from '../services/storage';
 import { apiSync } from '../services/apiSync';
+import { MessageCircle, Clock, TrendingUp as ProfitIcon } from 'lucide-react';
 
 const Pedidos = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -154,6 +155,13 @@ const Pedidos = () => {
 
   const variationSummary = getVariationSummary();
   const totalItems = variationSummary.reduce((acc, curr) => acc + curr.count, 0);
+  const totalProfit = filteredAndSortedOrders.reduce((acc, curr) => acc + (Number(curr.lucro || 0) * Number(curr.quantidade || 1)), 0);
+
+  const getDayDiff = (dateStr: string) => {
+    if (!dateStr) return 0;
+    const diffTime = Math.abs(new Date().getTime() - new Date(dateStr).getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
 
   const getColorHex = (colorName: string) => {
     const colors: Record<string, string> = {
@@ -211,6 +219,9 @@ const Pedidos = () => {
               </h3>
               <div style={{ background: '#4f46e515', color: '#4f46e5', padding: '0.3rem 0.75rem', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '800' }}>
                 Total: {totalItems} peças
+              </div>
+              <div style={{ background: '#10b98115', color: '#10b981', padding: '0.3rem 0.75rem', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <ProfitIcon size={14} /> Lucro: R$ {totalProfit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </div>
             </div>
             
@@ -368,8 +379,13 @@ const Pedidos = () => {
                       <tr key={order.id_pedido} className="table-row">
                         <td>
                           <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
-                            <div style={{ width: '40px', height: '40px', background: '#f0f0f0', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                             <div style={{ width: '40px', height: '40px', background: '#f0f0f0', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', position: 'relative' }}>
                               👕
+                              {getDayDiff(order.data) > 3 && order.status !== OrderStatus.ENTREGUE && (
+                                <div title="Pedido parado há mais de 3 dias" style={{ position: 'absolute', top: -5, right: -5, background: '#ef4444', color: 'white', borderRadius: '50%', width: '16px', height: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', border: '2px solid white' }}>
+                                  !
+                                </div>
+                              )}
                             </div>
                             <div>
                               <div style={{ fontWeight: '500', color: '#333' }}>{order.produtoNome}</div>
@@ -379,9 +395,22 @@ const Pedidos = () => {
                             </div>
                           </div>
                         </td>
-                        <td>
-                          <div style={{ fontWeight: '500' }}>{order.cliente}</div>
-                          <div style={{ fontSize: '0.75rem', color: '#888' }}>ID: {String(order.id_pedido).substring(0, 8)}</div>
+                         <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: '500' }}>{order.cliente}</div>
+                              <div style={{ fontSize: '0.75rem', color: '#888' }}>ID: {String(order.id_pedido).substring(0, 8)}</div>
+                            </div>
+                            <a 
+                              href={`https://api.whatsapp.com/send?phone=${order.whatsapp.replace(/\D/g, '')}&text=${encodeURIComponent(`Olá ${order.cliente}! Aqui é da equipe de atendimento. Estamos passando para atualizar sobre o seu pedido: ${order.produtoNome}. Status atual: ${order.status}`)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ color: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.4rem', borderRadius: '8px', background: '#25D36615', transition: 'all 0.2s' }}
+                              title="Chamar no WhatsApp"
+                            >
+                              <MessageCircle size={18} />
+                            </a>
+                          </div>
                         </td>
                         <td>
                           <div style={{ fontWeight: '500' }}>
