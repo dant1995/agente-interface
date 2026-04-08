@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+// v1.0.2 - Fix: Estabilização de feedback do checkpoint IA
 import { useNavigate } from 'react-router-dom';
 import { 
   CheckSquare, 

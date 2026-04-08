@@ -1,5 +1,5 @@
-// v1.0.1 - Fix: Invalidação de cache build
 import { useState, useEffect } from 'react';
+// v1.0.2 - Fix: Sincronização de lucro e resumo de variações
 import type { Order } from '../types';
 import { OrderStatus } from '../types';
 import { storage } from '../services/storage';

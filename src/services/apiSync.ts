@@ -741,6 +741,13 @@ export const apiSync = {
           'Fornecedor': produto.fornecedor || '',
           'Categoria': produto.categoria || '',
           'Descricao': produto.descricao || '',
+          'SKU': produto.sku || '',
+          'Tipo': produto.tipo || 'Estoque Próprio',
+          'Preço Concorrente': Number(produto.precoConcorrente || 0),
+          'Frete': Number(produto.frete || 0),
+          'Taxa Plataforma': Number(produto.taxaPlataforma || 18),
+          'Margem Minima': Number(produto.margemMinima || 10),
+          'ID Fornecedor': produto.fornecedorId || '',
           timestamp: new Date().toISOString()
         }];
 
@@ -804,58 +811,12 @@ export const apiSync = {
     tamanho: string;
     cor: string;
     quantidade: number;
-    valorTotal?: number;
-    codigo_barra?: string;
-    dataEntrega: string;
-    horarioEntrega: string;
+    valorTotal: number;
   }) => {
     return sendWebhook(N8N_WEBHOOK_URLS.ENTREGA, {
-      action: 'registrar_entrega',
+      action: 'marcar_entregue',
       ...dados,
-      timestamp: new Date().toISOString(),
+      dataEntrega: new Date().toISOString()
     });
-  },
-
-  fetchProdutosPerformance: async (): Promise<any> => {
-    try {
-      console.time('SyncPerformanceN8N');
-      const response = await fetch(N8N_WEBHOOK_URLS.PERFORMANCE_PRODUTOS, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'get_performance' })
-      });
-      console.timeEnd('SyncPerformanceN8N');
-      
-      if (!response.ok) throw new Error('Falha ao buscar performance da planilha');
-      const rawData = await response.json();
-      return Array.isArray(rawData) ? rawData : (Object.values(rawData).find(v => Array.isArray(v)) as any[] || []);
-    } catch (error) {
-      console.timeEnd('SyncPerformanceN8N');
-      console.error('Erro buscando performance:', error);
-      return [];
-    }
-  },
-
-  fetchChatHistory: async (whatsapp: string) => {
-    try {
-      const tel = String(whatsapp).replace(/\D/g, '');
-      console.log(`[Chat API] Buscando histórico para ${tel} via ${N8N_WEBHOOK_URLS.CHAT}`);
-      const res = await sendWebhook(N8N_WEBHOOK_URLS.CHAT, { action: 'get_chat', whatsapp: tel });
-      console.log(`[Chat API] Resposta recebida para ${tel}:`, res);
-      return res;
-    } catch (error) {
-      console.error('[Chat API] Erro ao buscar histórico:', error);
-      return [];
-    }
-  },
-
-  fetchEngagementStats: async () => {
-    try {
-      // Enviamos 'global' para que o n8n saiba que não deve filtrar por um telefone específico
-      return await sendWebhook(N8N_WEBHOOK_URLS.CHAT, { action: 'get_engagement', type: 'global' });
-    } catch (error) {
-      console.error('Erro ao buscar estatísticas de engajamento:', error);
-      return {};
-    }
-  },
+  }
 };
