@@ -1,9 +1,10 @@
+// v1.0.1 - Fix: Invalidação de cache build
 import { useState, useEffect } from 'react';
 import type { Order } from '../types';
 import { OrderStatus } from '../types';
 import { storage } from '../services/storage';
 import { apiSync } from '../services/apiSync';
-import { MessageCircle, Clock, TrendingUp as ProfitIcon } from 'lucide-react';
+import { MessageCircle, TrendingUp as ProfitIcon } from 'lucide-react';
 
 const Pedidos = () => {
   const [orders, setOrders] = useState<Order[]>([]);
