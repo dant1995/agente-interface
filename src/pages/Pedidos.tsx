@@ -4,7 +4,7 @@ import type { Order } from '../types';
 import { OrderStatus } from '../types';
 import { storage } from '../services/storage';
 import { apiSync } from '../services/apiSync';
-import { MessageCircle, TrendingUp as ProfitIcon } from 'lucide-react';
+import { MessageCircle, TrendingUp as ProfitIcon, Settings } from 'lucide-react';
 
 const Pedidos = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -14,6 +14,8 @@ const Pedidos = () => {
   const [currentFilter, setCurrentFilter] = useState<OrderStatus | 'TODOS'>('TODOS');
   const [visibleCount, setVisibleCount] = useState<number>(10);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showCostModal, setShowCostModal] = useState(false);
+  const [costConfig, setCostConfig] = useState(storage.getCostConfig());
 
 
   useEffect(() => {
@@ -157,11 +159,11 @@ const Pedidos = () => {
   const variationSummary = getVariationSummary();
   const totalItems = variationSummary.reduce((acc, curr) => acc + curr.count, 0);
   const totalProfit = filteredAndSortedOrders.reduce((acc, curr) => {
-    // Failsafe: se o lucro for 0, mas tivermos preço e custo, calcula na hora
+    // Failsafe: se o lucro for 0, mas tivermos preço, calcula na hora usando a composição configurada
     let profit = Number(curr.lucro || 0);
     if (profit === 0 && (curr.preco || 0) > 0) {
       const vTotal = curr.valorTotal || (curr.preco * curr.quantidade);
-      const cTotal = (curr.custo || 15) * curr.quantidade;
+      const cTotal = costConfig.total * curr.quantidade;
       profit = vTotal - cTotal;
     }
     return acc + profit;
@@ -232,6 +234,13 @@ const Pedidos = () => {
               </div>
               <div style={{ background: '#10b98115', color: '#10b981', padding: '0.3rem 0.75rem', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <ProfitIcon size={14} /> Lucro: R$ {totalProfit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                <button 
+                  onClick={() => setShowCostModal(true)}
+                  style={{ background: 'none', border: 'none', color: '#10b981', display: 'flex', marginLeft: '0.4rem', cursor: 'pointer', padding: '2px', borderRadius: '4px', transition: 'background 0.2s' }}
+                  title="Ajustar Composição de Custos"
+                >
+                   <Settings size={14} />
+                </button>
               </div>
             </div>
             
@@ -480,6 +489,99 @@ const Pedidos = () => {
            </div>
         )}
       </div>
+      {/* Modal de Composição de Custos */}
+      {showCostModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000, padding: '1.5rem'
+        }}>
+          <div style={{
+            background: 'white', borderRadius: '24px', padding: '2rem', width: '100%', maxWidth: '400px',
+            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', gap: '1.5rem'
+          }}>
+            <div style={{ textAlign: 'center' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '0.5rem', color: '#1e293b' }}>
+                💰 Composição de Custo
+              </h2>
+              <p style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                Ajuste os valores médios para calcular o lucro real dos seus pedidos.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label style={{ fontSize: '0.9rem', fontWeight: '600', color: '#475569' }}>👕 Camiseta Base</label>
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.9rem', color: '#94a3b8' }}>R$</span>
+                  <input 
+                    type="number" step="0.01" 
+                    value={costConfig.camisetaBase} 
+                    onChange={(e) => setCostConfig({...costConfig, camisetaBase: parseFloat(e.target.value) || 0})}
+                    style={{ padding: '0.6rem 0.6rem 0.6rem 2.2rem', borderRadius: '12px', border: '1px solid #e2e8f0', width: '120px', textAlign: 'right', fontWeight: '700' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label style={{ fontSize: '0.9rem', fontWeight: '600', color: '#475569' }}>🎨 Estampa (Média)</label>
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.9rem', color: '#94a3b8' }}>R$</span>
+                  <input 
+                    type="number" step="0.01" 
+                    value={costConfig.estampaMesa} 
+                    onChange={(e) => setCostConfig({...costConfig, estampaMesa: parseFloat(e.target.value) || 0})}
+                    style={{ padding: '0.6rem 0.6rem 0.6rem 2.2rem', borderRadius: '12px', border: '1px solid #e2e8f0', width: '120px', textAlign: 'right', fontWeight: '700' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label style={{ fontSize: '0.9rem', fontWeight: '600', color: '#475569' }}>🧶 Extras/Acabamento</label>
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.9rem', color: '#94a3b8' }}>R$</span>
+                  <input 
+                    type="number" step="0.01" 
+                    value={costConfig.extras} 
+                    onChange={(e) => setCostConfig({...costConfig, extras: parseFloat(e.target.value) || 0})}
+                    style={{ padding: '0.6rem 0.6rem 0.6rem 2.2rem', borderRadius: '12px', border: '1px solid #e2e8f0', width: '120px', textAlign: 'right', fontWeight: '700' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ 
+                marginTop: '0.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '16px', 
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                border: '1px dashed #cbd5e1'
+              }}>
+                <span style={{ fontWeight: '800', color: '#1e293b' }}>Custo Total:</span>
+                <span style={{ fontWeight: '800', color: '#334155', fontSize: '1.1rem' }}>
+                  R$ {((Number(costConfig.camisetaBase) || 0) + (Number(costConfig.estampaMesa) || 0) + (Number(costConfig.extras) || 0)).toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.8rem' }}>
+              <button 
+                onClick={() => setShowCostModal(false)}
+                style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #e2e8f0', background: 'white', fontWeight: '700', color: '#64748b' }}
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={() => {
+                  storage.saveCostConfig(costConfig);
+                  setCostConfig(storage.getCostConfig());
+                  setShowCostModal(false);
+                }}
+                style={{ flex: 2, padding: '0.8rem', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', fontWeight: '700', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)' }}
+              >
+                Salvar Custos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

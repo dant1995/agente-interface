@@ -374,63 +374,38 @@ export const apiSync = {
       });
       if (!response.ok) throw new Error('Falha ao buscar fluxo de caixa');
 
-      const rawData = await response.json();
-      let items: any[] = [];
-      if (Array.isArray(rawData)) {
-        items = rawData;
-      } else if (rawData && typeof rawData === 'object') {
-        const found = Object.values(rawData).find(val => Array.isArray(val));
-        if (found) items = found as any[];
-        else items = [rawData];
-      }
-
-      let totalEntradaSheet = 0;
-      let totalSaidaSheet = 0;
-      let saldoSheet = 0;
-
-      items.forEach((item) => {
-        const itemValues = Object.values(item).map(v => normalizeString(String(v)));
-        const isSummaryRow = itemValues.some(v => v.includes('TOTAL'));
-
-        const ent = parseReal(getValueByKeywords(item, ['TOTALDEENTRADA', 'TOTALENTRADA', 'TOTALPAGO']));
-        const sai = parseReal(getValueByKeywords(item, ['TOTALDESAIDA', 'TOTALSAIDA', 'SAIDA']));
-        const sal = parseReal(getValueByKeywords(item, ['SALDO', 'TOTALSALDO', 'SALDOGERAL']));
-
-        if (isSummaryRow) {
-          if (ent > 0) totalEntradaSheet = ent;
-          if (sai > 0) totalSaidaSheet = sai;
-          if (sal !== 0) saldoSheet = sal;
-        } else {
-          if (totalEntradaSheet === 0 || ent > totalEntradaSheet) totalEntradaSheet = ent;
-          if (totalSaidaSheet === 0 || sai > totalSaidaSheet) totalSaidaSheet = sai;
-          if (sal !== 0) saldoSheet = sal;
+      const rawItems = await response.json();
+      
+      const caixaItems: CaixaItem[] = (rawItems || []).map((item: any) => {
+        const data = getValueByKeywords(item, ['DATA', 'CARIMBO', 'CARIMBO DE DATA/HORA']);
+        const categoria = String(getValueByKeywords(item, ['CATEGORIA', 'DESCRICAO', 'DESCRIÇÃO']) || 'Outros');
+        const entrada = parseReal(getValueByKeywords(item, ['ENTRADA', 'TOTAL PAGO', 'VALOR PAGO', 'PAGO', 'RECEBIDO']));
+        const saida = parseReal(getValueByKeywords(item, ['SAIDA', 'GASTO', 'CUSTO', 'PAGAMENTO']));
+        
+        // Inteligência: Detectar Insumos na descrição para sugestão de custos
+        const descLower = categoria.toLowerCase();
+        if (descLower.includes('camiseta') || descLower.includes('tecido') || descLower.includes('papel sublimatico') || descLower.includes('tinta')) {
+          const unitario = parseReal(getValueByKeywords(item, ['VALOR UNITARIO', 'PRECO UNITARIO', 'VALOR UNIT']));
+          if (unitario > 0) {
+            import('./storage').then(({ storage }) => {
+              storage.updateInsumoPrice(categoria, unitario);
+            });
+          }
         }
-      });
 
-      const caixaItems: CaixaItem[] = items
-        .filter(item => !!getValueByKeywords(item, ['DATA']))
-        .map(item => {
-          const data = String(getValueByKeywords(item, ['DATA']) || '');
-          const categoria = String(getValueByKeywords(item, ['ORIGEM', 'CONTAS', 'CATEGORIA']) || 'Geral');
-          const entrada = parseReal(getValueByKeywords(item, ['ENTRADA', 'TOTAL PAGO', 'VALOR PAGO', 'PAGO', 'RECEBIDO']));
-          const saida = parseReal(getValueByKeywords(item, ['SAIDA', 'GASTO', 'CUSTO', 'PAGAMENTO']));
-          return { data, categoria, entrada, saida };
+        return { data, categoria, entrada, saida };
+      })
+      .filter(i => i.entrada > 0 || i.saida > 0);
 
-        })
-        .filter(i => i.entrada > 0 || i.saida > 0);
-
-      if (totalEntradaSheet === 0) {
-        totalEntradaSheet = caixaItems.reduce((acc, i) => acc + i.entrada, 0);
-        totalSaidaSheet = caixaItems.reduce((acc, i) => acc + i.saida, 0);
-        saldoSheet = totalEntradaSheet - totalSaidaSheet;
-      }
+      const totalEntradaSheet = caixaItems.reduce((acc: number, i: CaixaItem) => acc + i.entrada, 0);
+      const totalSaidaSheet = caixaItems.reduce((acc: number, i: CaixaItem) => acc + i.saida, 0);
 
       return {
         items: caixaItems,
         summary: {
           entrada: totalEntradaSheet,
           saida: totalSaidaSheet,
-          saldo: saldoSheet
+          saldo: totalEntradaSheet - totalSaidaSheet
         }
       };
     } catch (error) {

@@ -20,7 +20,9 @@ const KEYS = {
   CUSTOMERS: 'erp_customers',
   ANALISES: 'erp_analises_produtos',
   SUPPLIERS: 'erp_suppliers',
-  METRICS_HISTORY: 'erp_metrics_history'
+  METRICS_HISTORY: 'erp_metrics_history',
+  COST_CONFIG: 'erp_cost_config',
+  INSUMOS_METADATA: 'erp_insumos_metadata'
 };
 
 export const storage = {
@@ -196,5 +198,39 @@ export const storage = {
     list.unshift(metric);
     saveList(KEYS.METRICS_HISTORY, list);
     return Promise.resolve(metric);
+  },
+
+  // Configuração de Custos Reais
+  getCostConfig: (): any => {
+    const data = localStorage.getItem(KEYS.COST_CONFIG);
+    return data ? JSON.parse(data) : {
+      camisetaBase: 10.44,   // Padrão baseado na planilha do usuário
+      estampaMesa: 3.00,
+      extras: 1.50,
+      total: 14.94,
+      lastUpdated: new Date().toISOString()
+    };
+  },
+  saveCostConfig: (config: any): void => {
+    localStorage.setItem(KEYS.COST_CONFIG, JSON.stringify({
+      ...config,
+      total: (Number(config.camisetaBase) || 0) + (Number(config.estampaMesa) || 0) + (Number(config.extras) || 0),
+      lastUpdated: new Date().toISOString()
+    }));
+  },
+
+  // Metadados de Insumos (Preços detectados na planilha)
+  getInsumosMetadata: (): any[] => getList(KEYS.INSUMOS_METADATA),
+  updateInsumoPrice: (nome: string, preco: number): void => {
+    const list = getList<any>(KEYS.INSUMOS_METADATA);
+    const id = nome.toLowerCase().replace(/[^a-z]/g, '');
+    const index = list.findIndex(i => i.id === id);
+    
+    if (index > -1) {
+      list[index] = { ...list[index], preco, lastSeen: new Date().toISOString() };
+    } else {
+      list.push({ id, nome, preco, lastSeen: new Date().toISOString() });
+    }
+    saveList(KEYS.INSUMOS_METADATA, list);
   }
 };
