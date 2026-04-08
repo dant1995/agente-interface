@@ -165,7 +165,7 @@ const Entregas = () => {
         tamanho: pedidoEncontrado.tamanho,
         cor: pedidoEncontrado.cor,
         quantidade: pedidoEncontrado.quantidade,
-        valorTotal: pedidoEncontrado.valorTotal,
+        valorTotal: Number(pedidoEncontrado.valorTotal || 0),
         codigo_barra: pedidoEncontrado.codigo_barra,
         dataEntrega: new Date().toLocaleDateString('pt-BR'),
         horarioEntrega: new Date().toLocaleTimeString('pt-BR'),

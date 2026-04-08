@@ -138,6 +138,17 @@ export const apiSync = {
     return sendWebhook(N8N_WEBHOOK_URLS.IA_CHAT, { action: 'ia_chat', ...payload });
   },
 
+  fetchChatHistory: async (whatsapp: string) => {
+    return sendWebhook(N8N_WEBHOOK_URLS.CHAT, { 
+      action: 'verificar_historico', 
+      whatsapp: whatsapp.replace(/\D/g, '') 
+    });
+  },
+
+  fetchProdutosPerformance: async () => {
+    return sendWebhook(N8N_WEBHOOK_URLS.PERFORMANCE_PRODUTOS, { action: 'get_performance' });
+  },
+
   notifyOrderInProduction: async (order: any) => {
     return sendWebhook(N8N_WEBHOOK_URLS.ORDER_PRODUCTION, { action: 'start_production', ...order });
   },
@@ -812,11 +823,14 @@ export const apiSync = {
     cor: string;
     quantidade: number;
     valorTotal: number;
+    codigo_barra?: string;
+    dataEntrega?: string;
+    horarioEntrega?: string;
   }) => {
     return sendWebhook(N8N_WEBHOOK_URLS.ENTREGA, {
       action: 'marcar_entregue',
       ...dados,
-      dataEntrega: new Date().toISOString()
+      dataEntrega: dados.dataEntrega || new Date().toISOString()
     });
   }
 };

@@ -87,7 +87,7 @@ const Pedidos = () => {
         tamanho: order.tamanho,
         cor: order.cor,
         quantidade: order.quantidade,
-        valorTotal: order.valorTotal,
+        valorTotal: Number(order.valorTotal || 0),
         codigo_barra: order.codigo_barra,
         dataEntrega: new Date().toLocaleDateString('pt-BR'),
         horarioEntrega: new Date().toLocaleTimeString('pt-BR'),
