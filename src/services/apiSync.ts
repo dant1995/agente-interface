@@ -295,6 +295,59 @@ export const apiSync = {
     }
   },
 
+  /**
+   * Busca clientes da aba "clientes quente" da planilha Google Sheets.
+   * Usa o mesmo webhook mas com action diferente para o n8n saber qual aba ler.
+   */
+  fetchClientesQuentes: async (): Promise<any[]> => {
+    try {
+      const response = await fetch(N8N_WEBHOOK_URLS.CLIENTES, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_clientes_quentes' })
+      });
+      if (!response.ok) throw new Error('Falha ao buscar clientes quentes');
+      
+      const rawData = await response.json();
+      let items: any[] = [];
+      if (Array.isArray(rawData)) {
+        items = rawData;
+      } else if (rawData && typeof rawData === 'object') {
+        const found = Object.values(rawData).find(val => Array.isArray(val));
+        if (found) items = found as any[];
+        else items = [rawData];
+      }
+
+      return items.map(item => {
+        const rawDateCompra = getValueByKeywords(item, ['DATA DA COMPRA', 'COMPRA', 'DATA']);
+        const rawDateContato = getValueByKeywords(item, ['ULTIMO CONTATO', 'CONTATO', 'ULTIMA_MSG']);
+        
+        let nome = getValueByKeywords(item, ['NOME COMPLETO DO RESPONSAVEL', 'NOME', 'CLIENTE', 'NOME COMPLETO']);
+        let whatsapp = getValueByKeywords(item, ['WHATSAP', 'WHATSAPP', 'TELEFONE', 'CELULAR', 'PHONE']);
+
+        if (!whatsapp && (item.A || item['0'])) whatsapp = item.A || item['0'];
+        if (!nome && (item.B || item['1'])) nome = item.B || item['1'];
+
+        let cleanWhatsapp = String(whatsapp || '').split('@')[0].replace(/\D/g, '');
+
+        return {
+          nome: String(nome || 'Sem Nome').trim(),
+          whatsapp: cleanWhatsapp,
+          status: getValueByKeywords(item, ['STATUS', 'ESTADO']),
+          produtoInteresse: getValueByKeywords(item, ['PRODUTO DE INTERESSE', 'INTERESSE', 'PRODUTO']),
+          cidade: getValueByKeywords(item, ['CIDADE', 'LOCAL']),
+          origem: getValueByKeywords(item, ['ORIGEM', 'FONTE']),
+          dataCompra: parseBRDate(rawDateCompra)?.toISOString() || null,
+          ultimoContato: parseBRDate(rawDateContato)?.toISOString() || null,
+          recorrente: getValueByKeywords(item, ['CLIENTE RECORRENTE', 'RECORRENTE', 'VIP']) === 'Sim'
+        };
+      }).filter(c => c.whatsapp && c.whatsapp.length > 5);
+    } catch (error) {
+      console.error('Erro buscando clientes quentes:', error);
+      return [];
+    }
+  },
+
   fetchGastos: async () => {
     try {
       const response = await fetch(N8N_WEBHOOK_URLS.GASTOS, {
