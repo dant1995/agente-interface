@@ -212,6 +212,11 @@ const ModalDisparar = ({ campanha, clientes, onClose }: Omit<Props, 'onConcluido
                           <Flame size={14} /> Enviando para lista QUENTE 🔥
                       </div>
                     )}
+                    {campanha.imagemUrl && (
+                      <div style={{ display:'flex', alignItems:'center', gap:8, color: dark.success, fontSize:'0.78rem' }}>
+                          <CheckCircle size={14} /> Imagem anexada à mensagem 📷
+                      </div>
+                    )}
                 </div>
               </div>
 

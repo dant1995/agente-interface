@@ -37,6 +37,7 @@ export interface Campanha {
   valorMinimoVip: number;
   limiteHora: number;          // máx envios por hora (anti-bloqueio)
   mensagem: string;
+  imagemUrl?: string;          // URL ou base64 da imagem para enviar junto com a mensagem
   followUp: FollowUpConfig;
   status: 'rascunho' | 'disparada' | 'concluida';
   criadaEm: string;
@@ -308,6 +309,7 @@ export const campanhaService = {
         cliente_nome: cliente.nome,
         cliente_whatsapp: String(cliente.whatsapp || '').replace(/\D/g, ''),
         mensagem_personalizada: mensagemEnviada,
+        imagem_url: campanha.imagemUrl || '',
         status: 'enviado',
         total_enviado: (lista[idx].totalEnviados || 0) + 1,
         segmento: campanha.segmento,

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Megaphone, CheckCircle, X, Eye, Star } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Megaphone, CheckCircle, X, Eye, Star, ImagePlus, Trash2 } from 'lucide-react';
 import { dark } from './darkTheme';
 import {
   campanhaService,
@@ -39,6 +39,11 @@ const ModalCriar = ({ campanha, clientes, onClose, onSave }: Props) => {
   const [campoData, setCampoData] = useState<'pedido' | 'contato'>(campanha?.configSegmento?.campoData || 'pedido');
   const [diasInativo, setDiasInativo] = useState(campanha?.configSegmento?.diasInativo || 30);
   const [produtosSel, setProdutosSel] = useState<string[]>(campanha?.configSegmento?.produtosInteresse || []);
+  
+  // Imagem da campanha
+  const [imagemUrl, setImagemUrl] = useState(campanha?.imagemUrl || '');
+  const [imagemPreview, setImagemPreview] = useState(campanha?.imagemUrl || '');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Extrair produtos únicos para o filtro
   const produtosDisponiveis = Array.from(new Set(clientes.map(c => c.produtoInteresse).filter(Boolean))) as string[];
@@ -55,11 +60,39 @@ const ModalCriar = ({ campanha, clientes, onClose, onSave }: Props) => {
     if (!nome.trim()) return alert('Dê um nome para a campanha!');
     const p = { 
       nome, tipo, segmento, valorMinimoVip: valorVip, limiteHora, mensagem, 
+      imagemUrl: imagemUrl || undefined,
       followUp: { ativo: followUp, delayHoras: followDelay, mensagem: followMsg },
       configSegmento: { campoData, diasInativo, produtosInteresse: produtosSel }
     };
     campanha ? campanhaService.atualizar(campanha.id, p) : campanhaService.criar(p);
     onSave();
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Imagem muito grande. Máximo: 5MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target?.result as string;
+      setImagemUrl(base64);
+      setImagemPreview(base64);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleImageUrlPaste = (url: string) => {
+    setImagemUrl(url);
+    setImagemPreview(url);
+  };
+
+  const removerImagem = () => {
+    setImagemUrl('');
+    setImagemPreview('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const lbl = (t: string) => <label style={{ color: dark.textDim, fontSize:'0.72rem', fontWeight:700, display:'block', marginBottom:6, letterSpacing:'0.04em', textTransform:'uppercase' }}>{t}</label>;
@@ -168,7 +201,69 @@ const ModalCriar = ({ campanha, clientes, onClose, onSave }: Props) => {
 
           <div style={{ background: dark.bg, borderRadius:10, padding:'0.8rem', border:`1px solid ${dark.border}` }}>
             <div style={{ color: dark.textMuted, fontSize:'0.68rem', fontWeight:600, marginBottom:6, display:'flex', alignItems:'center', gap:4 }}><Eye size={11} /> PREVIEW</div>
+            {imagemPreview && (
+              <div style={{ marginBottom:8, borderRadius:8, overflow:'hidden', border:`1px solid ${dark.border}` }}>
+                <img src={imagemPreview} alt="Preview" style={{ width:'100%', maxHeight:120, objectFit:'cover', display:'block' }} />
+              </div>
+            )}
             <div style={{ background:'#1a2f1a', borderRadius:8, padding:'0.6rem 0.9rem', color:'#d4edda', fontSize:'0.82rem', lineHeight:1.6, whiteSpace:'pre-wrap' }}>{preview}</div>
+          </div>
+
+          {/* ═══ Imagem da Campanha ═══ */}
+          <div>
+            {lbl('Imagem da Campanha (opcional)')}
+            <input 
+              type="file" 
+              ref={fileInputRef}
+              accept="image/*" 
+              onChange={handleFileUpload}
+              style={{ display:'none' }} 
+            />
+            
+            {imagemPreview ? (
+              <div style={{ position:'relative', borderRadius:12, overflow:'hidden', border:`1px solid ${dark.border}` }}>
+                <img src={imagemPreview} alt="Imagem da campanha" style={{ width:'100%', maxHeight:160, objectFit:'cover', display:'block' }} />
+                <div style={{ position:'absolute', top:0, right:0, left:0, display:'flex', justifyContent:'flex-end', padding:6, background:'linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%)' }}>
+                  <button onClick={removerImagem} style={{ background:'rgba(255,92,92,0.85)', border:'none', borderRadius:8, padding:'4px 8px', color:'#fff', cursor:'pointer', display:'flex', alignItems:'center', gap:4, fontSize:'0.65rem', fontWeight:700, backdropFilter:'blur(4px)' }}>
+                    <Trash2 size={12} /> Remover
+                  </button>
+                </div>
+                <div style={{ padding:'0.5rem 0.7rem', background: dark.card, display:'flex', alignItems:'center', gap:6 }}>
+                  <ImagePlus size={12} style={{ color: dark.success }} />
+                  <span style={{ color: dark.success, fontSize:'0.68rem', fontWeight:700 }}>Imagem anexada ✓</span>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    padding:'1.2rem', borderRadius:12, 
+                    border:`2px dashed ${dark.border}`, background: dark.bg,
+                    color: dark.textMuted, cursor:'pointer',
+                    display:'flex', flexDirection:'column', alignItems:'center', gap:8,
+                    transition:'border-color 0.2s, background 0.2s'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = dark.accent; e.currentTarget.style.background = `${dark.accent}08`; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = dark.border; e.currentTarget.style.background = dark.bg; }}
+                >
+                  <ImagePlus size={24} style={{ color: dark.accent, opacity:0.7 }} />
+                  <span style={{ fontSize:'0.78rem', fontWeight:600 }}>Fazer upload de imagem</span>
+                  <span style={{ fontSize:'0.65rem', opacity:0.6 }}>JPG, PNG ou WebP · Máx 5MB</span>
+                </button>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <div style={{ flex:1, height:1, background: dark.border }} />
+                  <span style={{ color: dark.textMuted, fontSize:'0.65rem', fontWeight:600 }}>OU</span>
+                  <div style={{ flex:1, height:1, background: dark.border }} />
+                </div>
+                <input 
+                  placeholder="Cole a URL da imagem aqui..."
+                  value={imagemUrl.startsWith('data:') ? '' : imagemUrl}
+                  onChange={e => handleImageUrlPaste(e.target.value)}
+                  style={{ ...inp, fontSize:'0.78rem' }} 
+                />
+              </div>
+            )}
           </div>
 
           <div>

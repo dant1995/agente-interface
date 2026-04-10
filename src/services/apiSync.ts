@@ -306,19 +306,44 @@ export const apiSync = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'get_clientes_quentes' })
       });
-      if (!response.ok) throw new Error('Falha ao buscar clientes quentes');
+      if (!response.ok) throw new Error(`Falha ao buscar clientes quentes (status ${response.status})`);
       
-      const rawData = await response.json();
-      let items: any[] = [];
-      if (Array.isArray(rawData)) {
-        items = rawData;
-      } else if (rawData && typeof rawData === 'object') {
-        const found = Object.values(rawData).find(val => Array.isArray(val));
-        if (found) items = found as any[];
-        else items = [rawData];
+      // Ler como texto primeiro para evitar crash se a resposta for vazia
+      const text = await response.text();
+      console.log('[ClientesQuentes] Resposta bruta (tamanho):', text.length, 'chars');
+      
+      if (!text || text.trim().length === 0) {
+        console.error('[ClientesQuentes] ⚠️ n8n retornou resposta VAZIA! Configure o nó "Respond to Webhook" para retornar os dados do Google Sheets.');
+        throw new Error('O n8n retornou resposta vazia. Configure o "Respond to Webhook" no workflow.');
       }
 
-      return items.map(item => {
+      let rawData: any;
+      try {
+        rawData = JSON.parse(text);
+      } catch {
+        console.error('[ClientesQuentes] ⚠️ Resposta não é JSON válido:', text.substring(0, 200));
+        throw new Error('O n8n retornou uma resposta inválida (não é JSON).');
+      }
+
+      console.log('[ClientesQuentes] Dados parseados. Tipo:', typeof rawData, 'É array?', Array.isArray(rawData));
+      
+      let items: any[] = [];
+      if (Array.isArray(rawData)) {
+        items = rawData.map(r => r.json ? r.json : r);
+      } else if (rawData && typeof rawData === 'object') {
+        const found = Object.values(rawData).find(val => Array.isArray(val));
+        if (found) {
+          items = (found as any[]).map(r => r.json ? r.json : r);
+        } else if (rawData.json) {
+          items = [rawData.json];
+        } else {
+          items = [rawData];
+        }
+      }
+
+      console.log('[ClientesQuentes] Items:', items.length, 'Primeiro:', items[0]);
+
+      const result = items.map(item => {
         const rawDateCompra = getValueByKeywords(item, ['DATA DA COMPRA', 'COMPRA', 'DATA']);
         const rawDateContato = getValueByKeywords(item, ['ULTIMO CONTATO', 'CONTATO', 'ULTIMA_MSG']);
         
@@ -342,6 +367,9 @@ export const apiSync = {
           recorrente: getValueByKeywords(item, ['CLIENTE RECORRENTE', 'RECORRENTE', 'VIP']) === 'Sim'
         };
       }).filter(c => c.whatsapp && c.whatsapp.length > 5);
+
+      console.log('[ClientesQuentes] ✅ Resultado final:', result.length, 'clientes válidos');
+      return result;
     } catch (error) {
       console.error('Erro buscando clientes quentes:', error);
       return [];
