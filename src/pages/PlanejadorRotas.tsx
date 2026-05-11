@@ -102,25 +102,41 @@ async function geocodificar(endereco: string): Promise<{ lat: number; lng: numbe
   };
 
   try {
-    // TENTATIVA 1: Busca Estruturada (Rua + Número + CEP) - Mais precisa
+    console.log(`[GEO] Buscando: ${rua}, ${num} (CEP: ${cep})`);
+    
+    // TENTATIVA 1: Estruturada Completa (Rua + Num + CEP)
     let data = await fetchGeo({ street: `${rua} ${num}`, postalcode: cep, city: 'São Paulo' });
 
-    // TENTATIVA 2: Busca por Rua e Número (sem CEP)
+    // TENTATIVA 2: Rua + Número + Bairro (Sem CEP - mais garantido para ruas longas)
     if (!data.length && num) {
-      data = await fetchGeo({ street: `${rua} ${num}`, city: 'São Paulo' });
+      console.log(`[GEO] Tentativa 2 (Sem CEP): ${rua}, ${num}`);
+      data = await fetchGeo({ street: `${rua} ${num}`, city: 'São Paulo', county: 'Ermelino Matarazzo' });
     }
 
-    // TENTATIVA 3: Busca apenas pelo CEP (âncora de segurança)
+    // TENTATIVA 3: Apenas Rua + Número (Busca global na cidade)
+    if (!data.length && num) {
+      data = await fetchGeo({ q: `${rua}, ${num}, São Paulo` });
+    }
+
+    // TENTATIVA 4: Apenas o CEP (Último recurso)
     if (!data.length && cep) {
+      console.log(`[GEO] Tentativa 4 (Apenas CEP): ${cep}`);
       data = await fetchGeo({ postalcode: cep });
     }
 
-    if (!data?.length) return null;
+    if (!data?.length) {
+      console.warn(`[GEO] Falha total para: ${endereco}`);
+      return null;
+    }
 
     const pos = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+    console.log(`[GEO] Sucesso:`, pos);
     GEO_CACHE[key] = pos;
     return pos;
-  } catch { return null; }
+  } catch (e) { 
+    console.error(`[GEO] Erro na requisição:`, e);
+    return null; 
+  }
 }
 
 /** Adiciona offset para separar pinos próximos (aumentado para melhor visibilidade) */
@@ -160,7 +176,10 @@ export default function PlanejadorRotas() {
           (window as any).markerVoce.setLatLng([novaPos.lat, novaPos.lng]);
         }
       },
-      (err) => console.error('Erro GPS:', err),
+      (err) => {
+        console.error('Erro GPS:', err);
+        if (err.code === 1) alert("⚠️ GPS Bloqueado! Por favor, autorize a localização para o app funcionar corretamente.");
+      },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
     );
 
