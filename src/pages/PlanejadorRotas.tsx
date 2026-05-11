@@ -41,27 +41,6 @@ function dist(a: { lat: number; lng: number }, b: { lat: number; lng: number }) 
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-// ── K-Means geográfico → divide em N sacos ───────────────────────
-function kMeans(pontos: Pacote[], k: number): number[] {
-  const validos = pontos.filter(p => p.lat && p.lng);
-  if (validos.length === 0) return pontos.map(() => 0);
-  let centroids = validos.slice(0, k).map(p => ({ lat: p.lat!, lng: p.lng! }));
-  let assignments = new Array(pontos.length).fill(0);
-  for (let iter = 0; iter < 30; iter++) {
-    for (let i = 0; i < pontos.length; i++) {
-      if (!pontos[i].lat) continue;
-      let minD = Infinity, best = 0;
-      centroids.forEach((c, j) => { const d = dist({ lat: pontos[i].lat!, lng: pontos[i].lng! }, c); if (d < minD) { minD = d; best = j; } });
-      assignments[i] = best;
-    }
-    for (let j = 0; j < k; j++) {
-      const grp = pontos.filter((_, i) => assignments[i] === j && pontos[i].lat);
-      if (grp.length > 0) centroids[j] = { lat: grp.reduce((s, p) => s + p.lat!, 0) / grp.length, lng: grp.reduce((s, p) => s + p.lng!, 0) / grp.length };
-    }
-  }
-  return assignments;
-}
-
 // ── TSP Vizinho Mais Próximo ─────────────────────────────────────
 function tsp(grupo: Pacote[], inicio: { lat: number; lng: number }): Pacote[] {
   const restantes = [...grupo];
@@ -75,6 +54,22 @@ function tsp(grupo: Pacote[], inicio: { lat: number; lng: number }): Pacote[] {
     if (prox.lat) pos = { lat: prox.lat, lng: prox.lng! };
   }
   return rota;
+}
+
+/**
+ * Divide a rota TSP em N grupos sequenciais (fatias da rota)
+ * Ex: 8 pacotes em 4 sacos → [1,2] [3,4] [5,6] [7,8]
+ * Melhor que K-means quando os endereços estão no mesmo bairro.
+ */
+function dividirEmSacos(rota: Pacote[], nSacos: number): Pacote[] {
+  const resultado = [...rota];
+  const porSaco = Math.ceil(rota.length / nSacos);
+  rota.forEach((p, i) => {
+    const saco = Math.floor(i / porSaco) + 1;
+    const idx = resultado.findIndex(r => r.id === p.id);
+    resultado[idx] = { ...resultado[idx], saco: Math.min(saco, nSacos), ordem: (i % porSaco) + 1 };
+  });
+  return resultado;
 }
 
 // ── Geocodificação Nominatim ─────────────────────────────────────
@@ -145,20 +140,15 @@ export default function PlanejadorRotas() {
       setProgresso(i + 1);
       if (i < lista.length - 1) await new Promise(r => setTimeout(r, 1100));
     }
-    // K-means: divide em até 4 sacos
-    const k = Math.min(4, lista.filter(p => p.lat).length);
-    const assignments = kMeans(lista, k);
-    // TSP em cada saco
-    const resultado = [...lista];
-    for (let s = 0; s < k; s++) {
-      const indices = lista.reduce<number[]>((acc, _, i) => assignments[i] === s ? [...acc, i] : acc, []);
-      const grupo = indices.map(i => lista[i]);
-      const ordenado = tsp(grupo, posAtual);
-      ordenado.forEach((p, ordem) => {
-        const idx = resultado.findIndex(r => r.id === p.id);
-        resultado[idx] = { ...resultado[idx], saco: s + 1, ordem: ordem + 1 };
-      });
-    }
+    // 1) TSP global partindo da posição atual
+    const comCoord = lista.filter(p => p.lat);
+    const semCoord = lista.filter(p => !p.lat);
+    const rotaTSP = tsp(comCoord, posAtual);
+    // 2) Divide a rota em N sacos sequenciais (fatia a fila em partes iguais)
+    const nSacos = Math.min(4, rotaTSP.length);
+    const resultado = dividirEmSacos(rotaTSP, nSacos);
+    // Pacotes sem GPS ficam no último saco sem ordem definida
+    semCoord.forEach((p, i) => resultado.push({ ...p, saco: nSacos, ordem: resultado.filter(r => r.saco === nSacos).length + i + 1 }));
     setPacotes(resultado);
     setFase('otimizado');
     setAba('mapa');
