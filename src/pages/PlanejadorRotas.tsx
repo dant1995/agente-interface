@@ -154,7 +154,6 @@ export default function PlanejadorRotas() {
   const [showBulk, setShowBulk] = useState(false);
   const [bulkText, setBulkText] = useState('');
   const [pacotes, setPacotes] = useState<Pacote[]>(() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; } });
-  const [manualInput, setManualInput] = useState('');
   const [scanning, setScanning] = useState(false);
   const [fase, setFase] = useState<'idle' | 'geocoding' | 'otimizado'>('idle');
   const [progresso, setProgresso] = useState(0);
