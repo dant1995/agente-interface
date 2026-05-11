@@ -198,7 +198,7 @@ const Dashboard = () => {
     { icon: '🏛️', label: 'Licitações', route: '/licitacoes', color: '#1E40AF' },
     { icon: '📢', label: 'Campanhas', route: '/campanhas', color: '#F43F5E' },
     { icon: '🎬', label: 'TikTok\nSync', route: '/tiktok', color: '#000000' },
-    { icon: '🗂️', label: 'Triagem\nRotas', route: '/triagem-rotas', color: '#EE4D2D' },
+    { icon: '📦', label: 'Planejar\nRotas', route: '/planejador-rotas', color: '#EE4D2D' },
     { icon: '🗺️', label: 'Navegar\nRota', route: '/navegacao-rota', color: '#2563eb' },
   ];
 

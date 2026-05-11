@@ -31,6 +31,7 @@ import Fornecedores from './pages/Fornecedores';
 import TikTokPost from './pages/TiktokPost';
 import TriagemRotas from './pages/TriagemRotas';
 import NavegacaoRota from './pages/NavegacaoRota';
+import PlanejadorRotas from './pages/PlanejadorRotas';
 
 function App() {
   const [unlocked, setUnlocked] = useState(authService.isUnlocked());
@@ -69,6 +70,7 @@ function App() {
           <Route path="/tiktok" element={<TikTokPost />} />
           <Route path="/triagem-rotas" element={<TriagemRotas />} />
           <Route path="/navegacao-rota" element={<NavegacaoRota />} />
+          <Route path="/planejador-rotas" element={<PlanejadorRotas />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <QueueMonitor />
