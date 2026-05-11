@@ -23,6 +23,7 @@ const N8N_WEBHOOK_URLS = {
   CLIENTES: `${BASE_URL}/webhook/clientes`,
   CHAT: `${BASE_URL}/webhook/chat`,
   PERFORMANCE_PRODUTOS: `${BASE_URL}/webhook/performance-optimized`,
+  WOO_CREATE: `${BASE_URL}/webhook/criar-produto-woo`,
 };
 
 
@@ -818,7 +819,60 @@ export const apiSync = {
           timestamp: new Date().toISOString()
         }];
 
-    return sendWebhook(`${BASE_URL}/webhook/estoque`, { linhas });
+    // 1) Envia para o Google Sheets (estoque)
+    const resultEstoque = await sendWebhook(`${BASE_URL}/webhook/estoque`, { linhas });
+
+    // 2) Envia para o WooCommerce em paralelo se solicitado (não bloqueia se falhar)
+    if (produto.syncWooCommerce) {
+      try {
+        const wooPayload = {
+          nome: produto.nome,
+          preco: produto.preco,
+          preco_desconto: produto.precoDesconto || '',
+          descricao: produto.descricao || '',
+          sku: produto.sku || '',
+          estoque: produto.variacoes.length > 0
+            ? String(produto.variacoes.reduce((a, v) => a + v.quantidade, 0))
+            : produto.estoqueTotal || '0',
+          categoria: produto.categoria || '',
+          imagem_url: produto.imagem || '',
+          drive_folder_id: produto.drive_folder_id || '',
+          drive_file_ids: produto.drive_file_ids || '',
+        };
+        
+        console.log('[WooCommerce] Enviando produto:', wooPayload.nome);
+        fetch(N8N_WEBHOOK_URLS.WOO_CREATE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(wooPayload),
+        }).then(r => {
+          if (r.ok) console.log('[WooCommerce] ✅ Produto criado com sucesso!');
+          else console.warn('[WooCommerce] ⚠️ Falha ao criar produto (status', r.status, ')');
+        }).catch(err => {
+          console.warn('[WooCommerce] ⚠️ Erro ao enviar:', err.message);
+        });
+      } catch (e) {
+        console.warn('[WooCommerce] Erro ao preparar envio:', e);
+      }
+    }
+
+    return resultEstoque;
+  },
+
+  syncProductToWooCommerce: async (produto: any) => {
+    const payload = {
+      nome: produto.nome,
+      preco: String(produto.preco),
+      sku: produto.sku || '',
+      descricao: produto.descricao || '',
+      categoria: produto.categoria || '',
+      estoque: String(produto.estoqueTotal || '0'),
+      imagem_url: produto.imagem || '',
+      drive_folder_id: produto.drive_folder_id || '',
+      preco_desconto: produto.precoDesconto ? String(produto.precoDesconto) : ''
+    };
+
+    return sendWebhook(N8N_WEBHOOK_URLS.WOO_CREATE, payload);
   },
 
   /**

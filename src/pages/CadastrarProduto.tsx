@@ -33,6 +33,9 @@ interface NovoProduto {
   margemMinima: string;
   imagem: string;
   imagem2: string;
+  drive_folder_id?: string;
+  drive_file_ids?: string;
+  syncWooCommerce?: boolean;
   variacoes: Variacao[];
 }
 
@@ -97,7 +100,8 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
     estoqueMinimo: '5', estoqueTotal: '1', fornecedor: '', 
     fornecedorId: '', precoConcorrente: '', frete: '', 
     taxaPlataforma: '18', margemMinima: '10',
-    imagem: '', imagem2: '', variacoes: []
+    imagem: '', imagem2: '', variacoes: [],
+    drive_folder_id: '', syncWooCommerce: true
   });
   const [variacaoAtual, setVariacaoAtual] = useState<Variacao>({
     id: Date.now().toString(), tamanho: 'M', cor: '', codigoBarra: '', quantidade: 1, imagem: ''
@@ -518,6 +522,38 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
                   value={produto.descricao}
                   onChange={e => setProduto(p => ({ ...p, descricao: e.target.value }))} />
               </div>
+
+              <div style={{ padding: '1rem', background: '#eef2ff', borderRadius: '12px', border: '1px solid #c7d2fe' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#4338ca', marginBottom: '0.8rem', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span>🌐 Integração Digital</span>
+                  <span style={{ fontSize: '0.6rem', background: '#4338ca', color: 'white', padding: '1px 5px', borderRadius: '4px' }}>NOVO</span>
+                </div>
+                
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={labelStyle}>ID da Pasta no Google Drive (Imagens)</label>
+                  <input 
+                    style={{ ...inputStyle, border: '1px solid #c7d2fe' }} 
+                    placeholder="Cole o ID da pasta do Drive aqui" 
+                    value={produto.drive_folder_id}
+                    onChange={e => setProduto(p => ({ ...p, drive_folder_id: e.target.value }))} 
+                  />
+                  <p style={{ fontSize: '0.65rem', color: '#6366f1', marginTop: '0.3rem' }}>
+                    O sistema buscará as fotos nesta pasta para o WooCommerce
+                  </p>
+                </div>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', cursor: 'pointer' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={produto.syncWooCommerce}
+                    onChange={e => setProduto(p => ({ ...p, syncWooCommerce: e.target.checked }))}
+                    style={{ width: '18px', height: '18px', accentColor: '#4338ca' }}
+                  />
+                  <span style={{ fontSize: '0.85rem', fontWeight: '600', color: '#312e81' }}>
+                    Publicar automaticamente no WooCommerce
+                  </span>
+                </label>
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '0.8rem', marginTop: '1.2rem' }}>
@@ -739,7 +775,7 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
                 📤 EXPORTAÇÃO AUTOMÁTICA
               </div>
               <div style={{ fontSize: '0.8rem', color: '#666' }}>
-                Ao clicar em Concluir, o produto será enviado para o Google Sheets.
+                Ao clicar em Concluir, o produto será enviado para o Google Sheets {produto.syncWooCommerce ? 'e WooCommerce' : ''}.
               </div>
             </div>
 

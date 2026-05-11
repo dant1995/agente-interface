@@ -44,6 +44,38 @@ const Estoque = () => {
     setTimeout(() => handleSync(), 1500);
   };
 
+  const handleSyncToWoo = async (group: any) => {
+    setSyncing(true);
+    try {
+      // Prepara o objeto no formato esperado pela API
+      const produtoParaWoo = {
+        nome: group.produto,
+        preco: group.preco || 35,
+        precoDesconto: group.precoDesconto,
+        descricao: group.variants[0]?.descricao || '', // Pega a descrição da primeira variante
+        sku: group.variants[0]?.sku || '',
+        categoria: group.variants[0]?.categoria || '',
+        imagem: group.variants.find((v: any) => v.imagem)?.imagem || '',
+        estoqueTotal: group.totalEstoque,
+        syncWooCommerce: true,
+        variacoes: group.variants.map((v: any) => ({
+          tamanho: v.tamanho,
+          cor: v.cor,
+          quantidade: v.estoque,
+          codigoBarra: v.codigoBarra,
+          imagem: v.imagem
+        }))
+      };
+
+      await apiSync.syncProductToWooCommerce(produtoParaWoo);
+      setSalvouProduto(`${group.produto} enviado ao WooCommerce!`);
+      setTimeout(() => setSalvouProduto(''), 4000);
+    } catch (e) {
+      console.error('Erro ao sincronizar com WooCommerce:', e);
+    }
+    setSyncing(false);
+  };
+
   const toggleGroup = (produto: string) => {
     setExpandedGroups(prev => 
       prev.includes(produto) 
@@ -136,7 +168,7 @@ const Estoque = () => {
           borderRadius: '20px', zIndex: 2000, fontSize: '0.85rem', fontWeight: '600',
           boxShadow: '0 4px 12px rgba(0,0,0,0.2)', whiteSpace: 'nowrap'
         }}>
-          ✅ {salvouProduto} exportado para a planilha!
+          ✅ {salvouProduto} exportado com sucesso!
         </div>
       )}
       
@@ -292,6 +324,28 @@ const Estoque = () => {
                     </span>
                   </div>
                 </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSyncToWoo(group);
+                  }}
+                  disabled={syncing}
+                  style={{
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    padding: '0.5rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: syncing ? 'default' : 'pointer',
+                    transition: 'all 0.2s',
+                    height: 'fit-content'
+                  }}
+                  title="Sincronizar este produto com WooCommerce"
+                >
+                  <span style={{ fontSize: '1.2rem', filter: syncing ? 'grayscale(1)' : 'none' }}>🌐</span>
+                </button>
               </div>
 
               {/* Stats Grid */}

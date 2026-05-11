@@ -29,6 +29,8 @@ import AnaliseProduto from './pages/AnaliseProduto';
 import GestaoProdutos from './pages/GestaoProdutos';
 import Fornecedores from './pages/Fornecedores';
 import TikTokPost from './pages/TiktokPost';
+import TriagemRotas from './pages/TriagemRotas';
+import NavegacaoRota from './pages/NavegacaoRota';
 
 function App() {
   const [unlocked, setUnlocked] = useState(authService.isUnlocked());
@@ -65,6 +67,8 @@ function App() {
           <Route path="/gestao-produtos" element={<GestaoProdutos />} />
           <Route path="/fornecedores" element={<Fornecedores />} />
           <Route path="/tiktok" element={<TikTokPost />} />
+          <Route path="/triagem-rotas" element={<TriagemRotas />} />
+          <Route path="/navegacao-rota" element={<NavegacaoRota />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <QueueMonitor />
