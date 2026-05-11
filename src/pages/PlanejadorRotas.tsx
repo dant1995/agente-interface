@@ -72,19 +72,31 @@ function dividirEmSacos(rota: Pacote[], nSacos: number): Pacote[] {
   return resultado;
 }
 
-// ── Geocodificação Nominatim ─────────────────────────────────────
+// ── Geocodificação Nominatim ─────────────────────────────────────────────
 const GEO_CACHE: Record<string, { lat: number; lng: number }> = {};
-async function geocodificar(cep: string): Promise<{ lat: number; lng: number } | null> {
-  const key = cep.replace(/\D/g, '');
+async function geocodificar(endereco: string): Promise<{ lat: number; lng: number } | null> {
+  // Chave de cache usa o endereço completo (não só dígitos)
+  const key = endereco.trim().toLowerCase();
   if (GEO_CACHE[key]) return GEO_CACHE[key];
   try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cep + ', Brasil')}&format=json&limit=1&countrycodes=br`, { headers: { 'User-Agent': 'CapelEntregas/1.0' } });
+    const query = encodeURIComponent(endereco + ', São Paulo, Brasil');
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1&countrycodes=br`,
+      { headers: { 'User-Agent': 'CapelEntregas/1.0' } }
+    );
     const d = await r.json();
     if (!d?.length) return null;
     const pos = { lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon) };
     GEO_CACHE[key] = pos;
     return pos;
   } catch { return null; }
+}
+
+/** Adiciona offset aletorio pequeno para pinos com mesmas coordenadas ficarem visíveis */
+function jitter(lat: number, lng: number, seed: number) {
+  const angle = seed * 2.399; // golden angle em radianos
+  const radius = 0.00008 * Math.ceil(seed / 6); // aumenta o círculo a cada 6 pinos
+  return { lat: lat + Math.cos(angle) * radius, lng: lng + Math.sin(angle) * radius };
 }
 
 type Aba = 'escanear' | 'mapa' | 'sacos';
@@ -154,32 +166,97 @@ export default function PlanejadorRotas() {
     setAba('mapa');
   }, [pacotes, posAtual]);
 
-  // ── MAPA LEAFLET ─────────────────────────────────────────────
+  // ── MÉTRICAS TOTAIS ──────────────────────────────────────────
+  const metricas = useCallback(() => {
+    const validos = pacotes.filter(p => p.lat && p.lng).sort((a, b) => {
+      if (a.saco !== b.saco) return (a.saco ?? 0) - (b.saco ?? 0);
+      return (a.ordem ?? 0) - (b.ordem ?? 0);
+    });
+    if (validos.length === 0) return { km: 0, min: 0 };
+    
+    let totalD = 0;
+    let pos = posAtual;
+    validos.forEach(p => {
+      totalD += dist(pos, { lat: p.lat!, lng: p.lng! });
+      pos = { lat: p.lat!, lng: p.lng! };
+    });
+
+    return {
+      km: totalD.toFixed(1),
+      min: Math.round((totalD / 15) * 60 + (validos.length * 2)) // 15km/h + 2min por entrega
+    };
+  }, [pacotes, posAtual]);
+
+  const stats = metricas();
+
+
+  // ── MAPA LEAFLET ─────────────────────────────────────────────────────
   useEffect(() => {
     if (aba !== 'mapa') return;
     let mounted = true;
     injectLeaflet().then(() => {
       if (!mounted || !mapRef.current) return;
       if (mapInst.current) mapInst.current.remove();
-      const map = L.map(mapRef.current).setView([posAtual.lat, posAtual.lng], 13);
+      const map = L.map(mapRef.current, { zoomControl: false }).setView([posAtual.lat, posAtual.lng], 15);
       mapInst.current = map;
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(map);
+      
+      // Tile Layer DARK (Estilo Loop/Premium)
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+      }).addTo(map);
+
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+
       // Pin posição atual
-      L.circleMarker([posAtual.lat, posAtual.lng], { radius: 10, color: '#EE4D2D', fillColor: '#EE4D2D', fillOpacity: 1 }).bindPopup('📍 Você').addTo(map);
+      L.circleMarker([posAtual.lat, posAtual.lng], { radius: 10, color: '#EE4D2D', fillColor: '#EE4D2D', fillOpacity: 1 })
+        .bindPopup('📍 Você está aqui').addTo(map);
+
       const bounds: [number, number][] = [[posAtual.lat, posAtual.lng]];
-      // Agrupar por saco para linhas
-      for (let s = 1; s <= 4; s++) {
-        const grupo = pacotes.filter(p => p.saco === s && p.lat).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
-        if (grupo.length === 0) continue;
-        const latlngs: [number, number][] = [[posAtual.lat, posAtual.lng], ...grupo.map(p => [p.lat!, p.lng!] as [number, number])];
-        L.polyline(latlngs, { color: SACO_CORES[s - 1], weight: 3, opacity: 0.75, dashArray: '8,5' }).addTo(map);
-        grupo.forEach(p => {
-          const icon = L.divIcon({ className: '', html: `<div style="background:${SACO_CORES[s-1]};color:white;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,.3)">${p.ordem}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] });
-          L.marker([p.lat!, p.lng!], { icon }).bindPopup(`<b>${SACO_LABELS[s-1]} #${p.ordem}</b><br>${p.codigo}`).addTo(map);
-          bounds.push([p.lat!, p.lng!]);
+
+      // Linha global conectando TODOS os pontos em ordem (1 única linha)
+      const todosOrdenados = pacotes
+        .filter(p => p.lat && p.lng && p.ordem != null)
+        .sort((a, b) => {
+          // Ordena primeiro por saco, depois por ordem dentro do saco
+          if (a.saco !== b.saco) return (a.saco ?? 0) - (b.saco ?? 0);
+          return (a.ordem ?? 0) - (b.ordem ?? 0);
         });
+
+      // Aplica jitter para separar pinos sobrepostos
+      const coordJitter = new Map<string, number>();
+      const getJitter = (p: typeof todosOrdenados[0]) => {
+        const coordKey = `${p.lat?.toFixed(5)},${p.lng?.toFixed(5)}`;
+        const count = (coordJitter.get(coordKey) ?? 0);
+        coordJitter.set(coordKey, count + 1);
+        return count === 0 ? { lat: p.lat!, lng: p.lng! } : jitter(p.lat!, p.lng!, count);
+      };
+
+      // Linha da rota: posAtual → todos os pontos em ordem
+      const linhaPts: [number, number][] = [[posAtual.lat, posAtual.lng]];
+      todosOrdenados.forEach(p => linhaPts.push([p.lat!, p.lng!]));
+      if (linhaPts.length > 1) {
+        L.polyline(linhaPts, { color: '#3b82f6', weight: 3, opacity: 0.7, dashArray: '8,5' }).addTo(map);
       }
-      // Pacotes sem saco (ainda não otimizados)
+
+      // Pinos numerados com cor do saco
+      // Reset jitter counter para os pinos
+      coordJitter.clear();
+      todosOrdenados.forEach((p, globalIdx) => {
+        const cor = p.saco ? SACO_CORES[p.saco - 1] : '#94a3b8';
+        const label = p.saco ? SACO_LABELS[p.saco - 1] : '?';
+        const pos = getJitter(p);
+        const icon = L.divIcon({
+          className: '',
+          html: `<div style="background:${cor};color:white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.35)">${globalIdx + 1}</div>`,
+          iconSize: [28, 28], iconAnchor: [14, 14],
+        });
+        L.marker([pos.lat, pos.lng], { icon })
+          .bindPopup(`<b>${label} #${p.ordem}</b><br><small>${p.codigo}</small>`)
+          .addTo(map);
+        bounds.push([pos.lat, pos.lng]);
+      });
+
+      // Pacotes sem saco (antes da otimização)
       pacotes.filter(p => !p.saco && p.lat).forEach(p => {
         L.circleMarker([p.lat!, p.lng!], { radius: 8, color: '#94a3b8', fillColor: '#94a3b8', fillOpacity: 0.8 }).bindPopup(p.codigo).addTo(map);
         bounds.push([p.lat!, p.lng!]);
@@ -194,14 +271,16 @@ export default function PlanejadorRotas() {
   return (
     <div style={{ background: '#f5f5f5', minHeight: '100vh', paddingBottom: 80 }}>
       {/* Header */}
-      <div style={{ background: 'linear-gradient(135deg,#EE4D2D,#FF8844)', padding: '1rem 1.2rem', color: 'white' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: 6 }}>
-          <button onClick={() => { stopScanner(); navigate('/'); }} style={{ background: 'rgba(255,255,255,.2)', border: 'none', color: 'white', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', fontSize: '1.1rem' }}>←</button>
+      <div style={{ background: 'linear-gradient(135deg,#1e293b,#0f172a)', padding: '1rem 1.2rem', color: 'white' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: 12 }}>
+          <button onClick={() => { stopScanner(); navigate('/'); }} style={{ background: 'rgba(255,255,255,.1)', border: 'none', color: 'white', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', fontSize: '1.1rem' }}>←</button>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: '1rem' }}>📦 Planejador de Rotas</div>
-            <div style={{ fontSize: '0.7rem', opacity: .85 }}>{pacotes.length} pacote{pacotes.length !== 1 ? 's' : ''} • Escaneie, otimize e separe</div>
+            <div style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>📍 Planejador de Rotas</div>
+            <div style={{ fontSize: '0.72rem', opacity: .7, fontWeight: 500 }}>
+              {fase === 'otimizado' ? `🚀 ${stats.km}km • ~${stats.min}min` : `${pacotes.length} pacotes aguardando`}
+            </div>
           </div>
-          {pacotes.length > 0 && <button onClick={() => { if (confirm('Limpar todos os pacotes?')) { setPacotes([]); setFase('idle'); } }} style={{ background: 'rgba(255,255,255,.2)', border: 'none', color: 'white', borderRadius: 8, padding: '0.3rem 0.7rem', cursor: 'pointer', fontSize: '0.72rem' }}>🗑️ Limpar</button>}
+          {pacotes.length > 0 && <button onClick={() => { if (confirm('Limpar todos os pacotes?')) { setPacotes([]); setFase('idle'); } }} style={{ background: 'rgba(239,68,68,0.2)', border: 'none', color: '#f87171', borderRadius: 8, padding: '0.4rem 0.8rem', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 700 }}>Limpar</button>}
         </div>
         {/* Mini contadores por saco */}
         {fase === 'otimizado' && (
