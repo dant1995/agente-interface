@@ -294,9 +294,10 @@ export default function PlanejadorRotas() {
         L.marker([pos.lat, pos.lng], { icon }).bindPopup(`<b>${label} #${p.ordem}</b><br><small>${p.codigo}</small>`).addTo(map);
         bounds.push([pos.lat, pos.lng]);
       });
-      if (bounds.length > 1) { try { map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40] }); } catch (e) { } }
+      if (bounds.length > 1) { 
+        try { map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40] }); } catch (e) { } 
+      }
 
-      // ── FUNÇÕES EXPOSTAS PARA OS BOTÕES ──
       (window as any).recenterMap = () => {
         if (mapInst.current) mapInst.current.setView([posAtual.lat, posAtual.lng], 16);
       };
@@ -305,7 +306,7 @@ export default function PlanejadorRotas() {
       };
     });
     return () => { mounted = false; };
-  }, [aba, pacotes, posAtual]);
+  }, [aba, pacotes]); // Removido posAtual das dependências para evitar reset de zoom
 
   const sacosPorNumero = (s: number) => pacotes.filter(p => p.saco === s).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
 
