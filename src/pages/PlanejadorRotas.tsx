@@ -75,17 +75,22 @@ function dividirEmSacos(rota: Pacote[], nSacos: number): Pacote[] {
 // ── Geocodificação Nominatim ─────────────────────────────────────────────
 const GEO_CACHE: Record<string, { lat: number; lng: number }> = {};
 async function geocodificar(endereco: string): Promise<{ lat: number; lng: number } | null> {
-  // Chave de cache usa o endereço completo (não só dígitos)
-  const key = endereco.trim().toLowerCase();
+  // Limpa o endereço para o Nominatim entender melhor o número
+  // Remove CEPs e caracteres especiais do final
+  let limpo = endereco.split('-')[0].split(',')[0].trim();
+  const key = limpo.toLowerCase();
   if (GEO_CACHE[key]) return GEO_CACHE[key];
+
   try {
-    const query = encodeURIComponent(endereco + ', São Paulo, Brasil');
+    // Tenta busca estruturada para maior precisão no número da casa
+    const query = encodeURIComponent(limpo + ', São Paulo, SP, Brasil');
     const r = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1&countrycodes=br`,
+      `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1&addressdetails=1&countrycodes=br`,
       { headers: { 'User-Agent': 'CapelEntregas/1.0' } }
     );
     const d = await r.json();
     if (!d?.length) return null;
+
     const pos = { lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon) };
     GEO_CACHE[key] = pos;
     return pos;
@@ -113,8 +118,31 @@ export default function PlanejadorRotas() {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInst = useRef<any>(null);
+  const watchId = useRef<number | null>(null);
 
-  useEffect(() => { navigator.geolocation?.getCurrentPosition(p => setPosAtual({ lat: p.coords.latitude, lng: p.coords.longitude })); }, []);
+  // ── GPS EM TEMPO REAL (WATCH) ────────────────────────────────
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    
+    // Inicia o rastreamento real
+    watchId.current = navigator.geolocation.watchPosition(
+      (p) => {
+        const novaPos = { lat: p.coords.latitude, lng: p.coords.longitude };
+        setPosAtual(novaPos);
+        // Se o mapa existir e estivermos na aba mapa, move o marcador "Você"
+        if (mapInst.current && (window as any).markerVoce) {
+          (window as any).markerVoce.setLatLng([novaPos.lat, novaPos.lng]);
+        }
+      },
+      (err) => console.error('Erro GPS:', err),
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+    );
+
+    return () => {
+      if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
+    };
+  }, []);
+
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(pacotes)); }, [pacotes]);
 
   const adicionarPacote = useCallback((codigo: string) => {
@@ -207,9 +235,11 @@ export default function PlanejadorRotas() {
 
       L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-      // Pin posição atual
-      L.circleMarker([posAtual.lat, posAtual.lng], { radius: 10, color: '#EE4D2D', fillColor: '#EE4D2D', fillOpacity: 1 })
-        .bindPopup('📍 Você está aqui').addTo(map);
+      // Pin posição atual (DINÂMICO)
+      const markerVoce = L.circleMarker([posAtual.lat, posAtual.lng], { 
+        radius: 12, color: '#white', weight: 3, fillColor: '#EE4D2D', fillOpacity: 1 
+      }).bindPopup('📍 Você está aqui').addTo(map);
+      (window as any).markerVoce = markerVoce;
 
       const bounds: [number, number][] = [[posAtual.lat, posAtual.lng]];
 
