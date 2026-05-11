@@ -437,8 +437,13 @@ export default function PlanejadorRotas() {
                       </div>
                       <div style={{ display: 'flex', gap: 6 }}>
                         {p.lat && !p.entregue && (
-                          <button onClick={() => window.open(`google.navigation:q=${p.lat},${p.lng}`, '_system') || window.open(`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`, '_blank')}
-                                  style={{ padding: '0.5rem 0.8rem', borderRadius: 8, background: '#3b82f6', color: 'white', border: 'none', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}>
+                          <button 
+                            onClick={() => {
+                              const url = `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=bicycling`;
+                              window.open(url, '_blank');
+                            }}
+                            style={{ padding: '0.5rem 0.8rem', borderRadius: 8, background: '#3b82f6', color: 'white', border: 'none', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
+                          >
                             🧭 GPS
                           </button>
                         )}
