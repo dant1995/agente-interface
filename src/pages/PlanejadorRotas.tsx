@@ -75,8 +75,10 @@ function dividirEmSacos(rota: Pacote[], nSacos: number): Pacote[] {
 // ── Geocodificação Nominatim ─────────────────────────────────────────────
 const GEO_CACHE: Record<string, { lat: number; lng: number }> = {};
 async function geocodificar(endereco: string): Promise<{ lat: number; lng: number } | null> {
-  // 1. Limpeza agressiva do texto
-  let base = endereco.split('-')[0].split(',')[0].trim();
+  // 1. Limpeza pesada: Remove CEP (formatos 00000-000 ou 00000000) de qualquer lugar da string
+  let base = endereco.replace(/\d{5}-?\d{3}/g, '').split('-')[0].split(',')[0].trim();
+  // Remove números soltos de 5 dígitos (possíveis CEPs sem traço)
+  base = base.replace(/\d{5}/g, '').trim();
   
   const key = base.toLowerCase();
   if (GEO_CACHE[key]) return GEO_CACHE[key];
@@ -205,7 +207,7 @@ export default function PlanejadorRotas() {
         lista[i] = { ...lista[i], status: 'erro' };
       }
       setProgresso(i + 1);
-      if (i < lista.length - 1) await new Promise(r => setTimeout(r, 1100));
+      if (i < lista.length - 1) await new Promise(r => setTimeout(r, 1500)); // Aumentado para 1.5s (evitar bloqueio Nominatim)
     }
     // 1) TSP global partindo da posição atual
     const comCoord = lista.filter(p => p.lat);
@@ -318,7 +320,12 @@ export default function PlanejadorRotas() {
         L.circleMarker([p.lat!, p.lng!], { radius: 8, color: '#94a3b8', fillColor: '#94a3b8', fillOpacity: 0.8 }).bindPopup(p.codigo).addTo(map);
         bounds.push([p.lat!, p.lng!]);
       });
-      if (bounds.length > 1) map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30] });
+      // Ajusta zoom para mostrar TODOS os pontos (apenas se houver mais de um)
+      if (bounds.length > 1) {
+        try {
+          map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40] });
+        } catch (e) { console.error('Erro ao ajustar zoom:', e); }
+      }
     });
     return () => { mounted = false; };
   }, [aba, pacotes, posAtual]);
