@@ -76,8 +76,6 @@ function dividirEmSacos(rota: Pacote[], nSacos: number): Pacote[] {
 // ── Geocodificação Nominatim ─────────────────────────────────────────────
 const GEO_CACHE: Record<string, { lat: number; lng: number }> = {};
 async function geocodificar(endereco: string): Promise<{ lat: number; lng: number } | null> {
-  // Extrai número e rua de forma inteligente
-  // Ex: "Rua Cinturão Verde 433" -> rua: "Rua Cinturão Verde", num: "433"
   const match = endereco.match(/(.*?)\s+(\d+)/);
   let rua = match ? match[1].trim() : endereco.replace(/\d{5}-?\d{3}/g, '').trim();
   let num = match ? match[2] : '';
@@ -103,47 +101,27 @@ async function geocodificar(endereco: string): Promise<{ lat: number; lng: numbe
   };
 
   try {
-    console.log(`[GEO] Buscando: ${rua}, ${num} (CEP: ${cep})`);
-    
-    // TENTATIVA 1: Estruturada Completa (Rua + Num + CEP)
     let data = await fetchGeo({ street: `${rua} ${num}`, postalcode: cep, city: 'São Paulo' });
-
-    // TENTATIVA 2: Rua + Número + Bairro (Sem CEP - mais garantido para ruas longas)
     if (!data.length && num) {
-      console.log(`[GEO] Tentativa 2 (Sem CEP): ${rua}, ${num}`);
       data = await fetchGeo({ street: `${rua} ${num}`, city: 'São Paulo', county: 'Ermelino Matarazzo' });
     }
-
-    // TENTATIVA 3: Apenas Rua + Número (Busca global na cidade)
     if (!data.length && num) {
       data = await fetchGeo({ q: `${rua}, ${num}, São Paulo` });
     }
-
-    // TENTATIVA 4: Apenas o CEP (Último recurso)
     if (!data.length && cep) {
-      console.log(`[GEO] Tentativa 4 (Apenas CEP): ${cep}`);
       data = await fetchGeo({ postalcode: cep });
     }
-
-    if (!data?.length) {
-      console.warn(`[GEO] Falha total para: ${endereco}`);
-      return null;
-    }
-
+    if (!data?.length) return null;
     const pos = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-    console.log(`[GEO] Sucesso:`, pos);
     GEO_CACHE[key] = pos;
     return pos;
-  } catch (e) { 
-    console.error(`[GEO] Erro na requisição:`, e);
-    return null; 
-  }
+  } catch (e) { return null; }
 }
 
 /** Adiciona offset para separar pinos próximos (aumentado para melhor visibilidade) */
 function jitter(lat: number, lng: number, seed: number) {
   const angle = seed * 2.399; 
-  const radius = 0.00015 * Math.ceil(seed / 3); // Aumentado para ~15 metros de separação
+  const radius = 0.00015 * Math.ceil(seed / 3);
   return { lat: lat + Math.cos(angle) * radius, lng: lng + Math.sin(angle) * radius };
 }
 
@@ -158,6 +136,7 @@ export default function PlanejadorRotas() {
   const [scanning, setScanning] = useState(false);
   const [fase, setFase] = useState<'idle' | 'geocoding' | 'otimizado'>('idle');
   const [progresso, setProgresso] = useState(0);
+  const [flash, setFlash] = useState<{ cor: string; texto: string; sub: string } | null>(null);
   const [posAtual, setPosAtual] = useState<{ lat: number; lng: number }>({ lat: -23.55, lng: -46.63 });
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
@@ -182,15 +161,48 @@ export default function PlanejadorRotas() {
 
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(pacotes)); }, [pacotes]);
 
+  // ── FEEDBACK SONORO ──────────────────────────────────────────
+  const playBeep = useCallback((freq = 880, duration = 0.15) => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+      osc.start();
+      osc.stop(ctx.currentTime + duration);
+      if (navigator.vibrate) navigator.vibrate(100);
+    } catch (e) {}
+  }, []);
+
   const adicionarPacote = useCallback((codigo: string) => {
     const limpo = codigo.trim();
     if (!limpo) return;
+
+    // Se já estiver otimizado e o pacote já existe, mostra feedback GIGANTE (Modo Triagem)
+    const existente = pacotes.find(p => p.codigo === limpo || p.id === limpo);
+    if (existente && existente.saco) {
+      const cor = SACO_CORES[existente.saco - 1];
+      setFlash({ 
+        cor, 
+        texto: `SACO ${existente.saco}`, 
+        sub: existente.codigo.split(' ')[0]
+      });
+      playBeep(880, 0.3);
+      setTimeout(() => setFlash(null), 1800);
+      return;
+    }
+
     setPacotes(prev => {
       if (prev.find(p => p.codigo === limpo)) return prev;
+      playBeep(660, 0.1);
       const novo: Pacote = { id: Date.now().toString() + Math.random(), codigo: limpo, endereco: limpo, status: 'pendente' };
       return [...prev, novo];
     });
-  }, []);
+  }, [pacotes, playBeep]);
 
   const importarEmMassa = useCallback(() => {
     bulkText.split('\n').forEach(line => adicionarPacote(line.trim()));
@@ -310,13 +322,8 @@ export default function PlanejadorRotas() {
       if (bounds.length > 1) { 
         try { map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40] }); } catch (e) { } 
       }
-
-      (window as any).recenterMap = () => {
-        if (mapInst.current) mapInst.current.setView([posAtual.lat, posAtual.lng], 16);
-      };
-      (window as any).fitAllPoints = () => {
-        if (mapInst.current && bounds.length > 1) mapInst.current.fitBounds(L.latLngBounds(bounds), { padding: [40, 40] });
-      };
+      (window as any).recenterMap = () => { if (mapInst.current) mapInst.current.setView([posAtual.lat, posAtual.lng], 16); };
+      (window as any).fitAllPoints = () => { if (mapInst.current && bounds.length > 1) mapInst.current.fitBounds(L.latLngBounds(bounds), { padding: [40, 40] }); };
     });
     return () => { mounted = false; };
   }, [aba, pacotes]); 
@@ -325,6 +332,16 @@ export default function PlanejadorRotas() {
 
   return (
     <div style={{ background: '#f5f5f5', minHeight: '100vh', paddingBottom: 80 }}>
+      {flash && (
+        <div style={{ position: 'fixed', inset: 0, background: flash.cor, zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white', animation: 'fadeIn 0.2s ease-out' }}>
+          <div style={{ fontSize: '6rem', fontWeight: 900, textShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>{flash.texto}</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 700, marginTop: 20, opacity: 0.9 }}>{flash.sub}</div>
+          <style>{`
+            @keyframes fadeIn { from { opacity: 0; transform: scale(1.1); } to { opacity: 1; transform: scale(1); } }
+          `}</style>
+        </div>
+      )}
+
       <div style={{ background: 'linear-gradient(135deg,#1e293b,#0f172a)', padding: '1rem 1.2rem', color: 'white' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: 12 }}>
           <button onClick={() => { stopScanner(); navigate('/'); }} style={{ background: 'rgba(255,255,255,.1)', border: 'none', color: 'white', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', fontSize: '1.1rem' }}>←</button>
@@ -367,7 +384,6 @@ export default function PlanejadorRotas() {
           <button onClick={scanning ? stopScanner : startScanner} style={{ width: '100%', padding: '0.9rem', borderRadius: 12, border: 'none', background: scanning ? 'linear-gradient(135deg,#ef4444,#dc2626)' : 'linear-gradient(135deg,#EE4D2D,#FF6633)', color: 'white', fontSize: '1rem', fontWeight: 700, cursor: 'pointer', marginBottom: '0.8rem' }}>
             {scanning ? '⏹️ Parar Scanner' : '▶️ Iniciar Scanner'}
           </button>
-          
           <div style={{ background: 'white', padding: '1.2rem', borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', marginBottom: '1rem' }}>
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
               <input type="text" placeholder="Digitar endereço/código..." style={{ flex: 1, padding: '0.8rem', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.9rem' }} onKeyDown={(e) => { if (e.key === 'Enter') { adicionarPacote(e.currentTarget.value); e.currentTarget.value = ''; } }} />
@@ -381,7 +397,6 @@ export default function PlanejadorRotas() {
             )}
             <div style={{ fontSize: '0.75rem', color: '#64748b', textAlign: 'center' }}>{pacotes.length} pacotes na lista</div>
           </div>
-
           {pacotes.length >= 2 && (
             <button onClick={otimizar} disabled={fase === 'geocoding'} style={{ width: '100%', padding: '1rem', borderRadius: 12, border: 'none', background: fase === 'geocoding' ? '#94a3b8' : 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white', fontSize: '1rem', fontWeight: 700, cursor: fase === 'geocoding' ? 'not-allowed' : 'pointer', boxShadow: '0 4px 12px rgba(99,102,241,.3)' }}>
               {fase === 'geocoding' ? `⏳ Geocodificando ${progresso}/${pacotes.length}...` : '🚀 Otimizar Rota e Dividir Sacos'}
@@ -394,23 +409,10 @@ export default function PlanejadorRotas() {
         <div style={{ position: 'relative' }}>
           {fase !== 'otimizado' && <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>🗺️ Escaneie e otimize para ver o mapa.</div>}
           <div ref={mapRef} style={{ height: fase === 'otimizado' ? '70vh' : 0, width: '100%' }} />
-          
           {fase === 'otimizado' && (
             <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 1000, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <button 
-                onClick={() => (window as any).recenterMap()}
-                style={{ width: 44, height: 44, borderRadius: 12, background: 'white', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                title="Centralizar em Mim"
-              >
-                🎯
-              </button>
-              <button 
-                onClick={() => (window as any).fitAllPoints()}
-                style={{ width: 44, height: 44, borderRadius: 12, background: 'white', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                title="Ver Rota Toda"
-              >
-                🌍
-              </button>
+              <button onClick={() => (window as any).recenterMap()} style={{ width: 44, height: 44, borderRadius: 12, background: 'white', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} title="Centralizar em Mim">🎯</button>
+              <button onClick={() => (window as any).fitAllPoints()} style={{ width: 44, height: 44, borderRadius: 12, background: 'white', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} title="Ver Rota Toda">🌍</button>
             </div>
           )}
         </div>
@@ -429,7 +431,15 @@ export default function PlanejadorRotas() {
                     <div style={{ fontSize: '0.75rem', opacity: .9 }}>{grupo.length} entregas</div>
                   </div>
                   {grupo.map(p => (
-                    <div key={p.id} style={{ background: 'white', padding: '0.65rem 1rem', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '0.7rem' }}>
+                    <div key={p.id} 
+                      onClick={() => {
+                        const cor = SACO_CORES[i];
+                        setFlash({ cor, texto: `SACO ${i + 1}`, sub: p.codigo.split(' ')[0] });
+                        playBeep(880, 0.2);
+                        setTimeout(() => setFlash(null), 1500);
+                      }}
+                      style={{ background: 'white', padding: '0.65rem 1rem', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '0.7rem', cursor: 'pointer' }}
+                    >
                       <div style={{ width: 28, height: 28, borderRadius: '50%', background: SACO_CORES[i], color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '0.85rem' }}>{p.ordem}</div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: '0.85rem', fontWeight: 600, textDecoration: p.entregue ? 'line-through' : 'none', opacity: p.entregue ? 0.5 : 1 }}>{p.codigo}</div>
