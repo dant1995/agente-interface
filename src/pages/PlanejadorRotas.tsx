@@ -77,8 +77,6 @@ const GEO_CACHE: Record<string, { lat: number; lng: number }> = {};
 async function geocodificar(endereco: string): Promise<{ lat: number; lng: number } | null> {
   // 1. Limpeza agressiva do texto
   let base = endereco.split('-')[0].split(',')[0].trim();
-  // Se o endereço for só um CEP, trata diferente
-  const isCEP = /^[0-9]{5}-?[0-9]{3}$/.test(base);
   
   const key = base.toLowerCase();
   if (GEO_CACHE[key]) return GEO_CACHE[key];
