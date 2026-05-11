@@ -12,6 +12,7 @@ interface Pacote {
   saco?: number;       // 1-4 (atribuído após otimização)
   ordem?: number;      // posição na rota do saco
   status: 'pendente' | 'geocodificando' | 'ok' | 'erro';
+  entregue?: boolean;
 }
 
 const SACO_CORES = ['#16a34a', '#2563eb', '#9333ea', '#ea580c'];
@@ -253,7 +254,13 @@ export default function PlanejadorRotas() {
       totalD += dist(pos, { lat: p.lat!, lng: p.lng! });
       pos = { lat: p.lat!, lng: p.lng! };
     });
-    return { km: totalD.toFixed(1), min: Math.round((totalD / 15) * 60 + (validos.length * 2)) };
+    const entregues = pacotes.filter(p => p.entregue).length;
+    return { 
+      km: totalD.toFixed(1), 
+      min: Math.round((totalD / 15) * 60 + (validos.length * 2)),
+      total: validos.length,
+      entregues
+    };
   }, [pacotes, posAtual]);
 
   const stats = metricas();
@@ -286,11 +293,18 @@ export default function PlanejadorRotas() {
       if (linhaPts.length > 1) L.polyline(linhaPts, { color: '#3b82f6', weight: 3, opacity: 0.7, dashArray: '8,5' }).addTo(map);
       coordJitter.clear();
       todosOrdenados.forEach((p, globalIdx) => {
-        const cor = p.saco ? SACO_CORES[p.saco - 1] : '#94a3b8';
-        const label = p.saco ? SACO_LABELS[p.saco - 1] : '?';
+        const cor = p.entregue ? '#cbd5e1' : (p.saco ? SACO_CORES[p.saco - 1] : '#94a3b8');
+        const label = p.saco ? SACO_LABELS[p.saco - 1] : 'Pacote';
         const pos = getJitter(p);
-        const icon = L.divIcon({ className: '', html: `<div style="background:${cor};color:white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.35)">${globalIdx + 1}</div>`, iconSize: [28, 28], iconAnchor: [14, 14] });
-        L.marker([pos.lat, pos.lng], { icon }).bindPopup(`<b>${label} #${p.ordem}</b><br><small>${p.codigo}</small>`).addTo(map);
+        const icon = L.divIcon({ 
+          className: '', 
+          html: `<div style="background:${cor};color:white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.35);opacity:${p.entregue ? 0.6 : 1}">${globalIdx + 1}</div>`, 
+          iconSize: [28, 28], 
+          iconAnchor: [14, 14] 
+        });
+        L.marker([pos.lat, pos.lng], { icon })
+          .bindPopup(`<b>${label} #${p.ordem}</b><br><small>${p.codigo}</small>${p.entregue ? '<br>✅ ENTREGUE' : ''}`)
+          .addTo(map);
         bounds.push([pos.lat, pos.lng]);
       });
       if (bounds.length > 1) { 
@@ -305,7 +319,7 @@ export default function PlanejadorRotas() {
       };
     });
     return () => { mounted = false; };
-  }, [aba, pacotes]); // Removido posAtual das dependências para evitar reset de zoom
+  }, [aba, pacotes]); 
 
   const sacosPorNumero = (s: number) => pacotes.filter(p => p.saco === s).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
 
@@ -316,7 +330,11 @@ export default function PlanejadorRotas() {
           <button onClick={() => { stopScanner(); navigate('/'); }} style={{ background: 'rgba(255,255,255,.1)', border: 'none', color: 'white', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', fontSize: '1.1rem' }}>←</button>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>📍 Planejador de Rotas</div>
-            <div style={{ fontSize: '0.72rem', opacity: .7, fontWeight: 500 }}>{fase === 'otimizado' ? `🚀 ${stats.km}km • ~${stats.min}min` : `${pacotes.length} pacotes aguardando`}</div>
+            <div style={{ fontSize: '0.72rem', opacity: .7, fontWeight: 500 }}>
+              {fase === 'otimizado' 
+                ? `✅ ${stats.entregues}/${stats.total} • ${stats.km}km • ~${stats.min}min` 
+                : `${pacotes.length} pacotes aguardando`}
+            </div>
           </div>
           {pacotes.length > 0 && <button onClick={() => { if (confirm('Limpar tudo?')) { setPacotes([]); setFase('idle'); } }} style={{ background: 'rgba(239,68,68,0.2)', border: 'none', color: '#f87171', borderRadius: 8, padding: '0.4rem 0.8rem', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 700 }}>Limpar</button>}
         </div>
@@ -414,15 +432,25 @@ export default function PlanejadorRotas() {
                     <div key={p.id} style={{ background: 'white', padding: '0.65rem 1rem', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '0.7rem' }}>
                       <div style={{ width: 28, height: 28, borderRadius: '50%', background: SACO_CORES[i], color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '0.85rem' }}>{p.ordem}</div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{p.codigo}</div>
-                        {p.lat ? <div style={{ fontSize: '0.68rem', color: '#10b981' }}>📍 Localizado</div> : <div style={{ fontSize: '0.68rem', color: '#ef4444' }}>⚠️ Sem GPS</div>}
+                        <div style={{ fontSize: '0.85rem', fontWeight: 600, textDecoration: p.entregue ? 'line-through' : 'none', opacity: p.entregue ? 0.5 : 1 }}>{p.codigo}</div>
+                        {p.lat ? <div style={{ fontSize: '0.68rem', color: p.entregue ? '#94a3b8' : '#10b981' }}>{p.entregue ? '✓ Finalizado' : '📍 Localizado'}</div> : <div style={{ fontSize: '0.68rem', color: '#ef4444' }}>⚠️ Sem GPS</div>}
                       </div>
-                      {p.lat && (
-                        <button onClick={() => window.open(`google.navigation:q=${p.lat},${p.lng}`, '_system') || window.open(`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`, '_blank')}
-                          style={{ padding: '0.4rem 0.7rem', background: SACO_CORES[i], color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, flexShrink: 0 }}>
-                          🧭 GPS
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {p.lat && !p.entregue && (
+                          <button onClick={() => window.open(`google.navigation:q=${p.lat},${p.lng}`, '_system') || window.open(`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`, '_blank')}
+                                  style={{ padding: '0.5rem 0.8rem', borderRadius: 8, background: '#3b82f6', color: 'white', border: 'none', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}>
+                            🧭 GPS
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => {
+                            setPacotes(prev => prev.map(x => x.id === p.id ? { ...x, entregue: !x.entregue } : x));
+                          }}
+                          style={{ padding: '0.5rem 0.8rem', borderRadius: 8, background: p.entregue ? '#e2e8f0' : '#10b981', color: p.entregue ? '#64748b' : 'white', border: 'none', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          {p.entregue ? 'Desfazer' : 'Check'}
                         </button>
-                      )}
+                      </div>
                     </div>
                   ))}
                 </div>
