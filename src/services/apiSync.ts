@@ -759,6 +759,9 @@ export const apiSync = {
     taxaPlataforma: string;
     margemMinima: string;
     fornecedorId: string;
+    syncWooCommerce?: boolean;
+    drive_folder_id?: string;
+    drive_file_ids?: string;
     variacoes: Array<{ tamanho: string; cor: string; codigoBarra: string; quantidade: number; imagem?: string }>;
   }) => {
     const data = new Date().toLocaleDateString('pt-BR');

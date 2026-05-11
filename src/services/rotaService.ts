@@ -12,6 +12,7 @@ export interface EntregaRota {
   destinatario?: string;
   lat?: number;
   lng?: number;
+  saco?: number;           // ID do saco (1-4) vindo da triagem
   status: 'pendente' | 'entregue' | 'erro_geo';
   ordemRota?: number;      // Posição na rota otimizada
 }
