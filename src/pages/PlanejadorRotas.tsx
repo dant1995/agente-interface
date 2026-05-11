@@ -75,32 +75,49 @@ function dividirEmSacos(rota: Pacote[], nSacos: number): Pacote[] {
 // ── Geocodificação Nominatim ─────────────────────────────────────────────
 const GEO_CACHE: Record<string, { lat: number; lng: number }> = {};
 async function geocodificar(endereco: string): Promise<{ lat: number; lng: number } | null> {
-  // Limpa o endereço para o Nominatim entender melhor o número
-  // Remove CEPs e caracteres especiais do final
-  let limpo = endereco.split('-')[0].split(',')[0].trim();
-  const key = limpo.toLowerCase();
+  // 1. Limpeza agressiva do texto
+  let base = endereco.split('-')[0].split(',')[0].trim();
+  // Se o endereço for só um CEP, trata diferente
+  const isCEP = /^[0-9]{5}-?[0-9]{3}$/.test(base);
+  
+  const key = base.toLowerCase();
   if (GEO_CACHE[key]) return GEO_CACHE[key];
 
-  try {
-    // Tenta busca estruturada para maior precisão no número da casa
-    const query = encodeURIComponent(limpo + ', São Paulo, SP, Brasil');
+  const fetchGeo = async (q: string) => {
     const r = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1&addressdetails=1&countrycodes=br`,
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=br`,
       { headers: { 'User-Agent': 'CapelEntregas/1.0' } }
     );
-    const d = await r.json();
-    if (!d?.length) return null;
+    return await r.json();
+  };
 
-    const pos = { lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon) };
+  try {
+    // TENTATIVA 1: Endereço completo com bairro provável (Vila Santa Inês / Ermelino Matarazzo)
+    let data = await fetchGeo(`${base}, Vila Santa Inês, São Paulo, SP`);
+    
+    // TENTATIVA 2: Busca simplificada (Rua + Número + Cidade)
+    if (!data.length) {
+      data = await fetchGeo(`${base}, São Paulo, SP`);
+    }
+
+    // TENTATIVA 3: Se houver CEP no texto original, tenta só pelo CEP
+    if (!data.length) {
+      const cepMatch = endereco.match(/[0-9]{5}-?[0-9]{3}/);
+      if (cepMatch) data = await fetchGeo(cepMatch[0]);
+    }
+
+    if (!data?.length) return null;
+
+    const pos = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
     GEO_CACHE[key] = pos;
     return pos;
   } catch { return null; }
 }
 
-/** Adiciona offset aletorio pequeno para pinos com mesmas coordenadas ficarem visíveis */
+/** Adiciona offset para separar pinos próximos (aumentado para melhor visibilidade) */
 function jitter(lat: number, lng: number, seed: number) {
-  const angle = seed * 2.399; // golden angle em radianos
-  const radius = 0.00008 * Math.ceil(seed / 6); // aumenta o círculo a cada 6 pinos
+  const angle = seed * 2.399; 
+  const radius = 0.00015 * Math.ceil(seed / 3); // Aumentado para ~15 metros de separação
   return { lat: lat + Math.cos(angle) * radius, lng: lng + Math.sin(angle) * radius };
 }
 
