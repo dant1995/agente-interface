@@ -82,8 +82,10 @@ async function geocodificar(endereco: string): Promise<{ lat: number; lng: numbe
   if (GEO_CACHE[key]) return GEO_CACHE[key];
 
   const fetchGeo = async (q: string) => {
+    // Viewbox aproximado da Grande São Paulo para evitar resultados em outros estados
+    const viewbox = '-46.8262,-24.0088,-46.3650,-23.3567';
     const r = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=br`,
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=br&viewbox=${viewbox}&bounded=1`,
       { headers: { 'User-Agent': 'CapelEntregas/1.0' } }
     );
     return await r.json();
@@ -191,7 +193,17 @@ export default function PlanejadorRotas() {
     for (let i = 0; i < lista.length; i++) {
       if (lista[i].lat) { setProgresso(i + 1); continue; }
       const pos = await geocodificar(lista[i].codigo);
-      lista[i] = pos ? { ...lista[i], lat: pos.lat, lng: pos.lng, status: 'ok' } : { ...lista[i], status: 'erro' };
+      if (pos) {
+        // Validação de sanidade: Se a distância for > 50km, provavelmente é um erro de geocodificação
+        const d = dist(posAtual, pos);
+        if (d < 50) {
+          lista[i] = { ...lista[i], lat: pos.lat, lng: pos.lng, status: 'ok' };
+        } else {
+          lista[i] = { ...lista[i], status: 'erro' };
+        }
+      } else {
+        lista[i] = { ...lista[i], status: 'erro' };
+      }
       setProgresso(i + 1);
       if (i < lista.length - 1) await new Promise(r => setTimeout(r, 1100));
     }
