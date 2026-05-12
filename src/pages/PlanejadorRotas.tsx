@@ -213,6 +213,54 @@ export default function PlanejadorRotas() {
     setShowBulk(false);
   }, [bulkText, adicionarPacote]);
 
+  const adicionarPacoteManual = useCallback((pre: { texto: string, lat: number, lng: number }) => {
+    if (!pre) return;
+    setPacotes(prev => {
+      if (prev.find(p => p.codigo === pre.texto)) return prev;
+      playBeep(660, 0.1);
+      const novo: Pacote = { 
+        id: Date.now().toString() + Math.random(), 
+        codigo: pre.texto, 
+        endereco: pre.texto,
+        lat: pre.lat,
+        lng: pre.lng,
+        status: 'ok' 
+      };
+      return [...prev, novo];
+    });
+    setPreview(null);
+    setTypedValue('');
+  }, [playBeep]);
+
+  // Busca de pré-visualização com debounce
+  useEffect(() => {
+    if (typedValue.length < 5) { setPreview(null); return; }
+    const t = setTimeout(async () => {
+      setSearchingPreview(true);
+      const pos = await geocodificar(typedValue);
+      if (pos) {
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.lat}&lon=${pos.lng}`);
+          const data = await res.json();
+          const addr = data.address;
+          setPreview({
+            texto: typedValue,
+            bairro: addr.suburb || addr.neighbourhood || addr.city_district || 'Bairro não identificado',
+            cep: addr.postcode || 'Sem CEP',
+            lat: pos.lat,
+            lng: pos.lng
+          });
+        } catch (e) {
+          setPreview({ texto: typedValue, bairro: 'Localizado', cep: '---', lat: pos.lat, lng: pos.lng });
+        }
+      } else {
+        setPreview(null);
+      }
+      setSearchingPreview(false);
+    }, 800);
+    return () => clearTimeout(t);
+  }, [typedValue]);
+
   const startScanner = useCallback(async () => {
     const qr = new Html5Qrcode('capel-planner-scanner');
     scannerRef.current = qr;
