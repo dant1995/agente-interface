@@ -249,23 +249,35 @@ export default function PlanejadorRotas() {
         const cepMatch = typedValue.replace(/\D/g, '').match(/\d{8}/);
         const cep = cepMatch ? cepMatch[0] : null;
         
-        let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(typedValue)}&addressdetails=1&limit=5&countrycodes=br`;
-        
-        // Se achou CEP, faz uma busca híbrida
+        // Se achou CEP, ainda usamos o Nominatim que é imbatível para CEPs exatos
         if (cep) {
-          url = `https://nominatim.openstreetmap.org/search?format=json&postalcode=${cep}&street=${encodeURIComponent(typedValue.split(',')[0])}&addressdetails=1&limit=5&countrycodes=br`;
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&postalcode=${cep}&addressdetails=1&limit=1&countrycodes=br`);
+          const data = await res.json();
+          if (data.length > 0) {
+            setSugestoes(data);
+            setSearchingPreview(false);
+            return;
+          }
         }
 
-        const res = await fetch(url);
-        let data = await res.json();
+        // Para busca por TEXTO (rua, vila), usamos o PHOTON (muito mais inteligente/fuzzy)
+        // Bias: -23.55, -46.63 (Centro de SP / ZL)
+        const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(typedValue)}&lat=-23.5505&lon=-46.6333&limit=5&lang=pt`);
+        const geojson = await res.json();
         
-        // Se a busca por CEP + Rua falhar, tenta só o CEP
-        if (data.length === 0 && cep) {
-          const res2 = await fetch(`https://nominatim.openstreetmap.org/search?format=json&postalcode=${cep}&addressdetails=1&limit=1&countrycodes=br`);
-          data = await res2.json();
-        }
+        // Converte o formato do Photon para o nosso padrão de sugestões
+        const formatadas = geojson.features.map((f: any) => ({
+          display_name: `${f.properties.name || ''}, ${f.properties.housenumber || ''} - ${f.properties.district || f.properties.city || ''}`,
+          lat: f.geometry.coordinates[1],
+          lon: f.geometry.coordinates[0],
+          address: {
+            suburb: f.properties.district,
+            city: f.properties.city,
+            postcode: f.properties.postcode
+          }
+        })).filter((f: any) => f.display_name.length > 5);
 
-        setSugestoes(data);
+        setSugestoes(formatadas);
       } catch (e) {
         console.error('Erro ao buscar sugestões:', e);
       } finally {
