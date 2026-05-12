@@ -137,6 +137,9 @@ export default function PlanejadorRotas() {
   const [fase, setFase] = useState<'idle' | 'geocoding' | 'otimizado'>('idle');
   const [progresso, setProgresso] = useState(0);
   const [flash, setFlash] = useState<{ cor: string; texto: string; sub: string } | null>(null);
+  const [preview, setPreview] = useState<{ texto: string; bairro: string; cep: string; lat: number; lng: number } | null>(null);
+  const [searchingPreview, setSearchingPreview] = useState(false);
+  const [typedValue, setTypedValue] = useState('');
   const [posAtual, setPosAtual] = useState<{ lat: number; lng: number }>({ lat: -23.55, lng: -46.63 });
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
@@ -385,10 +388,39 @@ export default function PlanejadorRotas() {
             {scanning ? '⏹️ Parar Scanner' : '▶️ Iniciar Scanner'}
           </button>
           <div style={{ background: 'white', padding: '1.2rem', borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', marginBottom: '1rem' }}>
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-              <input type="text" placeholder="Digitar endereço/código..." style={{ flex: 1, padding: '0.8rem', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.9rem' }} onKeyDown={(e) => { if (e.key === 'Enter') { adicionarPacote(e.currentTarget.value); e.currentTarget.value = ''; } }} />
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <input 
+                type="text" 
+                value={typedValue}
+                onChange={(e) => setTypedValue(e.target.value)}
+                placeholder="Ex: Rua Cinturão Verde 433..." 
+                style={{ flex: 1, padding: '0.8rem', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.9rem', outline: 'none' }} 
+              />
               <button onClick={() => setShowBulk(!showBulk)} style={{ padding: '0.8rem', borderRadius: 10, border: '1px solid #3b82f6', background: showBulk ? '#3b82f6' : 'transparent', color: showBulk ? 'white' : '#3b82f6', fontWeight: 600, fontSize: '0.8rem' }}>{showBulk ? 'Fechar' : 'Massa'}</button>
             </div>
+
+            {/* Pré-visualização do Endereço */}
+            {searchingPreview && <div style={{ fontSize: '0.7rem', color: '#3b82f6', padding: '0.2rem 0.5rem' }}>🔍 Localizando endereço...</div>}
+            
+            {preview && !showBulk && (
+              <div style={{ background: '#f8fafc', border: '1px solid #3b82f6', borderRadius: 12, padding: '0.8rem', marginBottom: '1rem', animation: 'fadeIn 0.2s ease-out' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#1e293b' }}>📍 Endereço Encontrado</div>
+                  <div style={{ fontSize: '0.7rem', background: '#dcfce7', color: '#166534', padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>CONFIRMADO</div>
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#475569', marginBottom: 10 }}>
+                   <b>Bairro:</b> {preview.bairro}<br/>
+                   <b>CEP:</b> {preview.cep}
+                </div>
+                <button 
+                  onClick={() => adicionarPacoteManual(preview)}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: 8, background: '#10b981', color: 'white', border: 'none', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}
+                >
+                  ✅ Adicionar na Rota
+                </button>
+              </div>
+            )}
+
             {showBulk && (
               <div style={{ marginBottom: '1rem' }}>
                 <textarea placeholder="Cole aqui vários endereços (um por linha)..." value={bulkText} onChange={(e) => setBulkText(e.target.value)} style={{ width: '100%', height: 120, padding: '0.8rem', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.85rem', marginBottom: '0.5rem', resize: 'none' }} />
