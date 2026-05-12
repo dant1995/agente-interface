@@ -143,6 +143,8 @@ export default function PlanejadorRotas() {
   const [searchingPreview, setSearchingPreview] = useState(false);
   const [readingOCR, setReadingOCR] = useState(false);
   const [typedValue, setTypedValue] = useState('');
+  const miniMapRef = useRef<HTMLDivElement>(null);
+  const miniMapInst = useRef<any>(null);
   const [posAtual, setPosAtual] = useState<{ lat: number; lng: number }>({ lat: -23.55, lng: -46.63 });
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
@@ -248,13 +250,14 @@ export default function PlanejadorRotas() {
           const addr = data.address;
           setPreview({
             texto: typedValue,
-            bairro: addr.suburb || addr.neighbourhood || addr.city_district || 'Bairro não identificado',
+            bairro: addr.suburb || addr.neighbourhood || addr.city_district || addr.village || 'Localizado',
             cep: addr.postcode || 'Sem CEP',
+            full: data.display_name,
             lat: pos.lat,
             lng: pos.lng
           });
         } catch (e) {
-          setPreview({ texto: typedValue, bairro: 'Localizado', cep: '---', lat: pos.lat, lng: pos.lng });
+          setPreview({ texto: typedValue, bairro: 'Localizado', cep: '---', full: typedValue, lat: pos.lat, lng: pos.lng });
         }
       } else {
         setPreview(null);
@@ -263,6 +266,25 @@ export default function PlanejadorRotas() {
     }, 800);
     return () => clearTimeout(t);
   }, [typedValue]);
+
+  // Atualiza o Mini Mapa quando o preview muda
+  useEffect(() => {
+    if (!preview || !miniMapRef.current) {
+      if (miniMapInst.current) { miniMapInst.current.remove(); miniMapInst.current = null; }
+      return;
+    }
+    
+    if (!miniMapInst.current) {
+      miniMapInst.current = L.map(miniMapRef.current, { zoomControl: false, attributionControl: false }).setView([preview.lat, preview.lng], 16);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(miniMapInst.current);
+    } else {
+      miniMapInst.current.setView([preview.lat, preview.lng], 16);
+    }
+
+    // Limpa marcadores antigos do mini mapa
+    miniMapInst.current.eachLayer((layer: any) => { if (layer instanceof L.Marker) miniMapInst.current.removeLayer(layer); });
+    L.marker([preview.lat, preview.lng]).addTo(miniMapInst.current);
+  }, [preview]);
 
   const lerTextoImagem = useCallback(async () => {
     if (!scanning || readingOCR) return;
@@ -499,18 +521,22 @@ export default function PlanejadorRotas() {
             {preview && !showBulk && (
               <div style={{ background: '#f8fafc', border: '1px solid #3b82f6', borderRadius: 12, padding: '0.8rem', marginBottom: '1rem', animation: 'fadeIn 0.2s ease-out' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                  <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#1e293b' }}>📍 Endereço Encontrado</div>
-                  <div style={{ fontSize: '0.7rem', background: '#dcfce7', color: '#166534', padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>CONFIRMADO</div>
+                  <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#1e293b' }}>📍 Localização no Mapa</div>
+                  <div style={{ fontSize: '0.7rem', background: '#dcfce7', color: '#166534', padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>VERIFICADO</div>
                 </div>
-                <div style={{ fontSize: '0.8rem', color: '#475569', marginBottom: 10 }}>
-                   <b>Bairro:</b> {preview.bairro}<br/>
-                   <b>CEP:</b> {preview.cep}
+                
+                {/* Mini Mapa Preview */}
+                <div ref={miniMapRef} style={{ height: 120, width: '100%', borderRadius: 8, marginBottom: 10, border: '1px solid #e2e8f0', overflow: 'hidden' }} />
+
+                <div style={{ fontSize: '0.75rem', color: '#475569', marginBottom: 10, lineHeight: '1.2' }}>
+                   <b>Encontrado:</b> {(preview as any).full?.split(',').slice(0, 3).join(',')}<br/>
+                   <b>Bairro:</b> {preview.bairro} | <b>CEP:</b> {preview.cep}
                 </div>
                 <button 
                   onClick={() => adicionarPacoteManual(preview)}
                   style={{ width: '100%', padding: '0.6rem', borderRadius: 8, background: '#10b981', color: 'white', border: 'none', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}
                 >
-                  ✅ Adicionar na Rota
+                  ✅ Confirmar e Adicionar
                 </button>
               </div>
             )}
