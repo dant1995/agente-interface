@@ -101,12 +101,15 @@ async function geocodificar(endereco: string): Promise<{ lat: number; lng: numbe
   };
 
   try {
-    let data = await fetchGeo({ street: `${rua} ${num}`, postalcode: cep, city: 'São Paulo' });
-    if (!data.length && num) {
-      data = await fetchGeo({ street: `${rua} ${num}`, city: 'São Paulo', county: 'Ermelino Matarazzo' });
+    // Tenta busca estruturada primeiro, depois busca global (q=) para maior flexibilidade
+    let data = await fetchGeo({ q: `${query}, Vila Santa Inês, São Paulo, SP`, limit: '1' });
+    
+    if (!data.length) {
+      data = await fetchGeo({ q: `${query}, São Paulo, SP`, limit: '1' });
     }
+
     if (!data.length && num) {
-      data = await fetchGeo({ q: `${rua}, ${num}, São Paulo` });
+      data = await fetchGeo({ street: `${rua} ${num}`, city: 'São Paulo' });
     }
     if (!data.length && cep) {
       data = await fetchGeo({ postalcode: cep });
@@ -246,9 +249,14 @@ export default function PlanejadorRotas() {
           const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.lat}&lon=${pos.lng}`);
           const data = await res.json();
           const addr = data.address;
+          const bairroDetectado = addr.suburb || addr.neighbourhood || addr.city_district || addr.village || 'Localizado';
+          
+          // Se o usuário digitou uma vila específica e o mapa achou algo perto, respeitamos o nome do usuário
+          const exibicaoBairro = typedValue.toLowerCase().includes('vila') ? typedValue.split(',').pop()?.trim() || bairroDetectado : bairroDetectado;
+
           setPreview({
             texto: typedValue,
-            bairro: addr.suburb || addr.neighbourhood || addr.city_district || addr.village || 'Localizado',
+            bairro: exibicaoBairro,
             cep: addr.postcode || 'Sem CEP',
             full: data.display_name,
             lat: pos.lat,
@@ -268,24 +276,47 @@ export default function PlanejadorRotas() {
   // Atualiza o Mini Mapa quando o preview muda
   useEffect(() => {
     if (!preview || !miniMapRef.current) {
-      if (miniMapInst.current) { miniMapInst.current.remove(); miniMapInst.current = null; }
+      if (miniMapInst.current) {
+        try { miniMapInst.current.remove(); } catch(e) {}
+        miniMapInst.current = null;
+      }
       return;
     }
     
-    if (!miniMapInst.current) {
-      const L = (window as any).L;
-      if (!L) return;
-      miniMapInst.current = L.map(miniMapRef.current, { zoomControl: false, attributionControl: false }).setView([preview.lat, preview.lng], 16);
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(miniMapInst.current);
-    } else {
-      miniMapInst.current.setView([preview.lat, preview.lng], 16);
+    // Sempre recria para evitar o erro de "map already initialized" ou container órfão
+    if (miniMapInst.current) {
+      try { miniMapInst.current.remove(); } catch(e) {}
+      miniMapInst.current = null;
     }
 
     const L = (window as any).L;
-    if (L && miniMapInst.current) {
-      miniMapInst.current.eachLayer((layer: any) => { if (layer instanceof L.Marker) miniMapInst.current.removeLayer(layer); });
-      L.marker([preview.lat, preview.lng]).addTo(miniMapInst.current);
+    if (!L || !miniMapRef.current) return;
+
+    try {
+      const m = L.map(miniMapRef.current, { 
+        zoomControl: false, 
+        attributionControl: false,
+        dragging: false,
+        touchZoom: false,
+        scrollWheelZoom: false
+      }).setView([preview.lat, preview.lng], 16);
+      
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m);
+      L.marker([preview.lat, preview.lng]).addTo(m);
+      
+      miniMapInst.current = m;
+      // Força o Leaflet a recalcular o tamanho do container
+      setTimeout(() => m.invalidateSize(), 100);
+    } catch (e) {
+      console.error('Erro ao criar mini mapa:', e);
     }
+
+    return () => {
+      if (miniMapInst.current) {
+        try { miniMapInst.current.remove(); } catch(e) {}
+        miniMapInst.current = null;
+      }
+    };
   }, [preview]);
 
   const lerTextoImagem = useCallback(async () => {
