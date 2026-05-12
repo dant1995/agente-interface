@@ -102,10 +102,10 @@ async function geocodificar(endereco: string): Promise<{ lat: number; lng: numbe
 
   try {
     // Tenta busca estruturada primeiro, depois busca global (q=) para maior flexibilidade
-    let data = await fetchGeo({ q: `${query}, Vila Santa Inês, São Paulo, SP`, limit: '1' });
+    let data = await fetchGeo({ q: `${endereco}, Vila Santa Inês, São Paulo, SP`, limit: '1' });
     
     if (!data.length) {
-      data = await fetchGeo({ q: `${query}, São Paulo, SP`, limit: '1' });
+      data = await fetchGeo({ q: `${endereco}, São Paulo, SP`, limit: '1' });
     }
 
     if (!data.length && num) {
