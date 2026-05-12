@@ -549,6 +549,8 @@ export default function PlanejadorRotas() {
             </div>
 
             {/* Lista de Sugestões */}
+            {searchingPreview && <div style={{ fontSize: '0.7rem', color: '#3b82f6', padding: '0.2rem 0.5rem', animation: 'pulse 1.5s infinite' }}>🔍 Buscando endereços...</div>}
+            
             {sugestoes.length > 0 && !preview && (
               <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, marginBottom: '1rem', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
                 {sugestoes.map((s, i) => (
