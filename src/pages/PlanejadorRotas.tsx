@@ -300,11 +300,11 @@ export default function PlanejadorRotas() {
       ctx?.drawImage(video, 0, 0);
 
       const { data: { text } } = await Tesseract.recognize(canvas, 'por', {
-        logger: m => console.log(m)
+        logger: (m: any) => console.log(m)
       });
       
       // Limpa o texto lido para tentar pegar só o endereço (linhas com números)
-      const linhas = text.split('\n').map(l => l.trim()).filter(l => l.length > 5);
+      const linhas = text.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 5);
       if (linhas.length > 0) {
         setTypedValue(linhas[0]); // Pega a primeira linha que parece um endereço
         playBeep(440, 0.2);
