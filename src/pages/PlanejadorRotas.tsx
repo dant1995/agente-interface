@@ -245,9 +245,26 @@ export default function PlanejadorRotas() {
     const t = setTimeout(async () => {
       setSearchingPreview(true);
       try {
-        // Envia exatamente o que o usuário digitou, sem "ajudas" que atrapalham
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(typedValue)}&addressdetails=1&limit=5&countrycodes=br`);
-        const data = await res.json();
+        // Detecta se existe um CEP (8 números) no texto
+        const cepMatch = typedValue.replace(/\D/g, '').match(/\d{8}/);
+        const cep = cepMatch ? cepMatch[0] : null;
+        
+        let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(typedValue)}&addressdetails=1&limit=5&countrycodes=br`;
+        
+        // Se achou CEP, faz uma busca híbrida
+        if (cep) {
+          url = `https://nominatim.openstreetmap.org/search?format=json&postalcode=${cep}&street=${encodeURIComponent(typedValue.split(',')[0])}&addressdetails=1&limit=5&countrycodes=br`;
+        }
+
+        const res = await fetch(url);
+        let data = await res.json();
+        
+        // Se a busca por CEP + Rua falhar, tenta só o CEP
+        if (data.length === 0 && cep) {
+          const res2 = await fetch(`https://nominatim.openstreetmap.org/search?format=json&postalcode=${cep}&addressdetails=1&limit=1&countrycodes=br`);
+          data = await res2.json();
+        }
+
         setSugestoes(data);
       } catch (e) {
         console.error('Erro ao buscar sugestões:', e);
