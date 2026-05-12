@@ -15,6 +15,8 @@ interface Pacote {
   entregue?: boolean;
 }
 
+import Tesseract from 'tesseract.js';
+
 const SACO_CORES = ['#16a34a', '#2563eb', '#9333ea', '#ea580c'];
 const SACO_LABELS = ['Saco 1', 'Saco 2', 'Saco 3', 'Saco 4'];
 const STORAGE_KEY = 'capel_planejador_pacotes';
@@ -139,6 +141,7 @@ export default function PlanejadorRotas() {
   const [flash, setFlash] = useState<{ cor: string; texto: string; sub: string } | null>(null);
   const [preview, setPreview] = useState<{ texto: string; bairro: string; cep: string; lat: number; lng: number } | null>(null);
   const [searchingPreview, setSearchingPreview] = useState(false);
+  const [readingOCR, setReadingOCR] = useState(false);
   const [typedValue, setTypedValue] = useState('');
   const [posAtual, setPosAtual] = useState<{ lat: number; lng: number }>({ lat: -23.55, lng: -46.63 });
   const scannerRef = useRef<Html5Qrcode | null>(null);
@@ -260,6 +263,36 @@ export default function PlanejadorRotas() {
     }, 800);
     return () => clearTimeout(t);
   }, [typedValue]);
+
+  const lerTextoImagem = useCallback(async () => {
+    if (!scanning || readingOCR) return;
+    setReadingOCR(true);
+    try {
+      const video = document.querySelector('#capel-planner-scanner video') as HTMLVideoElement;
+      if (!video) return;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(video, 0, 0);
+
+      const { data: { text } } = await Tesseract.recognize(canvas, 'por', {
+        logger: m => console.log(m)
+      });
+      
+      // Limpa o texto lido para tentar pegar só o endereço (linhas com números)
+      const linhas = text.split('\n').map(l => l.trim()).filter(l => l.length > 5);
+      if (linhas.length > 0) {
+        setTypedValue(linhas[0]); // Pega a primeira linha que parece um endereço
+        playBeep(440, 0.2);
+      }
+    } catch (e) {
+      console.error('Erro OCR:', e);
+    } finally {
+      setReadingOCR(false);
+    }
+  }, [scanning, readingOCR, playBeep]);
 
   const startScanner = useCallback(async () => {
     const qr = new Html5Qrcode('capel-planner-scanner');
@@ -432,9 +465,22 @@ export default function PlanejadorRotas() {
             <div id="capel-planner-scanner" style={{ width: '100%' }} />
             {!scanning && <div style={{ padding: '1.5rem', textAlign: 'center', color: '#aaa' }}><div style={{ fontSize: '2.5rem' }}>📷</div><div style={{ fontSize: '0.85rem', marginTop: 4 }}>Câmera inativa</div></div>}
           </div>
-          <button onClick={scanning ? stopScanner : startScanner} style={{ width: '100%', padding: '0.9rem', borderRadius: 12, border: 'none', background: scanning ? 'linear-gradient(135deg,#ef4444,#dc2626)' : 'linear-gradient(135deg,#EE4D2D,#FF6633)', color: 'white', fontSize: '1rem', fontWeight: 700, cursor: 'pointer', marginBottom: '0.8rem' }}>
-            {scanning ? '⏹️ Parar Scanner' : '▶️ Iniciar Scanner'}
-          </button>
+          
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.8rem' }}>
+            <button onClick={scanning ? stopScanner : startScanner} style={{ flex: 1, padding: '0.9rem', borderRadius: 12, border: 'none', background: scanning ? 'linear-gradient(135deg,#ef4444,#dc2626)' : 'linear-gradient(135deg,#EE4D2D,#FF6633)', color: 'white', fontSize: '1rem', fontWeight: 700, cursor: 'pointer' }}>
+              {scanning ? '⏹️ Parar' : '▶️ Iniciar Câmera'}
+            </button>
+            
+            {scanning && (
+              <button 
+                onClick={lerTextoImagem} 
+                disabled={readingOCR}
+                style={{ padding: '0.9rem', borderRadius: 12, border: 'none', background: readingOCR ? '#94a3b8' : '#3b82f6', color: 'white', fontWeight: 700, cursor: 'pointer' }}
+              >
+                {readingOCR ? '⌛...' : '🔍 Ler Texto'}
+              </button>
+            )}
+          </div>
           <div style={{ background: 'white', padding: '1.2rem', borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', marginBottom: '1rem' }}>
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
               <input 
