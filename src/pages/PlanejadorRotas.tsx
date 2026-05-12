@@ -141,6 +141,7 @@ export default function PlanejadorRotas() {
   const [progresso, setProgresso] = useState(0);
   const [flash, setFlash] = useState<{ cor: string; texto: string; sub: string } | null>(null);
   const [preview, setPreview] = useState<{ texto: string; bairro: string; cep: string; full: string; lat: number; lng: number } | null>(null);
+  const [sugestoes, setSugestoes] = useState<any[]>([]);
   const [searchingPreview, setSearchingPreview] = useState(false);
   const [readingOCR, setReadingOCR] = useState(false);
   const [typedValue, setTypedValue] = useState('');
@@ -238,40 +239,37 @@ export default function PlanejadorRotas() {
     setTypedValue('');
   }, [playBeep]);
 
-  // Busca de pré-visualização com debounce
+  // Busca de sugestões com debounce
   useEffect(() => {
-    if (typedValue.length < 5) { setPreview(null); return; }
+    if (typedValue.length < 4) { setSugestoes([]); setPreview(null); return; }
     const t = setTimeout(async () => {
       setSearchingPreview(true);
-      const pos = await geocodificar(typedValue);
-      if (pos) {
-        try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.lat}&lon=${pos.lng}`);
-          const data = await res.json();
-          const addr = data.address;
-          const bairroDetectado = addr.suburb || addr.neighbourhood || addr.city_district || addr.village || 'Localizado';
-          
-          // Se o usuário digitou uma vila específica e o mapa achou algo perto, respeitamos o nome do usuário
-          const exibicaoBairro = typedValue.toLowerCase().includes('vila') ? typedValue.split(',').pop()?.trim() || bairroDetectado : bairroDetectado;
-
-          setPreview({
-            texto: typedValue,
-            bairro: exibicaoBairro,
-            cep: addr.postcode || 'Sem CEP',
-            full: data.display_name,
-            lat: pos.lat,
-            lng: pos.lng
-          });
-        } catch (e) {
-          setPreview({ texto: typedValue, bairro: 'Localizado', cep: '---', full: typedValue, lat: pos.lat, lng: pos.lng });
-        }
-      } else {
-        setPreview(null);
+      try {
+        const query = `${typedValue}, São Paulo, SP`;
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=4&countrycodes=br`);
+        const data = await res.json();
+        setSugestoes(data);
+      } catch (e) {
+        console.error('Erro ao buscar sugestões:', e);
+      } finally {
+        setSearchingPreview(false);
       }
-      setSearchingPreview(false);
-    }, 800);
+    }, 600);
     return () => clearTimeout(t);
   }, [typedValue]);
+
+  const selecionarSugestao = (item: any) => {
+    const addr = item.address;
+    setPreview({
+      texto: typedValue,
+      bairro: addr.suburb || addr.neighbourhood || addr.city_district || addr.village || 'Localizado',
+      cep: addr.postcode || 'Sem CEP',
+      full: item.display_name,
+      lat: parseFloat(item.lat),
+      lng: parseFloat(item.lon)
+    });
+    setSugestoes([]);
+  };
 
   // Atualiza o Mini Mapa quando o preview muda
   useEffect(() => {
@@ -550,9 +548,22 @@ export default function PlanejadorRotas() {
               <button onClick={() => setShowBulk(!showBulk)} style={{ padding: '0.8rem', borderRadius: 10, border: '1px solid #3b82f6', background: showBulk ? '#3b82f6' : 'transparent', color: showBulk ? 'white' : '#3b82f6', fontWeight: 600, fontSize: '0.8rem' }}>{showBulk ? 'Fechar' : 'Massa'}</button>
             </div>
 
-            {/* Pré-visualização do Endereço */}
-            {searchingPreview && <div style={{ fontSize: '0.7rem', color: '#3b82f6', padding: '0.2rem 0.5rem' }}>🔍 Localizando endereço...</div>}
-            
+            {/* Lista de Sugestões */}
+            {sugestoes.length > 0 && !preview && (
+              <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, marginBottom: '1rem', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+                {sugestoes.map((s, i) => (
+                  <div 
+                    key={i} 
+                    onClick={() => selecionarSugestao(s)}
+                    style={{ padding: '0.8rem', borderBottom: i === sugestoes.length - 1 ? 'none' : '1px solid #f1f5f9', cursor: 'pointer', fontSize: '0.8rem' }}
+                  >
+                    <div style={{ fontWeight: 700, color: '#1e293b' }}>📍 {s.display_name.split(',')[0]}, {s.display_name.split(',')[1]}</div>
+                    <div style={{ color: '#64748b', fontSize: '0.7rem' }}>{s.display_name.split(',').slice(2, 5).join(',')}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {preview && !showBulk && (
               <div style={{ background: '#f8fafc', border: '1px solid #3b82f6', borderRadius: 12, padding: '0.8rem', marginBottom: '1rem', animation: 'fadeIn 0.2s ease-out' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
