@@ -15,8 +15,6 @@ interface Pacote {
   entregue?: boolean;
 }
 
-import Tesseract from 'tesseract.js';
-
 const SACO_CORES = ['#16a34a', '#2563eb', '#9333ea', '#ea580c'];
 const SACO_LABELS = ['Saco 1', 'Saco 2', 'Saco 3', 'Saco 4'];
 const STORAGE_KEY = 'capel_planejador_pacotes';
@@ -275,15 +273,19 @@ export default function PlanejadorRotas() {
     }
     
     if (!miniMapInst.current) {
+      const L = (window as any).L;
+      if (!L) return;
       miniMapInst.current = L.map(miniMapRef.current, { zoomControl: false, attributionControl: false }).setView([preview.lat, preview.lng], 16);
       L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(miniMapInst.current);
     } else {
       miniMapInst.current.setView([preview.lat, preview.lng], 16);
     }
 
-    // Limpa marcadores antigos do mini mapa
-    miniMapInst.current.eachLayer((layer: any) => { if (layer instanceof L.Marker) miniMapInst.current.removeLayer(layer); });
-    L.marker([preview.lat, preview.lng]).addTo(miniMapInst.current);
+    const L = (window as any).L;
+    if (L && miniMapInst.current) {
+      miniMapInst.current.eachLayer((layer: any) => { if (layer instanceof L.Marker) miniMapInst.current.removeLayer(layer); });
+      L.marker([preview.lat, preview.lng]).addTo(miniMapInst.current);
+    }
   }, [preview]);
 
   const lerTextoImagem = useCallback(async () => {
@@ -299,6 +301,8 @@ export default function PlanejadorRotas() {
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(video, 0, 0);
 
+      // Carregamento dinâmico do Tesseract para evitar erros de inicialização
+      const Tesseract = (await import('tesseract.js')).default;
       const { data: { text } } = await Tesseract.recognize(canvas, 'por', {
         logger: (m: any) => console.log(m)
       });
