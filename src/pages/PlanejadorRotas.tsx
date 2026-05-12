@@ -271,6 +271,30 @@ export default function PlanejadorRotas() {
     setSugestoes([]);
   };
 
+  const adicionarForcado = async () => {
+    setSearchingPreview(true);
+    // Tenta achar pelo menos a rua para ter um pino no mapa
+    const ruaSomente = typedValue.split(' ').slice(0, 3).join(' ');
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(ruaSomente + ', São Paulo')}&limit=1`);
+      const data = await res.json();
+      const pos = data[0] || { lat: -23.55, lon: -46.63 }; // Fallback para centro de SP se sumir
+      
+      adicionarPacoteManual({
+        texto: typedValue,
+        lat: parseFloat(pos.lat),
+        lng: parseFloat(pos.lon)
+      } as any);
+      
+      setTypedValue('');
+      setSugestoes([]);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSearchingPreview(false);
+    }
+  };
+
   // Atualiza o Mini Mapa quando o preview muda
   useEffect(() => {
     if (!preview || !miniMapRef.current) {
@@ -551,6 +575,18 @@ export default function PlanejadorRotas() {
             {/* Lista de Sugestões */}
             {searchingPreview && <div style={{ fontSize: '0.7rem', color: '#3b82f6', padding: '0.2rem 0.5rem', animation: 'pulse 1.5s infinite' }}>🔍 Buscando endereços...</div>}
             
+            {!searchingPreview && typedValue.length >= 4 && sugestoes.length === 0 && !preview && (
+              <div style={{ background: '#eff6ff', padding: '1rem', borderRadius: 12, border: '1px dashed #3b82f6', textAlign: 'center', marginBottom: '1rem' }}>
+                <div style={{ fontSize: '0.8rem', color: '#1e40af', marginBottom: '0.5rem' }}>Não encontramos esse endereço exato no mapa.</div>
+                <button 
+                  onClick={adicionarForcado}
+                  style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '0.6rem 1rem', borderRadius: 8, fontWeight: 700, fontSize: '0.85rem' }}
+                >
+                  ➕ Adicionar "{typedValue}" mesmo assim
+                </button>
+              </div>
+            )}
+
             {sugestoes.length > 0 && !preview && (
               <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, marginBottom: '1rem', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
                 {sugestoes.map((s, i) => (
