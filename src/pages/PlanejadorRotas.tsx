@@ -636,8 +636,13 @@ export default function PlanejadorRotas() {
                     onClick={() => selecionarSugestao(s)}
                     style={{ padding: '0.8rem', borderBottom: i === sugestoes.length - 1 ? 'none' : '1px solid #f1f5f9', cursor: 'pointer', fontSize: '0.8rem' }}
                   >
-                    <div style={{ fontWeight: 700, color: '#1e293b' }}>📍 {s.display_name.split(',')[0]}, {s.display_name.split(',')[1]}</div>
-                    <div style={{ color: '#64748b', fontSize: '0.7rem' }}>{s.display_name.split(',').slice(2, 5).join(',')}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ color: '#1e293b', fontSize: '0.85rem' }}>📍 {s.display_name.split(',')[0]}</div>
+                      <div style={{ fontWeight: 800, color: '#2563eb', fontSize: '0.75rem', marginTop: '2px' }}>
+                        {s.address?.suburb || s.address?.neighbourhood || 'Bairro não identificado'}
+                      </div>
+                      <div style={{ color: '#64748b', fontSize: '0.65rem' }}>{s.display_name.split(',').slice(1, 4).join(',')}</div>
+                    </div>
                   </div>
                 ))}
               </div>
