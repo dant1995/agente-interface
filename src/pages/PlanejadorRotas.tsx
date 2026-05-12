@@ -139,7 +139,7 @@ export default function PlanejadorRotas() {
   const [fase, setFase] = useState<'idle' | 'geocoding' | 'otimizado'>('idle');
   const [progresso, setProgresso] = useState(0);
   const [flash, setFlash] = useState<{ cor: string; texto: string; sub: string } | null>(null);
-  const [preview, setPreview] = useState<{ texto: string; bairro: string; cep: string; lat: number; lng: number } | null>(null);
+  const [preview, setPreview] = useState<{ texto: string; bairro: string; cep: string; full: string; lat: number; lng: number } | null>(null);
   const [searchingPreview, setSearchingPreview] = useState(false);
   const [readingOCR, setReadingOCR] = useState(false);
   const [typedValue, setTypedValue] = useState('');
