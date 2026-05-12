@@ -245,39 +245,39 @@ export default function PlanejadorRotas() {
     const t = setTimeout(async () => {
       setSearchingPreview(true);
       try {
-        // Detecta se existe um CEP (8 números) no texto
         const cepMatch = typedValue.replace(/\D/g, '').match(/\d{8}/);
         const cep = cepMatch ? cepMatch[0] : null;
         
-        // Se achou CEP, ainda usamos o Nominatim que é imbatível para CEPs exatos
+        let brutos: any[] = [];
+
         if (cep) {
-          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&postalcode=${cep}&addressdetails=1&limit=1&countrycodes=br`);
-          const data = await res.json();
-          if (data.length > 0) {
-            setSugestoes(data);
-            setSearchingPreview(false);
-            return;
-          }
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&postalcode=${cep}&addressdetails=1&limit=3&countrycodes=br`);
+          brutos = await res.json();
         }
 
-        // Para busca por TEXTO (rua, vila), usamos o PHOTON (muito mais inteligente/fuzzy)
-        // Bias: -23.55, -46.63 (Centro de SP / ZL)
-        const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(typedValue)}&lat=-23.5505&lon=-46.6333&limit=5&lang=pt`);
-        const geojson = await res.json();
-        
-        // Converte o formato do Photon para o nosso padrão de sugestões
-        const formatadas = geojson.features.map((f: any) => ({
-          display_name: `${f.properties.name || ''}, ${f.properties.housenumber || ''} - ${f.properties.district || f.properties.city || ''}`,
-          lat: f.geometry.coordinates[1],
-          lon: f.geometry.coordinates[0],
-          address: {
-            suburb: f.properties.district,
-            city: f.properties.city,
-            postcode: f.properties.postcode
-          }
-        })).filter((f: any) => f.display_name.length > 5);
+        if (brutos.length === 0) {
+          const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(typedValue)}&lat=-23.5505&lon=-46.6333&limit=10&lang=pt`);
+          const geojson = await res.json();
+          brutos = geojson.features.map((f: any) => ({
+            display_name: `${f.properties.name || ''}, ${f.properties.housenumber || ''} - ${f.properties.district || f.properties.city || ''} (${f.properties.state || ''})`,
+            lat: f.geometry.coordinates[1],
+            lon: f.geometry.coordinates[0],
+            address: {
+              suburb: f.properties.district,
+              city: f.properties.city,
+              state: f.properties.state,
+              postcode: f.properties.postcode
+            }
+          }));
+        }
 
-        setSugestoes(formatadas);
+        // FILTRO DE FERRO: Só aceita se for no estado de São Paulo
+        const filtradas = brutos.filter((item: any) => {
+          const info = (item.display_name + (item.address?.state || '')).toLowerCase();
+          return info.includes('são paulo') || info.includes('sp');
+        });
+
+        setSugestoes(filtradas.slice(0, 5));
       } catch (e) {
         console.error('Erro ao buscar sugestões:', e);
       } finally {
