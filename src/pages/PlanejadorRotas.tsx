@@ -273,17 +273,29 @@ export default function PlanejadorRotas() {
 
   const adicionarForcado = async () => {
     setSearchingPreview(true);
-    // Tenta achar pelo menos a rua para ter um pino no mapa
-    const ruaSomente = typedValue.split(' ').slice(0, 3).join(' ');
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(ruaSomente + ', São Paulo')}&limit=1`);
-      const data = await res.json();
-      const pos = data[0] || { lat: -23.55, lon: -46.63 }; // Fallback para centro de SP se sumir
+      // Limpa o endereço para a busca de fallback (remove Vila, traços, etc)
+      const limpo = typedValue.replace(/vila|santa|ines|-/gi, '').trim();
       
+      // Busca FORÇANDO ser em São Paulo, SP
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(limpo)}&city=São Paulo&state=São Paulo&country=Brazil&limit=1`);
+      const data = await res.json();
+      
+      // Se não achar nada em SP, usa a posição atual como pino (para não ir pra longe)
+      const pos = data[0] || { lat: posAtual.lat, lon: posAtual.lng };
+      
+      // Validação de distância: Se for mais de 60km de SP, ignora o resultado e usa o centro de SP
+      const latRes = parseFloat(pos.lat);
+      const lonRes = parseFloat(pos.lon);
+      const dist = Math.sqrt(Math.pow(latRes - (-23.55), 2) + Math.pow(lonRes - (-46.63), 2));
+      
+      const finalLat = dist > 0.6 ? -23.55 : latRes;
+      const finalLng = dist > 0.6 ? -46.63 : lonRes;
+
       adicionarPacoteManual({
         texto: typedValue,
-        lat: parseFloat(pos.lat),
-        lng: parseFloat(pos.lon)
+        lat: finalLat,
+        lng: finalLng
       } as any);
       
       setTypedValue('');
