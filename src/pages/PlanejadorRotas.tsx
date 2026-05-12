@@ -245,8 +245,8 @@ export default function PlanejadorRotas() {
     const t = setTimeout(async () => {
       setSearchingPreview(true);
       try {
-        const query = `${typedValue}, São Paulo, SP`;
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=4&countrycodes=br`);
+        // Envia exatamente o que o usuário digitou, sem "ajudas" que atrapalham
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(typedValue)}&addressdetails=1&limit=5&countrycodes=br`);
         const data = await res.json();
         setSugestoes(data);
       } catch (e) {
@@ -254,7 +254,7 @@ export default function PlanejadorRotas() {
       } finally {
         setSearchingPreview(false);
       }
-    }, 600);
+    }, 500);
     return () => clearTimeout(t);
   }, [typedValue]);
 
