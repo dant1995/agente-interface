@@ -282,8 +282,12 @@ export default function PlanejadorRotas() {
 
         // FILTRO DE FERRO: Só aceita se for no estado de São Paulo
         const filtradas = brutos.filter((item: any) => {
-          const info = (item.display_name + (item.address?.state || '')).toLowerCase();
-          return info.includes('são paulo') || info.includes('sp');
+          const info = (item.display_name + (item.address?.state || '') + (item.address?.city || ''))
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, ""); // Remove acentos
+          
+          return info.includes('sao paulo') || info.includes('sp');
         });
 
         setSugestoes(filtradas.slice(0, 5));
@@ -561,7 +565,7 @@ export default function PlanejadorRotas() {
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>📍 Planejador de Rotas</div>
             <div style={{ fontSize: '0.72rem', fontWeight: 900, background: 'white', color: '#ef4444', padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginTop: 4 }}>
-              🔥 v1.6 - TESTE DE FOGO 🔥
+              🔥 v1.7 - BUSCA SEM ACENTO 🔥
             </div>
             <div style={{ fontSize: '0.72rem', opacity: 0.8, marginTop: 4 }}>
               {fase === 'otimizado' 
