@@ -555,12 +555,15 @@ export default function PlanejadorRotas() {
         </div>
       )}
 
-      <div style={{ background: 'linear-gradient(135deg,#1e293b,#0f172a)', padding: '1rem 1.2rem', color: 'white' }}>
+      <div style={{ background: '#ef4444', padding: '1rem 1.2rem', color: 'white' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: 12 }}>
           <button onClick={() => { stopScanner(); navigate('/'); }} style={{ background: 'rgba(255,255,255,.1)', border: 'none', color: 'white', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', fontSize: '1.1rem' }}>←</button>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>📍 Planejador de Rotas</div>
-            <div style={{ fontSize: '0.72rem', opacity: .7, fontWeight: 500 }}>
+            <div style={{ fontSize: '0.72rem', fontWeight: 900, background: 'white', color: '#ef4444', padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginTop: 4 }}>
+              🔥 v1.6 - TESTE DE FOGO 🔥
+            </div>
+          </div>
               {fase === 'otimizado' 
                 ? `✅ ${stats.entregues}/${stats.total} • ${stats.km}km • ~${stats.min}min` 
                 : `${pacotes.length} pacotes aguardando`}
