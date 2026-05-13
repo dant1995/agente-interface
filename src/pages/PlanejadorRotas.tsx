@@ -704,6 +704,7 @@ export default function PlanejadorRotas() {
             <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 1000, display: 'flex', flexDirection: 'column', gap: 8 }}>
               <button onClick={() => (window as any).recenterMap()} style={{ width: 44, height: 44, borderRadius: 12, background: 'white', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} title="Centralizar em Mim">🎯</button>
               <button onClick={() => (window as any).fitAllPoints()} style={{ width: 44, height: 44, borderRadius: 12, background: 'white', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} title="Ver Rota Toda">🌍</button>
+              <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.6rem', color: '#94a3b8' }}>v1.5 - BUSCA TURBO</div>
             </div>
           )}
         </div>
