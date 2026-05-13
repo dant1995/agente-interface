@@ -717,7 +717,7 @@ export default function PlanejadorRotas() {
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>📍 Planejador de Rotas</div>
             <div style={{ fontSize: '0.72rem', fontWeight: 900, padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginTop: 4, color: '#facc15' }}>
-              ✅ v3.4 - BUILD OK ✅
+              🏆 v3.5 - COMPILAÇÃO FINAL 🏆
             </div>
             <div style={{ fontSize: '0.72rem', opacity: 0.8, marginTop: 4 }}>
               {fase === 'otimizado' 
@@ -751,11 +751,20 @@ export default function PlanejadorRotas() {
             
             {scanning && (
               <button 
-                onClick={lerTextoImagem} 
+                onClick={() => {
+                  const video = document.querySelector('video');
+                  if (video) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    canvas.getContext('2d')?.drawImage(video, 0, 0);
+                    processarImagemEtiqueta(canvas.toDataURL('image/png'));
+                  }
+                }}
                 disabled={readingOCR}
                 style={{ padding: '0.9rem', borderRadius: 12, border: 'none', background: readingOCR ? '#94a3b8' : '#3b82f6', color: 'white', fontWeight: 700, cursor: 'pointer' }}
               >
-                {readingOCR ? '⌛...' : '🔍 Ler Texto'}
+                {readingOCR ? '⌛ Lendo...' : '🔍 Ler Etiqueta (OCR)'}
               </button>
             )}
           </div>
