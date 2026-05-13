@@ -303,9 +303,9 @@ export default function PlanejadorRotas() {
             const data = await res.json();
             if (Array.isArray(data)) {
               brutos = data
-                .filter((item: any) => item.address?.road || item.address?.pedestrian || item.address?.path) // Só aceita se tiver nome de rua
+                .filter((item: any) => item.address?.road || item.address?.pedestrian || item.address?.path || item.name) 
                 .map((item: any) => {
-                  const rua = item.address?.road || item.address?.pedestrian || item.address?.path || '';
+                  const rua = item.address?.road || item.address?.pedestrian || item.address?.path || item.name || '';
                   const numero = item.address?.house_number ? `, ${item.address.house_number}` : '';
                   const bairro = item.address?.suburb || item.address?.neighbourhood || item.address?.city_district || '';
                   return {
@@ -612,7 +612,7 @@ export default function PlanejadorRotas() {
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>📍 Planejador de Rotas</div>
             <div style={{ fontSize: '0.72rem', fontWeight: 900, padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginTop: 4, color: '#facc15' }}>
-              🏠 v2.6 - FILTRO INTELIGENTE 🏠
+              🌍 v2.7 - BUSCA TOTAL 🌍
             </div>
             <div style={{ fontSize: '0.72rem', opacity: 0.8, marginTop: 4 }}>
               {fase === 'otimizado' 
