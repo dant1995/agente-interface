@@ -244,28 +244,27 @@ export default function PlanejadorRotas() {
     const t = setTimeout(async () => {
       setSearchingPreview(true);
       try {
-        // NORMALIZAÇÃO: Adiciona espaços entre palavras grudadas (ex: InesSão Paulo -> Ines São Paulo)
-        // E remove caracteres que confundem o buscador
         const textoLimpo = typedValue
-          .replace(/([a-z])([A-Z])/g, '$1 $2') // Separa CamelCase
-          .replace(/(\d{5})(\d{3})/, '$1-$2') // Formata CEP se estiver grudado
-          .replace(/([a-zA-Z])(\d)/g, '$1 $2') // Separa letra de número
-          .replace(/(\d)([a-zA-Z])/g, '$1 $2'); // Separa número de letra
+          .replace(/([a-z])([A-Z])/g, '$1 $2')
+          .replace(/(\d{5})(\d{3})/, '$1-$2')
+          .replace(/([a-zA-Z])(\d)/g, '$1 $2')
+          .replace(/(\d)([a-zA-Z])/g, '$1 $2');
 
         const cepMatch = textoLimpo.replace(/\D/g, '').match(/\d{8}/);
         const cep = cepMatch ? cepMatch[0] : null;
         
         let brutos: any[] = [];
 
-        // Prioridade 1: Busca por CEP (Sempre a mais certeira)
+        // PASSO 1: Busca por CEP puro
         if (cep) {
           const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&postalcode=${cep}&addressdetails=1&limit=3&countrycodes=br`);
           brutos = await res.json();
         }
 
-        // Prioridade 2: Busca por Texto (Photon) se o CEP falhar ou não existir
+        // PASSO 2: Busca por Texto (Limpando o CEP da frase para não confundir o Photon)
         if (brutos.length === 0) {
-          const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(textoLimpo)}&lat=-23.5505&lon=-46.6333&limit=10&lang=pt`);
+          const buscaSemCep = textoLimpo.replace(/\d{5}-?\d{3}/, '').trim();
+          const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(buscaSemCep)}&lat=-23.5505&lon=-46.6333&limit=10&lang=pt`);
           const geojson = await res.json();
           brutos = geojson.features.map((f: any) => ({
             display_name: `${f.properties.name || ''}, ${f.properties.housenumber || ''} - ${f.properties.district || f.properties.city || ''} (${f.properties.state || ''})`,
@@ -280,17 +279,8 @@ export default function PlanejadorRotas() {
           }));
         }
 
-        // FILTRO DE FERRO: Só aceita se for no estado de São Paulo
-        const filtradas = brutos.filter((item: any) => {
-          const info = (item.display_name + (item.address?.state || '') + (item.address?.city || ''))
-            .toLowerCase()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, ""); // Remove acentos
-          
-          return info.includes('sao paulo') || info.includes('sp');
-        });
-
-        setSugestoes(filtradas.slice(0, 5));
+        // DESATIVADO TEMPORARIAMENTE PARA TESTE: Mostra tudo o que vier
+        setSugestoes(brutos.slice(0, 5));
       } catch (e) {
         console.error('Erro ao buscar sugestões:', e);
       } finally {
@@ -565,7 +555,7 @@ export default function PlanejadorRotas() {
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>📍 Planejador de Rotas</div>
             <div style={{ fontSize: '0.72rem', fontWeight: 900, background: 'white', color: '#ef4444', padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginTop: 4 }}>
-              🔥 v1.7 - BUSCA SEM ACENTO 🔥
+              🚀 v1.8 - BUSCA INTELIGENTE 🚀
             </div>
             <div style={{ fontSize: '0.72rem', opacity: 0.8, marginTop: 4 }}>
               {fase === 'otimizado' 
