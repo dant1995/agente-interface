@@ -1,9 +1,7 @@
-import { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import BottomNav from './components/BottomNav';
 import QueueMonitor from './components/campanhas/QueueMonitor';
-import LockScreen from './pages/LockScreen';
-import { authService } from './services/authService';
+
 
 import Produtos from './pages/Produtos';
 import Etiquetas from './pages/Etiquetas';
@@ -34,11 +32,6 @@ import NavegacaoRota from './pages/NavegacaoRota';
 import PlanejadorRotas from './pages/PlanejadorRotas';
 
 function App() {
-  const [unlocked, setUnlocked] = useState(authService.isUnlocked());
-
-  if (!unlocked) {
-    return <LockScreen onUnlock={() => setUnlocked(true)} />;
-  }
 
   return (
     <BrowserRouter>
