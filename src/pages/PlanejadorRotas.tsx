@@ -547,37 +547,7 @@ export default function PlanejadorRotas() {
     };
   }, [preview]);
 
-  const lerTextoImagem = useCallback(async () => {
-    if (!scanning || readingOCR) return;
-    setReadingOCR(true);
-    try {
-      const video = document.querySelector('#capel-planner-scanner video') as HTMLVideoElement;
-      if (!video) return;
 
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx?.drawImage(video, 0, 0);
-
-      // Carregamento dinâmico do Tesseract para evitar erros de inicialização
-      const Tesseract = (await import('tesseract.js')).default;
-      const { data: { text } } = await Tesseract.recognize(canvas, 'por', {
-        logger: (m: any) => console.log(m)
-      });
-      
-      // Limpa o texto lido para tentar pegar só o endereço (linhas com números)
-      const linhas = text.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 5);
-      if (linhas.length > 0) {
-        setTypedValue(linhas[0]); // Pega a primeira linha que parece um endereço
-        playBeep(440, 0.2);
-      }
-    } catch (e) {
-      console.error('Erro OCR:', e);
-    } finally {
-      setReadingOCR(false);
-    }
-  }, [scanning, readingOCR, playBeep]);
 
   const startScanner = useCallback(async () => {
     const qr = new Html5Qrcode('capel-planner-scanner');
@@ -717,7 +687,7 @@ export default function PlanejadorRotas() {
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>📍 Planejador de Rotas</div>
             <div style={{ fontSize: '0.72rem', fontWeight: 900, padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginTop: 4, color: '#facc15' }}>
-              🏆 v3.5 - COMPILAÇÃO FINAL 🏆
+              🚀 v3.6 - BUILD FINALIZADO 🚀
             </div>
             <div style={{ fontSize: '0.72rem', opacity: 0.8, marginTop: 4 }}>
               {fase === 'otimizado' 
