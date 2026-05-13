@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
+import Tesseract from 'tesseract.js';
 
 // ── Tipos ────────────────────────────────────────────────────────
 interface Pacote {
@@ -145,9 +146,95 @@ export default function PlanejadorRotas() {
   const [searchingPreview, setSearchingPreview] = useState(false);
   const [readingOCR, setReadingOCR] = useState(false);
   const [typedValue, setTypedValue] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
   const miniMapRef = useRef<HTMLDivElement>(null);
   const miniMapInst = useRef<any>(null);
   const [posAtual, setPosAtual] = useState<{ lat: number; lng: number }>({ lat: -23.55, lng: -46.63 });
+
+  // ── Google Drive API Config ──────────────────────────────────────
+  const GOOGLE_CLIENT_ID = 'SEU_CLIENT_ID_AQUI.apps.googleusercontent.com';
+  const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
+  const SCOPES = "https://www.googleapis.com/auth/drive.file";
+
+  // ── Lógica OCR (Tesseract) ───────────────────────────────────────
+  const processarImagemEtiqueta = async (imageSrc: string) => {
+    setReadingOCR(true);
+    try {
+      const { data: { text } } = await Tesseract.recognize(imageSrc, 'por', {
+        logger: m => console.log(m)
+      });
+      
+      // Tenta extrair endereço e CEP via Regex (padrão Shopee)
+      const cepMatch = text.match(/\d{5}-?\d{3}/);
+      const lines = text.split('\n').filter(l => l.length > 5);
+      // Busca linha que parece endereço (contém Rua, Av, etc)
+      const enderecoLinha = lines.find(l => /Rua|Av|Rod|Trav|Alameda/i.test(l));
+
+      if (enderecoLinha || cepMatch) {
+        const resultado = `${enderecoLinha || ''} ${cepMatch ? cepMatch[0] : ''}`.trim();
+        setTypedValue(resultado);
+        // Feedback visual
+        setFlash({ cor: '#3b82f6', texto: 'OCR OK', sub: 'Endereço Identificado' });
+      }
+    } catch (error) {
+      console.error('Erro no OCR:', error);
+    } finally {
+      setReadingOCR(false);
+    }
+  };
+
+  // ── Exportação Google Drive ──────────────────────────────────────
+  const salvarNoGoogleDrive = async () => {
+    if (pacotes.length === 0) return alert('Lista vazia!');
+    setIsExporting(true);
+    
+    try {
+      // 1. Gerar CSV
+      const header = "Codigo,Endereco,Bairro,Cidade,CEP\n";
+      const rows = pacotes.map(p => 
+        `"${p.codigo}","${p.endereco || ''}","${p.saco || ''}","São Paulo",""`
+      ).join("\n");
+      const csvContent = header + rows;
+
+      // 2. Fluxo OAuth2 simplificado
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${window.location.origin}/planejador-rotas&response_type=token&scope=${encodeURIComponent(SCOPES)}`;
+      
+      // Nota: Em produção, você usaria uma lib como react-google-login ou gapi
+      // Aqui, se não houver token, pedimos login
+      const accessToken = new URLSearchParams(window.location.hash.substring(1)).get('access_token');
+      
+      if (!accessToken) {
+        window.location.href = authUrl;
+        return;
+      }
+
+      // 3. Upload via Fetch API
+      const metadata = {
+        name: `Triagem_CapelGo_${new Date().toLocaleDateString()}.csv`,
+        mimeType: 'text/csv'
+      };
+
+      const formData = new FormData();
+      formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      formData.append('file', new Blob([csvContent], { type: 'text/csv' }));
+
+      const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: formData
+      });
+
+      if (response.ok) {
+        alert('✅ Arquivo salvo com sucesso no Google Drive!');
+      } else {
+        throw new Error('Falha no upload');
+      }
+    } catch (error) {
+      alert('Erro ao salvar no Drive. Verifique suas permissões.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInst = useRef<any>(null);
@@ -612,7 +699,7 @@ export default function PlanejadorRotas() {
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>📍 Planejador de Rotas</div>
             <div style={{ fontSize: '0.72rem', fontWeight: 900, padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginTop: 4, color: '#facc15' }}>
-              🌍 v2.7 - BUSCA TOTAL 🌍
+              📦 v3.0 - TRIAGEM PRO 📦
             </div>
             <div style={{ fontSize: '0.72rem', opacity: 0.8, marginTop: 4 }}>
               {fase === 'otimizado' 
@@ -704,17 +791,21 @@ export default function PlanejadorRotas() {
             {typedValue.length > 5 && sugestoes.length === 0 && !searchingPreview && !preview && (
               <div style={{ marginBottom: '1rem', textAlign: 'center' }}>
                 <div style={{ color: '#64748b', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Nenhuma sugestão encontrada em SP.</div>
-                <button 
-                  onClick={() => {
-                    // v2.1: Limpeza agressiva para o Google Maps
-                    const enderecoLimpo = typedValue.replace(/\d{5}-?\d{3}/g, '').replace(/[,.-]/g, ' ').trim();
-                    const query = encodeURIComponent(`${enderecoLimpo}, São Paulo, SP`);
-                    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
-                  }}
-                  style={{ background: '#f8fafc', border: '1px solid #3b82f6', padding: '0.8rem 1rem', borderRadius: 12, color: '#1d4ed8', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', width: '100%', justifyContent: 'center', marginTop: '0.5rem', boxShadow: '0 2px 8px rgba(59, 130, 246, 0.1)' }}
-                >
-                  🚀 ABRIR NO GOOGLE MAPS
-                </button>
+                <div style={{ display: 'flex', gap: 8, marginTop: '1rem' }}>
+                  <button 
+                    onClick={salvarNoGoogleDrive}
+                    disabled={isExporting}
+                    style={{ flex: 1, padding: '0.8rem', borderRadius: 12, background: '#10b981', color: 'white', border: 'none', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', opacity: isExporting ? 0.6 : 1 }}
+                  >
+                    {isExporting ? '⏳ Salvando...' : '💾 Salvar no Drive'}
+                  </button>
+                  <button 
+                    onClick={() => setPacotes([])}
+                    style={{ padding: '0.8rem', borderRadius: 12, background: '#fee2e2', color: '#ef4444', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    🗑️ Limpar
+                  </button>
+                </div>
               </div>
             )}
 
