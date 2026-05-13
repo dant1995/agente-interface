@@ -171,9 +171,31 @@ export default function PlanejadorRotas() {
 
       if (enderecoLinha || cepMatch) {
         const resultado = `${enderecoLinha || ''} ${cepMatch ? cepMatch[0] : ''}`.trim();
-        setTypedValue(resultado);
-        // Feedback visual
-        setFlash({ cor: '#3b82f6', texto: 'OCR OK', sub: 'Endereço Identificado' });
+        
+        // ADICIONA DIRETO NA LISTA
+        const novo: Pacote = {
+          id: Math.random().toString(36).substring(2, 9),
+          codigo: `SCAN-${new Date().getTime().toString().slice(-4)}`,
+          endereco: resultado,
+          status: 'pendente'
+        };
+        
+        setPacotes(prev => {
+          const novaLista = [novo, ...prev];
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(novaLista));
+          return novaLista;
+        });
+
+        // Feedback sonoro (beep)
+        try {
+          const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const osc = audioCtx.createOscillator();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+          osc.connect(audioCtx.createGain()).connect(audioCtx.destination);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.1);
+        } catch(e) {}
       }
     } catch (error) {
       console.error('Erro no OCR:', error);
@@ -671,23 +693,13 @@ export default function PlanejadorRotas() {
 
   return (
     <div style={{ background: '#f5f5f5', minHeight: '100vh', paddingBottom: 80 }}>
-      {flash && (
-        <div style={{ position: 'fixed', inset: 0, background: flash.cor, zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white', animation: 'fadeIn 0.2s ease-out' }}>
-          <div style={{ fontSize: '6rem', fontWeight: 900, textShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>{flash.texto}</div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 700, marginTop: 20, opacity: 0.9 }}>{flash.sub}</div>
-          <style>{`
-            @keyframes fadeIn { from { opacity: 0; transform: scale(1.1); } to { opacity: 1; transform: scale(1); } }
-          `}</style>
-        </div>
-      )}
-
       <div style={{ background: 'linear-gradient(135deg,#1e293b,#0f172a)', padding: '1rem 1.2rem', color: 'white' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: 12 }}>
           <button onClick={() => { stopScanner(); navigate('/'); }} style={{ background: 'rgba(255,255,255,.1)', border: 'none', color: 'white', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', fontSize: '1.1rem' }}>←</button>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>📍 Planejador de Rotas</div>
             <div style={{ fontSize: '0.72rem', fontWeight: 900, padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginTop: 4, color: '#facc15' }}>
-              🚀 v3.6 - BUILD FINALIZADO 🚀
+              🚀 v4.0 - TRIAGEM CONTÍNUA 🚀
             </div>
             <div style={{ fontSize: '0.72rem', opacity: 0.8, marginTop: 4 }}>
               {fase === 'otimizado' 
