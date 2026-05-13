@@ -691,7 +691,7 @@ export default function PlanejadorRotas() {
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>📍 Planejador de Rotas</div>
             <div style={{ fontSize: '0.72rem', fontWeight: 900, padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginTop: 4, color: '#facc15' }}>
-              📝 v4.5 - EDIÇÃO ATIVA 📝
+              📥 v4.6 - EXPORTAÇÃO FIXA 📥
             </div>
             <div style={{ fontSize: '0.72rem', opacity: 0.8, marginTop: 4 }}>
               {fase === 'otimizado' 
@@ -792,28 +792,6 @@ export default function PlanejadorRotas() {
             {typedValue.length > 5 && sugestoes.length === 0 && !searchingPreview && !preview && (
               <div style={{ marginBottom: '1rem', textAlign: 'center' }}>
                 <div style={{ color: '#64748b', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Nenhuma sugestão encontrada em SP.</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: '1rem' }}>
-                  <button 
-                    onClick={salvarNoGoogleDrive}
-                    disabled={isExporting}
-                    style={{ flex: '1 1 140px', padding: '0.8rem', borderRadius: 12, background: '#10b981', color: 'white', border: 'none', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', opacity: isExporting ? 0.6 : 1 }}
-                  >
-                    {isExporting ? '⏳ Salvando...' : '☁️ Google Drive'}
-                  </button>
-                  <button 
-                    onClick={baixarCSV}
-                    style={{ flex: '1 1 140px', padding: '0.8rem', borderRadius: 12, background: '#3b82f6', color: 'white', border: 'none', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}
-                  >
-                    📥 Baixar
-                  </button>
-                  <button 
-                    onClick={() => setPacotes([])}
-                    style={{ padding: '0.8rem', borderRadius: 12, background: '#fee2e2', color: '#ef4444', border: 'none', fontWeight: 700, cursor: 'pointer' }}
-                    title="Limpar Lista"
-                  >
-                    🗑️
-                  </button>
-                </div>
               </div>
             )}
 
@@ -875,6 +853,25 @@ export default function PlanejadorRotas() {
                     </button>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Botões de Exportação Fixos */}
+            {pacotes.length > 0 && (
+              <div style={{ display: 'flex', gap: 8, marginTop: '1rem' }}>
+                <button 
+                  onClick={salvarNoGoogleDrive}
+                  disabled={isExporting}
+                  style={{ flex: 1, padding: '0.8rem', borderRadius: 12, background: '#10b981', color: 'white', border: 'none', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', opacity: isExporting ? 0.6 : 1, fontSize: '0.85rem' }}
+                >
+                  {isExporting ? '⏳...' : '☁️ Google Drive'}
+                </button>
+                <button 
+                  onClick={baixarCSV}
+                  style={{ flex: 1, padding: '0.8rem', borderRadius: 12, background: '#3b82f6', color: 'white', border: 'none', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', fontSize: '0.85rem' }}
+                >
+                  📥 Baixar CSV
+                </button>
               </div>
             )}
           </div>
