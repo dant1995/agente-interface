@@ -691,7 +691,7 @@ export default function PlanejadorRotas() {
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>📍 Planejador de Rotas</div>
             <div style={{ fontSize: '0.72rem', fontWeight: 900, padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginTop: 4, color: '#facc15' }}>
-              🧹 v4.2 - LIMPEZA PROFUNDA 🧹
+              📝 v4.5 - EDIÇÃO ATIVA 📝
             </div>
             <div style={{ fontSize: '0.72rem', opacity: 0.8, marginTop: 4 }}>
               {fase === 'otimizado' 
@@ -846,7 +846,37 @@ export default function PlanejadorRotas() {
                 <button onClick={importarEmMassa} style={{ width: '100%', padding: '0.8rem', borderRadius: 10, background: '#3b82f6', color: 'white', border: 'none', fontWeight: 700 }}>📥 Importar {bulkText.split('\n').filter(l => l.trim()).length} pacotes</button>
               </div>
             )}
-            <div style={{ fontSize: '0.75rem', color: '#64748b', textAlign: 'center' }}>{pacotes.length} pacotes na lista</div>
+            <div style={{ fontSize: '0.75rem', color: '#64748b', textAlign: 'center', marginBottom: '0.5rem' }}>{pacotes.length} pacotes na lista</div>
+            
+            {pacotes.length > 0 && (
+              <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, padding: '0.5rem', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+                {pacotes.map((p, idx) => (
+                  <div key={p.id} style={{ display: 'flex', gap: 6, background: 'white', padding: '0.5rem', borderRadius: 8, border: '1px solid #e2e8f0', alignItems: 'center' }}>
+                    <div style={{ fontSize: '0.65rem', fontWeight: 800, color: '#94a3b8', minWidth: 20 }}>{pacotes.length - idx}</div>
+                    <input 
+                      value={p.endereco} 
+                      onChange={(e) => {
+                        const nova = [...pacotes];
+                        nova[idx].endereco = e.target.value;
+                        setPacotes(nova);
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(nova));
+                      }}
+                      style={{ flex: 1, border: 'none', fontSize: '0.8rem', outline: 'none', background: 'transparent', color: '#1e293b' }}
+                    />
+                    <button 
+                      onClick={() => {
+                        const nova = pacotes.filter((_, i) => i !== idx);
+                        setPacotes(nova);
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(nova));
+                      }}
+                      style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.9rem', cursor: 'pointer', padding: '2px 6px' }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           {pacotes.length >= 2 && (
             <button onClick={otimizar} disabled={fase === 'geocoding'} style={{ width: '100%', padding: '1rem', borderRadius: 12, border: 'none', background: fase === 'geocoding' ? '#94a3b8' : 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white', fontSize: '1rem', fontWeight: 700, cursor: fase === 'geocoding' ? 'not-allowed' : 'pointer', boxShadow: '0 4px 12px rgba(99,102,241,.3)' }}>
