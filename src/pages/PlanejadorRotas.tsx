@@ -299,25 +299,27 @@ export default function PlanejadorRotas() {
         if (brutos.length === 0) {
           try {
             const query = encodeURIComponent(textoParaPhoton + ', São Paulo, SP, Brasil');
-            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&addressdetails=1&limit=5`);
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&addressdetails=1&limit=8`);
             const data = await res.json();
-            // Normaliza o formato do Nominatim para ser compatível com o Photon
             if (Array.isArray(data)) {
-              brutos = data.map((item: any) => ({
-                display_name: [
-                  item.address?.road || item.address?.pedestrian || item.name,
-                  item.address?.house_number,
-                  item.address?.suburb || item.address?.neighbourhood || item.address?.city_district
-                ].filter(Boolean).join(', '),
-                lat: parseFloat(item.lat),
-                lng: parseFloat(item.lon),
-                address: {
-                  suburb: item.address?.suburb || item.address?.neighbourhood || item.address?.city_district || item.address?.district,
-                  city: item.address?.city || item.address?.town,
-                  state: item.address?.state,
-                  postcode: item.address?.postcode
-                }
-              }));
+              brutos = data
+                .filter((item: any) => item.address?.road || item.address?.pedestrian || item.address?.path) // Só aceita se tiver nome de rua
+                .map((item: any) => {
+                  const rua = item.address?.road || item.address?.pedestrian || item.address?.path || '';
+                  const numero = item.address?.house_number ? `, ${item.address.house_number}` : '';
+                  const bairro = item.address?.suburb || item.address?.neighbourhood || item.address?.city_district || '';
+                  return {
+                    display_name: `${rua}${numero}${bairro ? ' - ' + bairro : ''}`,
+                    lat: parseFloat(item.lat),
+                    lng: parseFloat(item.lon),
+                    address: {
+                      suburb: bairro,
+                      city: item.address?.city || item.address?.town,
+                      state: item.address?.state,
+                      postcode: item.address?.postcode
+                    }
+                  };
+                });
             }
           } catch (e) { console.error('Erro Nominatim:', e); }
         }
@@ -610,7 +612,7 @@ export default function PlanejadorRotas() {
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>📍 Planejador de Rotas</div>
             <div style={{ fontSize: '0.72rem', fontWeight: 900, padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginTop: 4, color: '#facc15' }}>
-              ✅ v2.5 - MAPEAMENTO CORRETO ✅
+              🏠 v2.6 - FILTRO INTELIGENTE 🏠
             </div>
             <div style={{ fontSize: '0.72rem', opacity: 0.8, marginTop: 4 }}>
               {fase === 'otimizado' 
