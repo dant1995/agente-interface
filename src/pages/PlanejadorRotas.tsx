@@ -201,7 +201,7 @@ export default function PlanejadorRotas() {
     } finally {
       setReadingOCR(false);
     }
-  }, [setTypedValue, setFlash]);
+  }, [setTypedValue]);
 
   // ── Exportação Google Drive ──────────────────────────────────────
   const salvarNoGoogleDrive = async () => {
@@ -321,14 +321,7 @@ export default function PlanejadorRotas() {
     // Se já estiver otimizado e o pacote já existe, mostra feedback GIGANTE (Modo Triagem)
     const existente = pacotes.find(p => p.codigo === limpo || p.id === limpo);
     if (existente && existente.saco) {
-      const cor = SACO_CORES[existente.saco - 1];
-      setFlash({ 
-        cor, 
-        texto: `SACO ${existente.saco}`, 
-        sub: existente.codigo.split(' ')[0]
-      });
       playBeep(880, 0.3);
-      setTimeout(() => setFlash(null), 1800);
       return;
     }
 
@@ -698,7 +691,7 @@ export default function PlanejadorRotas() {
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>📍 Planejador de Rotas</div>
             <div style={{ fontSize: '0.72rem', fontWeight: 900, padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginTop: 4, color: '#facc15' }}>
-              🚀 v4.1 - LIMPO 🧹
+              🧹 v4.2 - LIMPEZA PROFUNDA 🧹
             </div>
             <div style={{ fontSize: '0.72rem', opacity: 0.8, marginTop: 4 }}>
               {fase === 'otimizado' 
@@ -892,10 +885,7 @@ export default function PlanejadorRotas() {
                   {grupo.map(p => (
                     <div key={p.id} 
                       onClick={() => {
-                        const cor = SACO_CORES[i];
-                        setFlash({ cor, texto: `SACO ${i + 1}`, sub: p.codigo.split(' ')[0] });
                         playBeep(880, 0.2);
-                        setTimeout(() => setFlash(null), 1500);
                       }}
                       style={{ background: 'white', padding: '0.65rem 1rem', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '0.7rem', cursor: 'pointer' }}
                     >
