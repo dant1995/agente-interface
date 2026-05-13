@@ -180,7 +180,7 @@ export default function PlanejadorRotas() {
     } finally {
       setReadingOCR(false);
     }
-  };
+  }, [setTypedValue, setFlash]);
 
   // ── Exportação Google Drive ──────────────────────────────────────
   const salvarNoGoogleDrive = async () => {
@@ -717,7 +717,7 @@ export default function PlanejadorRotas() {
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>📍 Planejador de Rotas</div>
             <div style={{ fontSize: '0.72rem', fontWeight: 900, padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginTop: 4, color: '#facc15' }}>
-              📸 v3.3 - OCR ATIVO 📸
+              ✅ v3.4 - BUILD OK ✅
             </div>
             <div style={{ fontSize: '0.72rem', opacity: 0.8, marginTop: 4 }}>
               {fase === 'otimizado' 
