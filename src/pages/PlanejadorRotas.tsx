@@ -300,7 +300,25 @@ export default function PlanejadorRotas() {
           try {
             const query = encodeURIComponent(textoParaPhoton + ', São Paulo, SP, Brasil');
             const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&addressdetails=1&limit=5`);
-            brutos = await res.json();
+            const data = await res.json();
+            // Normaliza o formato do Nominatim para ser compatível com o Photon
+            if (Array.isArray(data)) {
+              brutos = data.map((item: any) => ({
+                display_name: [
+                  item.address?.road || item.address?.pedestrian || item.name,
+                  item.address?.house_number,
+                  item.address?.suburb || item.address?.neighbourhood || item.address?.city_district
+                ].filter(Boolean).join(', '),
+                lat: parseFloat(item.lat),
+                lng: parseFloat(item.lon),
+                address: {
+                  suburb: item.address?.suburb || item.address?.neighbourhood || item.address?.city_district || item.address?.district,
+                  city: item.address?.city || item.address?.town,
+                  state: item.address?.state,
+                  postcode: item.address?.postcode
+                }
+              }));
+            }
           } catch (e) { console.error('Erro Nominatim:', e); }
         }
 
@@ -328,14 +346,14 @@ export default function PlanejadorRotas() {
   }, [typedValue]);
 
   const selecionarSugestao = (item: any) => {
-    const addr = item.address;
+    const addr = item.address || {};
     setPreview({
       texto: typedValue,
       bairro: addr.suburb || addr.neighbourhood || addr.city_district || addr.village || 'Localizado',
       cep: addr.postcode || 'Sem CEP',
       full: item.display_name,
-      lat: parseFloat(item.lat),
-      lng: parseFloat(item.lon)
+      lat: typeof item.lat === 'number' ? item.lat : parseFloat(item.lat),
+      lng: item.lng ?? (typeof item.lon === 'number' ? item.lon : parseFloat(item.lon))
     });
     setSugestoes([]);
   };
@@ -592,7 +610,7 @@ export default function PlanejadorRotas() {
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>📍 Planejador de Rotas</div>
             <div style={{ fontSize: '0.72rem', fontWeight: 900, padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginTop: 4, color: '#facc15' }}>
-              🛰️ v2.4 - BUSCA PERSISTENTE 🛰️
+              ✅ v2.5 - MAPEAMENTO CORRETO ✅
             </div>
             <div style={{ fontSize: '0.72rem', opacity: 0.8, marginTop: 4 }}>
               {fase === 'otimizado' 
