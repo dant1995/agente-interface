@@ -563,24 +563,14 @@ export default function PlanejadorRotas() {
             <div style={{ fontSize: '0.72rem', fontWeight: 900, background: 'white', color: '#ef4444', padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginTop: 4 }}>
               🔥 v1.6 - TESTE DE FOGO 🔥
             </div>
-          </div>
+            <div style={{ fontSize: '0.72rem', opacity: 0.8, marginTop: 4 }}>
               {fase === 'otimizado' 
                 ? `✅ ${stats.entregues}/${stats.total} • ${stats.km}km • ~${stats.min}min` 
                 : `${pacotes.length} pacotes aguardando`}
             </div>
           </div>
-          {pacotes.length > 0 && <button onClick={() => { if (confirm('Limpar tudo?')) { setPacotes([]); setFase('idle'); } }} style={{ background: 'rgba(239,68,68,0.2)', border: 'none', color: '#f87171', borderRadius: 8, padding: '0.4rem 0.8rem', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 700 }}>Limpar</button>}
+          {pacotes.length > 0 && <button onClick={() => { if (confirm('Limpar tudo?')) { setPacotes([]); setFase('idle'); } }} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', borderRadius: 8, padding: '0.4rem 0.8rem', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 700 }}>Limpar</button>}
         </div>
-        {fase === 'otimizado' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 4 }}>
-            {SACO_LABELS.map((l, i) => (
-              <div key={i} style={{ background: SACO_CORES[i], borderRadius: 8, padding: '0.3rem', textAlign: 'center', color: 'white' }}>
-                <div style={{ fontSize: '1.1rem', fontWeight: 900 }}>{sacosPorNumero(i + 1).length}</div>
-                <div style={{ fontSize: '0.6rem', opacity: .9 }}>{l}</div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       <div style={{ display: 'flex', background: 'white', borderBottom: '1px solid #eee' }}>
