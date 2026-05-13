@@ -571,7 +571,7 @@ export default function PlanejadorRotas() {
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>📍 Planejador de Rotas</div>
             <div style={{ fontSize: '0.72rem', fontWeight: 900, padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginTop: 4, color: '#facc15' }}>
-              🛡️ v2.0 - BUSCA INQUEBRÁVEL 🛡️
+              📡 v2.1 - CONEXÃO GOOGLE 📡
             </div>
             <div style={{ fontSize: '0.72rem', opacity: 0.8, marginTop: 4 }}>
               {fase === 'otimizado' 
@@ -665,12 +665,14 @@ export default function PlanejadorRotas() {
                 <div style={{ color: '#64748b', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Nenhuma sugestão encontrada em SP.</div>
                 <button 
                   onClick={() => {
-                    const busca = `${typedValue.replace(/[,.-]/g, ' ')} São Paulo Brasil`;
-                    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(busca)}`, '_blank');
+                    // v2.1: Limpeza agressiva para o Google Maps
+                    const enderecoLimpo = typedValue.replace(/\d{5}-?\d{3}/g, '').replace(/[,.-]/g, ' ').trim();
+                    const query = encodeURIComponent(`${enderecoLimpo}, São Paulo, SP`);
+                    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
                   }}
-                  style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '0.6rem 1rem', borderRadius: 12, color: '#1e293b', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+                  style={{ background: '#f8fafc', border: '1px solid #3b82f6', padding: '0.8rem 1rem', borderRadius: 12, color: '#1d4ed8', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', width: '100%', justifyContent: 'center', marginTop: '0.5rem', boxShadow: '0 2px 8px rgba(59, 130, 246, 0.1)' }}
                 >
-                  🔎 Buscar no Google Maps
+                  🚀 ABRIR NO GOOGLE MAPS
                 </button>
               </div>
             )}
