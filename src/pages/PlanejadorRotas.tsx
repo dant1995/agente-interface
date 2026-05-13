@@ -241,22 +241,31 @@ export default function PlanejadorRotas() {
 
   // Busca de sugestões com debounce
   useEffect(() => {
-    if (typedValue.length < 4) { setSugestoes([]); setPreview(null); return; }
     const t = setTimeout(async () => {
       setSearchingPreview(true);
       try {
-        const cepMatch = typedValue.replace(/\D/g, '').match(/\d{8}/);
+        // NORMALIZAÇÃO: Adiciona espaços entre palavras grudadas (ex: InesSão Paulo -> Ines São Paulo)
+        // E remove caracteres que confundem o buscador
+        const textoLimpo = typedValue
+          .replace(/([a-z])([A-Z])/g, '$1 $2') // Separa CamelCase
+          .replace(/(\d{5})(\d{3})/, '$1-$2') // Formata CEP se estiver grudado
+          .replace(/([a-zA-Z])(\d)/g, '$1 $2') // Separa letra de número
+          .replace(/(\d)([a-zA-Z])/g, '$1 $2'); // Separa número de letra
+
+        const cepMatch = textoLimpo.replace(/\D/g, '').match(/\d{8}/);
         const cep = cepMatch ? cepMatch[0] : null;
         
         let brutos: any[] = [];
 
+        // Prioridade 1: Busca por CEP (Sempre a mais certeira)
         if (cep) {
           const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&postalcode=${cep}&addressdetails=1&limit=3&countrycodes=br`);
           brutos = await res.json();
         }
 
+        // Prioridade 2: Busca por Texto (Photon) se o CEP falhar ou não existir
         if (brutos.length === 0) {
-          const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(typedValue)}&lat=-23.5505&lon=-46.6333&limit=10&lang=pt`);
+          const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(textoLimpo)}&lat=-23.5505&lon=-46.6333&limit=10&lang=pt`);
           const geojson = await res.json();
           brutos = geojson.features.map((f: any) => ({
             display_name: `${f.properties.name || ''}, ${f.properties.housenumber || ''} - ${f.properties.district || f.properties.city || ''} (${f.properties.state || ''})`,
