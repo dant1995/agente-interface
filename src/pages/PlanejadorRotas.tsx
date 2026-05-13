@@ -153,11 +153,10 @@ export default function PlanejadorRotas() {
 
   // ── Google Drive API Config ──────────────────────────────────────
   const GOOGLE_CLIENT_ID = 'SEU_CLIENT_ID_AQUI.apps.googleusercontent.com';
-  const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
   const SCOPES = "https://www.googleapis.com/auth/drive.file";
 
   // ── Lógica OCR (Tesseract) ───────────────────────────────────────
-  const processarImagemEtiqueta = async (imageSrc: string) => {
+  const processarImagemEtiqueta = useCallback(async (imageSrc: string) => {
     setReadingOCR(true);
     try {
       const { data: { text } } = await Tesseract.recognize(imageSrc, 'por', {
@@ -234,6 +233,25 @@ export default function PlanejadorRotas() {
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const baixarCSV = () => {
+    if (pacotes.length === 0) return alert('Lista vazia!');
+    const header = "Codigo,Endereco,Bairro,Cidade,CEP\n";
+    const rows = pacotes.map(p => 
+      `"${p.codigo}","${p.endereco || ''}","${p.saco || ''}","São Paulo",""`
+    ).join("\n");
+    const csvContent = header + rows;
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Triagem_CapelGo_${new Date().toLocaleDateString().replace(/\//g, '-')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
@@ -699,7 +717,7 @@ export default function PlanejadorRotas() {
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>📍 Planejador de Rotas</div>
             <div style={{ fontSize: '0.72rem', fontWeight: 900, padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginTop: 4, color: '#facc15' }}>
-              📦 v3.0 - TRIAGEM PRO 📦
+              📸 v3.3 - OCR ATIVO 📸
             </div>
             <div style={{ fontSize: '0.72rem', opacity: 0.8, marginTop: 4 }}>
               {fase === 'otimizado' 
@@ -791,19 +809,26 @@ export default function PlanejadorRotas() {
             {typedValue.length > 5 && sugestoes.length === 0 && !searchingPreview && !preview && (
               <div style={{ marginBottom: '1rem', textAlign: 'center' }}>
                 <div style={{ color: '#64748b', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Nenhuma sugestão encontrada em SP.</div>
-                <div style={{ display: 'flex', gap: 8, marginTop: '1rem' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: '1rem' }}>
                   <button 
                     onClick={salvarNoGoogleDrive}
                     disabled={isExporting}
-                    style={{ flex: 1, padding: '0.8rem', borderRadius: 12, background: '#10b981', color: 'white', border: 'none', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', opacity: isExporting ? 0.6 : 1 }}
+                    style={{ flex: '1 1 140px', padding: '0.8rem', borderRadius: 12, background: '#10b981', color: 'white', border: 'none', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', opacity: isExporting ? 0.6 : 1 }}
                   >
-                    {isExporting ? '⏳ Salvando...' : '💾 Salvar no Drive'}
+                    {isExporting ? '⏳ Salvando...' : '☁️ Google Drive'}
+                  </button>
+                  <button 
+                    onClick={baixarCSV}
+                    style={{ flex: '1 1 140px', padding: '0.8rem', borderRadius: 12, background: '#3b82f6', color: 'white', border: 'none', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}
+                  >
+                    📥 Baixar
                   </button>
                   <button 
                     onClick={() => setPacotes([])}
                     style={{ padding: '0.8rem', borderRadius: 12, background: '#fee2e2', color: '#ef4444', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+                    title="Limpar Lista"
                   >
-                    🗑️ Limpar
+                    🗑️
                   </button>
                 </div>
               </div>
