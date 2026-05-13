@@ -283,15 +283,18 @@ export default function PlanejadorRotas() {
           }));
         }
 
-        // FILTRO DE FERRO: Só aceita se for no estado de São Paulo
-        const filtradas = brutos.filter((item: any) => {
+        // FILTRO DE SEGURANÇA: Tenta filtrar por SP, mas se não sobrar nada, mostra os brutos
+        let filtradas = brutos.filter((item: any) => {
           const info = (item.display_name + (item.address?.state || '') + (item.address?.city || ''))
             .toLowerCase()
             .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, ""); // Remove acentos
-          
+            .replace(/[\u0300-\u036f]/g, "");
           return info.includes('sao paulo') || info.includes('sp');
         });
+
+        if (filtradas.length === 0 && brutos.length > 0) {
+          filtradas = brutos; // Se o filtro for muito rigoroso e apagar tudo, mostra o original
+        }
 
         setSugestoes(filtradas.slice(0, 5));
       } catch (e) {
@@ -568,7 +571,7 @@ export default function PlanejadorRotas() {
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>📍 Planejador de Rotas</div>
             <div style={{ fontSize: '0.72rem', fontWeight: 900, padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginTop: 4, color: '#facc15' }}>
-              🏆 v1.9 - ARQUITETURA DE OURO 🏆
+              🛡️ v2.0 - BUSCA INQUEBRÁVEL 🛡️
             </div>
             <div style={{ fontSize: '0.72rem', opacity: 0.8, marginTop: 4 }}>
               {fase === 'otimizado' 
@@ -661,7 +664,10 @@ export default function PlanejadorRotas() {
               <div style={{ marginBottom: '1rem', textAlign: 'center' }}>
                 <div style={{ color: '#64748b', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Nenhuma sugestão encontrada em SP.</div>
                 <button 
-                  onClick={() => window.open(`https://www.google.com/maps/search/${encodeURIComponent(typedValue + ' São Paulo')}`, '_blank')}
+                  onClick={() => {
+                    const busca = `${typedValue.replace(/[,.-]/g, ' ')} São Paulo Brasil`;
+                    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(busca)}`, '_blank');
+                  }}
                   style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '0.6rem 1rem', borderRadius: 12, color: '#1e293b', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
                 >
                   🔎 Buscar no Google Maps
