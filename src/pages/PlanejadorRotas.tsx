@@ -268,19 +268,39 @@ export default function PlanejadorRotas() {
 
         // Prioridade 2: Busca por Texto (Photon) se o CEP falhar ou não existir
         if (brutos.length === 0) {
-          const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(textoParaPhoton)}&lat=-23.5505&lon=-46.6333&limit=10&lang=pt`);
-          const geojson = await res.json();
-          brutos = geojson.features.map((f: any) => ({
-            display_name: `${f.properties.name || ''}, ${f.properties.housenumber || ''} - ${f.properties.district || f.properties.city || ''} (${f.properties.state || ''})`,
-            lat: f.geometry.coordinates[1],
-            lon: f.geometry.coordinates[0],
-            address: {
-              suburb: f.properties.district,
-              city: f.properties.city,
-              state: f.properties.state,
-              postcode: f.properties.postcode
+          try {
+            const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(textoParaPhoton)}&limit=10&lang=pt`);
+            if (res.ok) {
+              const geojson = await res.json();
+              if (geojson && geojson.features) {
+                brutos = geojson.features.map((f: any) => ({
+                  display_name: `${f.properties.name || ''}, ${f.properties.housenumber || ''} - ${f.properties.district || f.properties.city || ''} (${f.properties.state || ''})`,
+                  lat: f.geometry.coordinates[1],
+                  lng: f.geometry.coordinates[0],
+                  address: {
+                    suburb: f.properties.district,
+                    city: f.properties.city,
+                    state: f.properties.state
+                  }
+                }));
+              }
             }
-          }));
+          } catch (e) {
+            console.error('Falha no Photon, tentando Nominatim...', e);
+          }
+        }
+
+        // Prioridade 3: Fallback Total para Nominatim se tudo acima falhar
+        if (brutos.length === 0) {
+          try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoParaPhoton + ', São Paulo, Brasil')}&addressdetails=1&limit=5&countrycodes=br`);
+            if (res.ok) {
+              const data = await res.json();
+              if (Array.isArray(data)) brutos = data;
+            }
+          } catch (e) {
+            console.error('Falha total na busca:', e);
+          }
         }
 
         // FILTRO DE SEGURANÇA: Tenta filtrar por SP, mas se não sobrar nada, mostra os brutos
@@ -571,7 +591,7 @@ export default function PlanejadorRotas() {
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>📍 Planejador de Rotas</div>
             <div style={{ fontSize: '0.72rem', fontWeight: 900, padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginTop: 4, color: '#facc15' }}>
-              🎯 v2.2 - GPS POR TEXTO 🎯
+              🛡️ v2.3 - ESTABILIDADE TOTAL 🛡️
             </div>
             <div style={{ fontSize: '0.72rem', opacity: 0.8, marginTop: 4 }}>
               {fase === 'otimizado' 
