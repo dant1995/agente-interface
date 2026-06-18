@@ -32,8 +32,6 @@ import Fornecedores from './pages/Fornecedores';
 import TikTokPost from './pages/TiktokPost';
 import TriagemRotas from './pages/TriagemRotas';
 import NavegacaoRota from './pages/NavegacaoRota';
-import PlanejadorRotas from './pages/PlanejadorRotas';
-import Usuarios from './pages/Usuarios';
 
 interface LoggedUser {
   nome: string;
