@@ -70,8 +70,6 @@ const allSections: { label: string; items: MenuItem[] }[] = [
 ];
 
 const Sidebar = ({ user, onLogout, permissoes = [] }: SidebarProps) => {
-  const permKey = permissoes.join(',');
-
   const hasPermission = (perm?: string) => {
     if (!perm) return true;
     if (permissoes.length === 0) return true;
