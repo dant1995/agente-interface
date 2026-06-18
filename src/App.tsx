@@ -50,14 +50,16 @@ function App() {
     setLoggedUser(user);
   };
 
+  const WEBHOOK = `${import.meta.env.DEV ? '' : 'https://n8n-n8n.sd8jyi.easypanel.host'}/webhook/usuarios`;
+
   const handleLogout = () => {
-    // Envia logout para o webhook
     if (loggedUser) {
-      fetch(`${import.meta.env.DEV ? '' : 'https://n8n-n8n.sd8jyi.easypanel.host'}/webhook/usuarios`, {
+      console.log('[App] Enviando logout para webhook...');
+      fetch(WEBHOOK, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'logout', usuario: loggedUser.usuario, data_hora_logout: new Date().toISOString() }),
-      }).catch(() => {});
+      }).then(r => r.text()).then(t => console.log('[App] Logout response:', t)).catch(e => console.error('[App] Logout error:', e));
     }
     localStorage.removeItem('app_user');
     setLoggedUser(null);

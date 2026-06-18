@@ -25,12 +25,12 @@ const Login = ({ onLogin }: Props) => {
     const savedUser = localStorage.getItem('app_admin_user') || 'admin';
     const savedPass = localStorage.getItem('app_admin_pass') || 'admin';
     if (usuario.trim().toLowerCase() === savedUser.toLowerCase() && senha.trim() === savedPass) {
-      // Envia login do admin para o webhook
+      console.log('[Login] Admin logando, enviando para webhook...');
       fetch(WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'login', usuario: savedUser, data_hora_login: new Date().toISOString() }),
-      }).catch(() => {});
+      }).then(r => r.text()).then(t => console.log('[Login] Admin webhook response:', t)).catch(e => console.error('[Login] Admin webhook error:', e));
       onLogin({ nome: 'Administrador', usuario: savedUser, permissoes: '' });
       setLoading(false);
       return;

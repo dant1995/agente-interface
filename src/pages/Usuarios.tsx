@@ -92,24 +92,28 @@ const Usuarios = () => {
     setSalvando(true);
     try {
       const id = `USR-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const payload = {
+        action: 'cadastrar_usuario',
+        id,
+        nome: nome.trim(),
+        usuario: usuario.trim(),
+        senha: senha.trim(),
+        permissoes: permissoes.join(','),
+      };
+      console.log('[Usuarios] Enviando cadastro:', JSON.stringify(payload));
       const resp = await fetch(WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'cadastrar_usuario',
-          id,
-          nome: nome.trim(),
-          usuario: usuario.trim(),
-          senha: senha.trim(),
-          permissoes: permissoes.join(','),
-        }),
+        body: JSON.stringify(payload),
       });
+      const respText = await resp.text();
+      console.log('[Usuarios] Resposta cadastro:', resp.status, respText);
       if (resp.ok) {
         alert('Usuário cadastrado com sucesso!');
         setNome(''); setUsuario(''); setSenha(''); setPermissoes([]);
         loadUsuarios();
       } else {
-        alert(`Erro ao cadastrar: status ${resp.status}`);
+        alert(`Erro ao cadastrar: status ${resp.status} - ${respText}`);
       }
     } catch (e: any) {
       alert(`Erro de rede: ${e.message}`);
