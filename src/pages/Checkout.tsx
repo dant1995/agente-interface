@@ -3,10 +3,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import { OrderStatus, type StockItem, type Order } from '../types';
 import { storage } from '../services/storage';
 import { apiSync } from '../services/apiSync';
-import { Search, Scan, ShoppingBag, Plus, Minus, CheckCircle, X,
-  Calendar,
-  History
-} from 'lucide-react';
+import { Search, Scan, ShoppingBag, CheckCircle, X, Calendar, History } from 'lucide-react';
 
 interface CartItem extends StockItem {
   quantity: number;
@@ -17,7 +14,6 @@ const Checkout = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [modalSearchTerm, setModalSearchTerm] = useState('');
-  const [expandedProducts, setExpandedProducts] = useState<string[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -26,67 +22,107 @@ const Checkout = () => {
   const [paymentMethod, setPaymentMethod] = useState<'Pix' | 'Dinheiro' | 'Cartão'>('Pix');
   const [saleOrigin, setSaleOrigin] = useState<'Físico' | 'Shopee' | 'TikTok' | 'Temu' | 'Mercado Livre' | 'Facebook'>('Físico');
   const [isManualSelectionOpen, setIsManualSelectionOpen] = useState(false);
+  const [catalogStock, setCatalogStock] = useState<StockItem[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState<'%' | 'R$'>('%');
   const [vendaRetroativa, setVendaRetroativa] = useState(false);
   const [dataManual, setDataManual] = useState(new Date().toISOString().split('T')[0]);
+  const [clientResults, setClientResults] = useState<{ nome: string; whatsapp: string; cidade?: string }[]>([]);
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
+  const [clientSearchField, setClientSearchField] = useState<'name' | 'phone'>('name');
+  const [clientSearching, setClientSearching] = useState(false);
+  const [allClients, setAllClients] = useState<{ nome: string; whatsapp: string; cidade?: string }[]>([]);
   const [recentSales, setRecentSales] = useState<Order[]>([]);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
+  const clientDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  const searchClients = async (term: string, field: 'name' | 'phone') => {
+    if (term.length < 2) { setClientResults([]); setShowClientDropdown(false); return; }
+    setClientSearchField(field);
+    setShowClientDropdown(true);
+
+    if (allClients.length === 0) {
+      setClientSearching(true);
+      try {
+        const clients = await apiSync.fetchClientesGlobais();
+        setAllClients(clients);
+      } catch { setAllClients([]); }
+      setClientSearching(false);
+    }
+
+    const lower = term.toLowerCase();
+    const filtered = allClients.filter(c =>
+      field === 'name'
+        ? (c.nome || '').toLowerCase().includes(lower)
+        : String(c.whatsapp || '').includes(term.replace(/\D/g, ''))
+    ).slice(0, 6);
+    setClientResults(filtered);
+  };
+
+  const selectClient = (client: { nome: string; whatsapp: string }) => {
+    setCustomerName(client.nome || '');
+    setCustomerPhone(client.whatsapp || '');
+    setShowClientDropdown(false);
+    setClientResults([]);
+  };
 
   useEffect(() => {
     loadData();
-    return () => {
-      stopScanner();
+    return () => { stopScanner(); };
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (clientDropdownRef.current && !clientDropdownRef.current.contains(e.target as Node)) {
+        setShowClientDropdown(false);
+      }
     };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const loadData = async () => {
-    const [stockData, orders] = await Promise.all([
-      storage.getStock(),
-      storage.getOrders()
-    ]);
+    const [stockData, orders] = await Promise.all([storage.getStock(), storage.getOrders()]);
     setStock(stockData);
-    
-    // Pegar apenas VENDAS (App ou Marketplace) - Excluir pedidos de produção (sem id_pedido numérico/fixo)
     const sortedSales = orders
-      .filter(o => 
-        (String(o.id_pedido).startsWith('VENDA-') || o.cliente === 'Venda Marketplace') &&
-        o.status !== OrderStatus.RECEBIDO && // Filtrar o que ainda não foi totalmente processado como venda direta? Na verdade RECEBIDO é o status inicial de venda.
-        o.status !== OrderStatus.PRODUCAO
-      )
+      .filter(o => String(o.id_pedido).startsWith('VENDA-') || o.cliente === 'Venda Marketplace')
       .sort((a, b) => new Date(b.data || b.dataCriacao || 0).getTime() - new Date(a.data || a.dataCriacao || 0).getTime())
-      .slice(0, 10);
+      .slice(0, 5);
     setRecentSales(sortedSales);
   };
 
   const handleSync = async () => {
     setSyncing(true);
     try {
-      const [externalStock, extSales] = await Promise.all([
-        apiSync.fetchEstoque(),
-        apiSync.fetchVendas()
-      ]);
-
-      if (externalStock) {
-        await storage.syncExternalStock(externalStock);
-        setStock(externalStock);
-      }
-      
-      if (extSales && extSales.length > 0) {
-        await storage.syncExternalOrders(extSales);
-      }
-      
-      await loadData(); // Recarregar tudo
-    } catch (e) {
-      console.error(e);
-    }
+      const [externalStock, extSales] = await Promise.all([apiSync.fetchEstoque(), apiSync.fetchVendas()]);
+      if (externalStock) { await storage.syncExternalStock(externalStock); setStock(externalStock); }
+      if (extSales && extSales.length > 0) await storage.syncExternalOrders(extSales);
+      await loadData();
+    } catch (e) { console.error(e); }
     setSyncing(false);
   };
 
-  const stopScanner = async () => {
-    if (html5QrCodeRef.current?.isScanning) {
-      await html5QrCodeRef.current.stop();
+  const openCatalog = async () => {
+    setIsManualSelectionOpen(true);
+    setCatalogLoading(true);
+    try {
+      const items = await apiSync.fetchEstoque(true);
+      if (items.length > 0) {
+        setCatalogStock(items);
+        setStock(items);
+      } else {
+        setCatalogStock(stock);
+      }
+    } catch (e) {
+      console.error('Erro ao buscar catálogo:', e);
+      setCatalogStock(stock);
     }
+    setCatalogLoading(false);
+  };
+
+  const stopScanner = async () => {
+    if (html5QrCodeRef.current?.isScanning) await html5QrCodeRef.current.stop();
     setIsScanning(false);
   };
 
@@ -96,59 +132,28 @@ const Checkout = () => {
       try {
         const html5QrCode = new Html5Qrcode("checkout-reader");
         html5QrCodeRef.current = html5QrCode;
-        
-        const config = {
-          fps: 15,
-          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-            const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-            const size = Math.floor(minEdge * 0.7);
-            return { width: size, height: size };
-          },
-          aspectRatio: 1.0,
-          disableFlip: true,
-        };
-
         await html5QrCode.start(
           { facingMode: "environment" },
-          config,
-          (decodedText) => {
-            addToCartByCode(decodedText);
-            stopScanner();
-          },
+          { fps: 15, qrbox: (w: number, h: number) => { const s = Math.floor(Math.min(w, h) * 0.7); return { width: s, height: s }; }, aspectRatio: 1.0, disableFlip: true },
+          (decodedText) => { addToCartByCode(decodedText); stopScanner(); },
           undefined
         );
-      } catch (err) {
-        console.error(err);
-        alert("Erro ao abrir a câmera. Verifique permissões e conexão HTTPS.");
-        setIsScanning(false);
-      }
+      } catch (err) { console.error(err); alert("Erro ao abrir a câmera."); setIsScanning(false); }
     }, 400);
   };
 
   const addToCartByCode = (code: string) => {
     const item = stock.find(s => String(s.codigoBarra).trim() === String(code).trim());
-    if (item) {
-      addItemToCart(item);
-    } else {
-      alert(`Código "${code}" não cadastrado no estoque.`);
-    }
+    if (item) addItemToCart(item);
+    else alert(`Código "${code}" não cadastrado.`);
   };
 
   const addItemToCart = (item: StockItem) => {
-    if (item.estoque <= 0) {
-      alert('Produto sem estoque disponível!');
-      return;
-    }
-
+    if (item.estoque <= 0) { alert('Produto sem estoque!'); return; }
     setCart(prev => {
-      const existing = prev.find(i =>
-        i.produto === item.produto && i.tamanho === item.tamanho && i.cor === item.cor
-      );
+      const existing = prev.find(i => i.produto === item.produto && i.tamanho === item.tamanho && i.cor === item.cor);
       if (existing) {
-        if (existing.quantity >= item.estoque) {
-          alert('Quantidade máxima em estoque atingida.');
-          return prev;
-        }
+        if (existing.quantity >= item.estoque) { alert('Estoque insuficiente!'); return prev; }
         return prev.map(i => i === existing ? { ...i, quantity: i.quantity + 1 } : i);
       }
       return [...prev, { ...item, quantity: 1 }];
@@ -157,571 +162,422 @@ const Checkout = () => {
 
   const updateQuantity = (index: number, delta: number) => {
     setCart(prev => {
-      const newItems = [...prev];
-      const item = newItems[index];
-      const newQty = item.quantity + delta;
-
-      if (newQty <= 0) {
-        return prev.filter((_, i) => i !== index);
-      }
-      if (newQty > item.estoque) {
-        alert('Estoque insuficiente!');
-        return prev;
-      }
-      newItems[index] = { ...item, quantity: newQty };
-      return newItems;
+      const n = [...prev];
+      const newQty = n[index].quantity + delta;
+      if (newQty <= 0) return prev.filter((_, i) => i !== index);
+      if (newQty > n[index].estoque) { alert('Estoque insuficiente!'); return prev; }
+      n[index] = { ...n[index], quantity: newQty };
+      return n;
     });
   };
 
-  const toggleProductExpand = (productName: string) => {
-    setExpandedProducts(prev => 
-      prev.includes(productName) 
-        ? prev.filter(p => p !== productName)
-        : [...prev, productName]
-    );
+  const calculateDiscountedTotal = () => {
+    let total = cart.reduce((acc, i) => acc + (i.quantity * (i.preco || 35)), 0);
+    if (discount > 0) {
+      total = discountType === '%' ? total * (1 - discount / 100) : total - discount;
+    }
+    return total > 0 ? total : 0;
   };
 
-  const calculateDiscountedTotal = () => {
-    let currentTotal = cart.reduce((acc, i) => acc + (i.quantity * (i.preco || 35)), 0);
-    if (discount > 0) {
-      if (discountType === '%') {
-        currentTotal = currentTotal * (1 - discount / 100);
-      } else { // R$
-        currentTotal = currentTotal - discount;
-      }
-    }
-    return currentTotal > 0 ? currentTotal : 0;
+  const convertGoogleDriveUrl = (url: string): string => {
+    if (!url) return '';
+    const match = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
+    if (match) return `https://drive.google.com/uc?export=view&id=${match[1]}`;
+    return url;
   };
+
+  const subtotal = cart.reduce((acc, i) => acc + (i.quantity * (i.preco || 35)), 0);
+  const totalComDesconto = calculateDiscountedTotal();
 
   const finalizeSale = async () => {
     if (cart.length === 0) return;
     setProcessing(true);
     try {
       const saleDate = vendaRetroativa ? new Date(dataManual) : new Date();
-      
-      // Calcular previsão de recebimento
-      // Marketplaces: 10 dias. Físico: 1 dia (D+1)
       const isMarketplace = ['Shopee', 'TikTok', 'Temu', 'Mercado Livre', 'Facebook'].includes(saleOrigin);
-      const daysToAdd = isMarketplace ? 10 : 1;
       const forecastDate = new Date(saleDate);
-      forecastDate.setDate(forecastDate.getDate() + daysToAdd);
+      forecastDate.setDate(forecastDate.getDate() + (isMarketplace ? 10 : 1));
 
-      // 1. Atualizar cada item no estoque local e enviar para o n8n
       for (const item of cart) {
-        // Atualizar estoque local
         await storage.updateStockQuantity(item.produto, item.tamanho, item.cor, item.quantity);
-
-        // Enviar para o n8n (Planilha)
         await apiSync.updateEstoque(item, item.quantity);
-
-        // CRIAR PEDIDO LOCAL (Para persistir no CRM e Relatórios)
         const unitPrice = item.preco || 35;
-        const unitCost = 15; // Custo estimado padrão
-
+        const unitCost = 15;
         let itemTotal = item.quantity * unitPrice;
         let itemDiscount = 0;
         if (discount > 0) {
-           if (discountType === '%') {
-             itemDiscount = itemTotal * (discount / 100);
-           } else { // R$
-             itemDiscount = discount / cart.length; // Divide o desconto fixo entre os itens
-           }
+          itemDiscount = discountType === '%' ? itemTotal * (discount / 100) : discount / cart.length;
         }
-        itemTotal = itemTotal - itemDiscount;
+        itemTotal -= itemDiscount;
 
         const orderData: Order = {
           id_pedido: `VENDA-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          data: vendaRetroativa ? new Date(dataManual).toISOString() : new Date().toISOString(),
-          dataCriacao: vendaRetroativa ? new Date(dataManual).toISOString() : new Date().toISOString(),
-          cliente: customerName || 'Venda Balcão',
-          whatsapp: customerPhone || '',
-          status: OrderStatus.RECEBIDO,
-          produtoNome: item.produto,
-          produtoId: item.produto, 
-          tamanho: item.tamanho,
-          cor: item.cor,
-          quantidade: item.quantity,
-          valorTotal: itemTotal,
-          preco: unitPrice,
-          custo: unitCost,
-          lucro: itemTotal - (item.quantity * unitCost),
-          pago: true,
-          entregue: true,
-          metodoPagamento: paymentMethod,
-          codigo_barra: item.codigoBarra || '',
+          data: saleDate.toISOString(), dataCriacao: saleDate.toISOString(),
+          cliente: customerName || 'Venda Balcão', whatsapp: customerPhone || '',
+          status: OrderStatus.ENTREGUE, produtoNome: item.produto, produtoId: item.produto,
+          tamanho: item.tamanho, cor: item.cor, quantidade: item.quantity,
+          valorTotal: itemTotal, preco: unitPrice, custo: unitCost,
+          lucro: itemTotal - (item.quantity * unitCost), pago: true, entregue: true,
+          metodoPagamento: paymentMethod, codigo_barra: item.codigoBarra || '',
           previsaoRecebimento: forecastDate.toISOString(),
-          observacoes: `Pagamento: ${paymentMethod}${discount > 0 ? ` | Desconto: ${discountType === '%' ? discount + '%' : 'R$ ' + discount}` : ''}${vendaRetroativa ? ' | VENDA RETROATIVA' : ''}`
+          observacoes: `Pagamento: ${paymentMethod}${discount > 0 ? ` | Desc: ${discountType === '%' ? discount + '%' : 'R$ ' + discount}` : ''}${vendaRetroativa ? ' | RETROATIVA' : ''}`
         };
         await storage.addOrder(orderData);
       }
 
-      // 1.5 Enviar dados completos para webhook n8n
       const salePayload = {
-         action: "nova_venda",
-         data: saleDate.toISOString(),
-         previsao_recebimento: forecastDate.toISOString(),
-         cliente: customerName || 'Venda Balcão',
-         telefone: customerPhone || '',
-         origem_venda: saleOrigin,
-         metodo_pagamento: paymentMethod,
-         itens: cart.map(i => ({
-             produto: i.produto,
-             tamanho: i.tamanho,
-             cor: i.cor,
-             quantidade: i.quantity,
-             preco_unitario: i.preco || 35,
-             ID: `${i.produto}-${i.tamanho}`
-         })),
-         total_bruto: cart.reduce((acc, i) => acc + (i.quantity * (i.preco || 35)), 0),
-         desconto: discountType === '%' ? (cart.reduce((acc, i) => acc + (i.quantity * (i.preco || 35)), 0) * (discount / 100)) : discount,
-         total_liquido: calculateDiscountedTotal(),
-         observacoes: `Desconto: ${discountType === '%' ? discount + '%' : 'R$ ' + discount}`
+        action: "nova_venda", data: saleDate.toISOString(), previsao_recebimento: forecastDate.toISOString(),
+        cliente: customerName || 'Venda Balcão', telefone: customerPhone || '',
+        origem_venda: saleOrigin, metodo_pagamento: paymentMethod,
+        itens: cart.map(i => ({ produto: i.produto, tamanho: i.tamanho, cor: i.cor, quantidade: i.quantity, preco_unitario: i.preco || 35, ID: `${i.produto}-${i.tamanho}` })),
+        total_bruto: subtotal, desconto: discountType === '%' ? subtotal * (discount / 100) : discount,
+        total_liquido: totalComDesconto, observacoes: `Desc: ${discountType === '%' ? discount + '%' : 'R$ ' + discount}`
       };
       await apiSync.notifyNewSale(salePayload);
+      await apiSync.notifyCaixa({ action: "nova_entrada", data: saleDate.toISOString(), descricao: `Venda ${saleOrigin} - ${customerName || 'Balcão'} (${cart.length} itens)`, categoria: "Vendas", entrada: totalComDesconto, saida: 0, metodo_pagamento: paymentMethod });
 
-      // 1.6 Enviar a receita para o fluxo de caixa
-      const caixaPayload = {
-         action: "nova_entrada",
-         data: saleDate.toISOString(),
-         descricao: `Venda ${saleOrigin} - ${customerName || 'Balcão'} (${cart.length} itens)`,
-         categoria: "Vendas",
-         entrada: calculateDiscountedTotal(),
-         saida: 0,
-         metodo_pagamento: paymentMethod
-      };
-      await apiSync.notifyCaixa(caixaPayload);
-
-      // 2. Gerar mensagem de WhatsApp se houver telefone
       if (customerPhone) {
         const cleanPhone = customerPhone.replace(/\D/g, '');
         const itemsList = cart.map(i => `${i.quantity}x ${i.produto} (${i.tamanho}/${i.cor}) - R$ ${(i.quantity * (i.preco || 35)).toFixed(2)}`).join('\n');
-        const totalPrice = calculateDiscountedTotal().toFixed(2);
-
-        const message = encodeURIComponent(
-          `*RECIBO DE VENDA - LOJAS CAPEL*\n\n` +
-          `Olá ${customerName || 'Cliente'}! Aqui está o resumo da sua compra:\n\n` +
-          `${itemsList}\n\n` +
-          `*TOTAL: R$ ${totalPrice}*\n\n` +
-          `Obrigado pela preferência! 😊`
-        );
-
+        const message = encodeURIComponent(`*RECIBO - LOJAS CAPEL*\n\nOlá ${customerName || 'Cliente'}!\n\n${itemsList}\n\n*TOTAL: R$ ${totalComDesconto.toFixed(2)}*\n\nObrigado! 😊`);
         window.open(`https://wa.me/55${cleanPhone}?text=${message}`, '_blank');
       }
 
-      alert('Venda finalizada com sucesso! Estoque atualizado no App e na Planilha.');
-      setCart([]);
-      setCustomerName('');
-      setCustomerPhone('');
-      setDiscount(0);
-      setDiscountType('%');
-      setPaymentMethod('Pix');
-      setSaleOrigin('Físico');
-      setVendaRetroativa(false);
+      alert('Venda finalizada!');
+      setCart([]); setCustomerName(''); setCustomerPhone(''); setDiscount(0); setDiscountType('%');
+      setPaymentMethod('Pix'); setSaleOrigin('Físico'); setVendaRetroativa(false);
       setDataManual(new Date().toISOString().split('T')[0]);
-      setExpandedProducts([]);
-      loadData(); // Recarregar estoque local atualizado
-    } catch (e) {
-      console.error(e);
-      alert('Erro ao processar venda. Verifique sua conexão.');
-    }
+      loadData();
+    } catch (e: any) { console.error('Erro finalizar:', e); alert(`Erro ao processar venda: ${e?.message || e}`); }
     setProcessing(false);
   };
 
   return (
-    <div className="page-content" style={{ background: '#f8fafc', minHeight: '100vh', padding: '0', paddingBottom: '120px' }}>
-
-      {/* Header Premium */}
-      <div style={{
-        background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-        padding: '1.5rem', color: 'white', position: 'sticky', top: 0, zIndex: 10
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1 style={{ fontSize: '1.4rem', fontWeight: '800', margin: 0 }}>Nova Venda</h1>
-            <p style={{ opacity: 0.7, fontSize: '0.8rem', margin: 0 }}>Checkout Rápido</p>
-          </div>
-          <button 
-            onClick={handleSync}
-            disabled={syncing}
-            style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', padding: '0.5rem 1rem', borderRadius: '20px', fontSize: '0.75rem' }}
-          >
-            {syncing ? 'Lendo...' : '🔄 Sincronizar'}
-          </button>
+    <div className="checkout-root">
+      {/* Header */}
+      <div className="checkout-header">
+        <div>
+          <h1 style={{ fontSize: '1.3rem', fontWeight: '800', margin: 0 }}>Nova Venda</h1>
+          <p style={{ opacity: 0.7, fontSize: '0.75rem', margin: 0 }}>Checkout Rápido</p>
         </div>
+        <button onClick={handleSync} disabled={syncing} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', padding: '0.4rem 0.8rem', borderRadius: '20px', fontSize: '0.7rem' }}>
+          {syncing ? 'Lendo...' : '🔄 Sync'}
+        </button>
       </div>
 
-      <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        
-        {/* Toggle Venda Manual */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', padding: '1rem', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
-            <div>
-                <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '800' }}>Modo de Lançamento</h3>
-                <p style={{ margin: 0, fontSize: '0.7rem', color: '#64748b' }}>Habilitar para vendas passadas</p>
-            </div>
-            <button 
-                onClick={() => setVendaRetroativa(!vendaRetroativa)}
-                style={{ 
-                    background: vendaRetroativa ? '#fef3c7' : '#f8fafc', 
-                    border: '1px solid', 
-                    borderColor: vendaRetroativa ? '#f59e0b' : '#e2e8f0',
-                    padding: '0.6rem 1rem', 
-                    borderRadius: '12px',
-                    fontSize: '0.8rem',
-                    fontWeight: '800',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    color: vendaRetroativa ? '#92400e' : '#64748b',
-                    transition: 'all 0.2s'
-                }}
-            >
-                {vendaRetroativa ? <Calendar size={16} /> : <History size={16} />}
-                {vendaRetroativa ? 'Datar Retroativo' : 'Venda Comum'}
-            </button>
-        </div>
+      <div className="checkout-body">
+        {/* ═══════ COLUNA ESQUERDA ═══════ */}
+        <div className="checkout-left">
 
-        {vendaRetroativa && (
-            <div style={{ background: '#fffbeb', padding: '1.2rem', borderRadius: '16px', border: '2px dashed #fcd34d' }}>
-                <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#92400e', marginBottom: '0.6rem', display: 'block' }}>ESCOLHA A DATA DA VENDA:</label>
-                <input 
-                    type="date" 
-                    value={dataManual}
-                    onChange={(e) => setDataManual(e.target.value)}
-                    style={{ 
-                        width: '100%', 
-                        padding: '1rem', 
-                        borderRadius: '12px', 
-                        border: '1px solid #fde68a', 
-                        outline: 'none', 
-                        background: 'white',
-                        fontSize: '1rem',
-                        fontWeight: '600'
-                    }}
-                />
-            </div>
-        )}
-        
-        {/* Scanner & Search */}
-        <div style={{ background: 'white', padding: '1.2rem', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-          <div style={{ position: 'relative', marginBottom: '1rem' }}>
-            <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-            <input 
-              type="text"
-              placeholder="🔍 Buscar produto por nome ou código..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && (addToCartByCode(searchTerm), setSearchTerm(''))}
-              style={{ width: '100%', padding: '0.9rem 1rem 0.9rem 2.6rem', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '1rem', outline: 'none', background: '#f8fafc' }}
-            />
-            
-            {/* Resultados da Busca */}
-            {searchTerm.length > 1 && (
-              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', zIndex: 50, maxHeight: '300px', overflowY: 'auto', marginTop: '5px', border: '1px solid #e2e8f0' }}>
-                {stock.filter(s => 
-                  s.produto.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                  s.codigoBarra?.includes(searchTerm)
-                ).map((item, i) => (
-                  <div 
-                    key={i} 
-                    onClick={() => {
-                        addItemToCart(item);
-                        setSearchTerm('');
-                    }}
-                    style={{ padding: '0.8rem 1rem', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                  >
-                    <div>
-                        <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>{item.produto}</div>
+          {/* Modo retroativo + Busca + Botões */}
+          <div className="checkout-card">
+            {vendaRetroativa && (
+              <div style={{ background: '#fffbeb', padding: '0.8rem', borderRadius: '10px', border: '1px dashed #fcd34d', marginBottom: '0.8rem' }}>
+                <label style={{ fontSize: '0.7rem', fontWeight: '700', color: '#92400e', marginBottom: '0.4rem', display: 'block' }}>DATA DA VENDA:</label>
+                <input type="date" value={dataManual} onChange={(e) => setDataManual(e.target.value)}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #fde68a', fontSize: '0.85rem', fontWeight: '600' }} />
+              </div>
+            )}
+
+            <div style={{ position: 'relative', marginBottom: '0.8rem' }}>
+              <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+              <input type="text" placeholder="🔍 Buscar por nome ou código..." value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (addToCartByCode(searchTerm), setSearchTerm(''))}
+                style={{ width: '100%', padding: '0.7rem 0.8rem 0.7rem 2.4rem', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '0.9rem', outline: 'none', background: '#f8fafc' }} />
+              {searchTerm.length > 1 && (
+                <div className="checkout-search-results">
+                  {stock.filter(s => s.produto.toLowerCase().includes(searchTerm.toLowerCase()) || String(s.codigoBarra || '').includes(searchTerm)).map((item, i) => (
+                    <div key={i} onClick={() => { addItemToCart(item); setSearchTerm(''); }} className="checkout-search-item">
+                      <div>
+                        <div style={{ fontWeight: '700', fontSize: '0.85rem' }}>{item.produto}</div>
                         <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{item.tamanho} • {item.cor} • <span style={{ color: '#3b82f6' }}>R$ {item.preco || 35}</span></div>
+                      </div>
+                      <div style={{ background: '#f0f9ff', color: '#0369a1', padding: '0.15rem 0.4rem', borderRadius: '6px', fontSize: '0.65rem', fontWeight: 'bold' }}>Qtd: {item.estoque}</div>
                     </div>
-                    <div style={{ background: '#f0f9ff', color: '#0369a1', padding: '0.2rem 0.5rem', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 'bold' }}>
-                        Qtd: {item.estoque}
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button onClick={openCatalog} className="checkout-btn-catalog">
+                <ShoppingBag size={16} /> CATÁLOGO
+              </button>
+              <button onClick={startScanner} className="checkout-btn-scan">
+                <Scan size={16} /> ESCANEAR
+              </button>
+              <button onClick={() => setVendaRetroativa(!vendaRetroativa)}
+                style={{ padding: '0.6rem 0.7rem', borderRadius: '10px', border: vendaRetroativa ? '1.5px solid #f59e0b' : '1px solid #e2e8f0', background: vendaRetroativa ? '#fef3c7' : 'white', fontSize: '0.7rem', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem', color: vendaRetroativa ? '#92400e' : '#64748b', flexShrink: 0 }}>
+                {vendaRetroativa ? <Calendar size={14} /> : <History size={14} />}
+                {vendaRetroativa ? 'Retroativo' : 'Data'}
+              </button>
+            </div>
+          </div>
+
+          {/* Carrinho */}
+          <div className="checkout-card checkout-cart">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.8rem' }}>
+              <ShoppingBag size={18} />
+              <h2 style={{ fontSize: '1rem', fontWeight: '700', margin: 0 }}>Carrinho ({cart.length})</h2>
+            </div>
+            {cart.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: '#94a3b8' }}>
+                <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🛒</div>
+                <p style={{ fontSize: '0.85rem' }}>Escaneie ou busque produtos</p>
+              </div>
+            ) : (
+              <div className="checkout-cart-list">
+                {cart.map((item, idx) => (
+                  <div key={idx} className="checkout-cart-item">
+                    <div style={{ width: '42px', height: '42px', background: '#f1f5f9', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', flexShrink: 0 }}>👕</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: '700', fontSize: '0.85rem', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.produto}</div>
+                      <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.2rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.65rem', fontWeight: '700', background: '#eef2ff', color: '#4f46e5', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>{item.tamanho}</span>
+                        <span style={{ fontSize: '0.65rem', fontWeight: '700', background: '#fef3c7', color: '#92400e', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>{item.cor}</span>
+                        <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Est: {item.estoque}</span>
+                        <span style={{ fontSize: '0.65rem', fontWeight: '600', color: '#3b82f6' }}>R$ {(item.preco || 35).toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <div className="checkout-qty-controls">
+                      <button onClick={() => updateQuantity(idx, -1)} className="checkout-qty-btn">−</button>
+                      <span className="checkout-qty-value">{item.quantity}</span>
+                      <button onClick={() => updateQuantity(idx, 1)} className="checkout-qty-btn checkout-qty-plus">+</button>
+                    </div>
+                    <div style={{ fontWeight: '800', fontSize: '0.85rem', color: '#1e293b', textAlign: 'right', flexShrink: 0, minWidth: '60px' }}>
+                      R$ {((item.preco || 35) * item.quantity).toFixed(2)}
                     </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
-          <div style={{ display: 'flex', gap: '0.8rem' }}>
-            <button
-              onClick={() => setIsManualSelectionOpen(true)}
-              style={{ 
-                flex: 1, background: '#f8fafc', color: '#3b82f6', border: '1px solid #bfdbfe', 
-                borderRadius: '12px', padding: '1rem', fontWeight: '700', 
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.8rem'
-              }}
-            >
-              <ShoppingBag size={20} /> CATÁLOGO
-            </button>
-            <button
-              onClick={startScanner}
-              style={{ 
-                flex: 1, background: '#3b82f6', color: 'white', border: 'none', 
-                borderRadius: '12px', padding: '1rem', fontWeight: '700', 
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.8rem'
-              }}
-            >
-              <Scan size={20} /> ESCANEAR PRODUTO
-            </button>
-          </div>
-        </div>
 
-        {/* Carrinho */}
-        <div style={{ background: 'white', borderRadius: '16px', padding: '1.2rem', minHeight: '200px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.2rem', color: '#1e293b' }}>
-            <ShoppingBag size={20} />
-            <h2 style={{ fontSize: '1.1rem', fontWeight: '700', margin: 0 }}>Carrinho ({cart.length})</h2>
-          </div>
-
-          {/* Dados do Cliente */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', marginBottom: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '12px' }}>
-             <h3 style={{ fontSize: '0.85rem', fontWeight: '700', color: '#64748b', margin: '0 0 0.4rem 0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                👤 DADOS DO CLIENTE (RECIBO)
-             </h3>
-             <input 
-                type="text" 
-                placeholder="Nome do Cliente (Opcional)"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                style={{ padding: '0.8rem', borderRadius: '10px', border: '1px solid #e2e8f0', width: '100%', fontSize: '0.9rem' }}
-             />
-             <input 
-                type="tel" 
-                placeholder="WhatsApp (ex: 11999999999)"
-                value={customerPhone}
-                onChange={(e) => setCustomerPhone(e.target.value)}
-                style={{ padding: '0.8rem', borderRadius: '10px', border: '1px solid #e2e8f0', width: '100%', fontSize: '0.9rem' }}
-             />
-             <p style={{ fontSize: '0.7rem', color: '#94a3b8', margin: 0 }}>Deixe em branco se não quiser enviar recibo.</p>
-          </div>
-
-          {cart.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#94a3b8' }}>
-              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🛒</div>
-              <p>Escaneie produtos para adicionar à venda</p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {cart.map((item, idx) => (
-                <div key={idx} style={{ 
-                  display: 'flex', alignItems: 'center', gap: '1rem', 
-                  paddingBottom: '1rem', borderBottom: '1px solid #f1f5f9' 
-                }}>
-                  <div style={{ 
-                    width: '50px', height: '50px', background: '#f8fafc', 
-                    borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' 
-                  }}>👕</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>{item.produto}</div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                      {item.tamanho} • {item.cor} • <span style={{ color: '#3b82f6' }}>Estoque: {item.estoque}</span>
+          {/* Vendas Recentes (compacto) */}
+          {recentSales.length > 0 && (
+            <div className="checkout-card checkout-recent">
+              <h3 style={{ fontSize: '0.8rem', fontWeight: '700', color: '#64748b', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <History size={14} /> Últimas Vendas
+              </h3>
+              <div className="checkout-recent-list">
+                {recentSales.map((sale, i) => (
+                  <div key={i} className="checkout-recent-item">
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ fontWeight: '600', fontSize: '0.75rem' }}>{sale.produtoNome}</span>
+                      <span style={{ fontSize: '0.65rem', color: '#94a3b8', marginLeft: '0.4rem' }}>{sale.tamanho}/{sale.cor}</span>
                     </div>
+                    <span style={{ fontWeight: '700', fontSize: '0.75rem', color: '#10b981' }}>R$ {(sale.valorTotal || 0).toFixed(0)}</span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', background: '#f8fafc', padding: '0.4rem', borderRadius: '8px' }}>
-                    <button onClick={() => updateQuantity(idx, -1)} style={{ background: 'none', border: 'none', color: '#64748b' }}><Minus size={16} /></button>
-                    <span style={{ fontWeight: '800', fontSize: '0.9rem', minWidth: '20px', textAlign: 'center' }}>{item.quantity}</span>
-                    <button onClick={() => updateQuantity(idx, 1)} style={{ background: 'none', border: 'none', color: '#3b82f6' }}><Plus size={16} /></button>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
         </div>
 
-        {/* Vendas Recentes */}
-        <div style={{ background: 'white', borderRadius: '16px', padding: '1.2rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.2rem', color: '#1e293b' }}>
-            <History size={20} />
-            <h2 style={{ fontSize: '1.1rem', fontWeight: '700', margin: 0 }}>Vendas Recentes</h2>
-          </div>
-          {recentSales.length === 0 ? (
-            <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem', padding: '1rem 0' }}>Nenhuma venda recente registrada.</p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-              {recentSales.map((sale, idx) => (
-                <div key={idx} style={{ 
-                  padding: '1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #f1f5f9',
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                }}>
-                  <div>
-                    <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>{sale.produtoNome}</div>
-                    <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
-                      {new Date(sale.data).toLocaleDateString('pt-BR')} • {sale.tamanho}/{sale.cor}
+        {/* ═══════ COLUNA DIREITA ═══════ */}
+        <div className="checkout-right">
+          <div className="checkout-card checkout-panel">
+            <h3 style={{ fontSize: '0.9rem', fontWeight: '800', color: '#1e293b', marginBottom: '1rem' }}>Fechar Venda</h3>
+
+            {/* Dados do Cliente */}
+            <div className="checkout-panel-section" style={{ position: 'relative' }} ref={clientDropdownRef}>
+              <label className="checkout-label">👤 CLIENTE</label>
+              <input type="text" placeholder="Nome do cliente..." value={customerName}
+                onChange={(e) => { setCustomerName(e.target.value); searchClients(e.target.value, 'name'); }}
+                onFocus={() => { if (clientResults.length > 0 && customerName.length >= 2) setShowClientDropdown(true); }}
+                className="checkout-input" />
+              <input type="tel" placeholder="WhatsApp" value={customerPhone}
+                onChange={(e) => { setCustomerPhone(e.target.value); searchClients(e.target.value, 'phone'); }}
+                onFocus={() => { if (clientResults.length > 0 && customerPhone.length >= 2) setShowClientDropdown(true); }}
+                className="checkout-input" />
+              {showClientDropdown && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 50, maxHeight: '220px', overflowY: 'auto' }}>
+                  {clientSearching ? (
+                    <div style={{ padding: '0.8rem', textAlign: 'center', color: '#64748b', fontSize: '0.75rem' }}>
+                      Buscando clientes...
                     </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontWeight: '800', fontSize: '0.9rem', color: '#10b981' }}>R$ {(sale.valorTotal || 0).toFixed(2)}</div>
-                    <div style={{ fontSize: '0.6rem', color: '#94a3b8', background: '#f1f5f9', padding: '0.2rem 0.4rem', borderRadius: '4px', marginTop: '0.2rem' }}>
-                      Prev: {sale.previsaoRecebimento ? new Date(sale.previsaoRecebimento).toLocaleDateString('pt-BR') : '-'}
+                  ) : clientResults.length > 0 ? (
+                    <>
+                      <div style={{ padding: '0.35rem 0.8rem', fontSize: '0.65rem', color: '#3b82f6', fontWeight: '600', borderBottom: '1px solid #f1f5f9' }}>
+                        {clientResults.length} cliente{clientResults.length > 1 ? 's' : ''} encontrado{clientResults.length > 1 ? 's' : ''}
+                      </div>
+                      {clientResults.map((c, i) => (
+                        <div key={i} onClick={() => selectClient(c)}
+                          style={{ padding: '0.6rem 0.8rem', cursor: 'pointer', borderBottom: i < clientResults.length - 1 ? '1px solid #f1f5f9' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'background 0.15s' }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = '#f0f9ff')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'white')}>
+                          <div>
+                            <div style={{ fontWeight: '700', fontSize: '0.82rem', color: '#1e293b' }}>{c.nome}</div>
+                            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>📱 {c.whatsapp} {c.cidade ? `• 📍 ${c.cidade}` : ''}</div>
+                          </div>
+                          <div style={{ fontSize: '0.65rem', color: '#3b82f6', fontWeight: '600' }}> selecionar</div>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <div style={{ padding: '0.8rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.75rem' }}>
+                      Nenhum cliente encontrado com esse {clientSearchField === 'name' ? 'nome' : 'WhatsApp'}
                     </div>
-                  </div>
+                  )}
                 </div>
-              ))}
+              )}
             </div>
-          )}
+
+            {/* Canal de Venda */}
+            <div className="checkout-panel-section">
+              <label className="checkout-label">📡 CANAL DE VENDA</label>
+              <div className="checkout-channel-grid">
+                {(['Físico', 'Shopee', 'TikTok', 'Temu', 'Mercado Livre', 'Facebook'] as const).map(c => (
+                  <button key={c} onClick={() => setSaleOrigin(c)} className={`checkout-channel-btn ${saleOrigin === c ? 'active' : ''}`}>
+                    {c === 'Físico' ? '🏪' : c === 'Shopee' ? '🛍️' : c === 'TikTok' ? '🎵' : c === 'Temu' ? '📦' : c === 'Mercado Livre' ? '🤝' : '👥'} {c}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Desconto */}
+            <div className="checkout-panel-section">
+              <label className="checkout-label">🏷️ DESCONTO</label>
+              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                <input type="number" placeholder="0" value={discount || ''} onChange={(e) => setDiscount(Number(e.target.value))}
+                  style={{ flex: 1, padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem', textAlign: 'center', fontWeight: '600' }} />
+                <button onClick={() => setDiscountType(discountType === '%' ? 'R$' : '%')}
+                  style={{ padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', fontWeight: '800', fontSize: '0.85rem', cursor: 'pointer', color: '#3b82f6' }}>
+                  {discountType}
+                </button>
+              </div>
+            </div>
+
+            {/* Formas de Pagamento */}
+            <div className="checkout-panel-section">
+              <label className="checkout-label">💳 PAGAMENTO</label>
+              <div className="checkout-payment-grid">
+                {([
+                  { key: 'Pix' as const, icon: '📱', label: 'Pix' },
+                  { key: 'Cartão' as const, icon: '💳', label: 'Cartão' },
+                  { key: 'Dinheiro' as const, icon: '💵', label: 'Dinheiro' },
+                ]).map(p => (
+                  <button key={p.key} onClick={() => setPaymentMethod(p.key)} className={`checkout-payment-btn ${paymentMethod === p.key ? 'active' : ''}`}>
+                    <span style={{ fontSize: '1.2rem' }}>{p.icon}</span>
+                    <span>{p.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Resumo */}
+            <div className="checkout-panel-section" style={{ borderBottom: 'none', paddingBottom: 0 }}>
+              <div className="checkout-summary-row">
+                <span>Subtotal</span>
+                <span>R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              </div>
+              {discount > 0 && (
+                <div className="checkout-summary-row" style={{ color: '#ef4444' }}>
+                  <span>Desconto ({discountType === '%' ? `${discount}%` : `R$ ${discount}`})</span>
+                  <span>- R$ {(subtotal - totalComDesconto).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+              )}
+              <div className="checkout-summary-total">
+                <span>TOTAL</span>
+                <span>R$ {totalComDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+
+            {/* Botão Finalizar */}
+            <button onClick={finalizeSale} disabled={processing || cart.length === 0} className="checkout-finalize-btn">
+              <CheckCircle size={20} />
+              {processing ? 'Processando...' : 'FINALIZAR E EMITIR RECIBO'}
+            </button>
+          </div>
         </div>
       </div>
-
-      {/* Rodapé Checkout */}
-      {cart.length > 0 && (
-        <div style={{ 
-          position: 'fixed', bottom: '70px', left: 0, right: 0, 
-          background: 'white', padding: '1rem', borderTop: '1px solid #e2e8f0',
-          boxShadow: '0 -4px 12px rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', gap: '0.8rem',
-          zIndex: 100
-        }}>
-          {/* Pagamento e Desconto */}
-          <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
-             <select 
-                value={paymentMethod} 
-                onChange={(e: any) => setPaymentMethod(e.target.value)}
-                style={{ flex: 1, padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.85rem', fontWeight: 'bold' }}
-             >
-                <option value="Pix">📱 Pix</option>
-                <option value="Dinheiro">💵 Dinheiro</option>
-                <option value="Cartão">💳 Cartão</option>
-             </select>
-             <select 
-                value={saleOrigin} 
-                onChange={(e: any) => setSaleOrigin(e.target.value)}
-                style={{ flex: 1, padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.85rem', fontWeight: 'bold' }}
-             >
-                <option value="Físico">🏪 Físico</option>
-                <option value="Shopee">🛍️ Shopee</option>
-                <option value="TikTok">🎵 TikTok</option>
-                <option value="Temu">📦 Temu</option>
-                <option value="Mercado Livre">🤝 M. Livre</option>
-                <option value="Facebook">👥 Facebook</option>
-             </select>
-             <div style={{ display: 'flex', alignItems: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', padding: '0 0.5rem' }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748b', marginRight: '0.4rem' }}>DESC</span>
-                <input 
-                    type="number" 
-                    placeholder="Val"
-                    value={discount || ''}
-                    onChange={(e) => setDiscount(Number(e.target.value))}
-                    style={{ width: '40px', border: 'none', background: 'transparent', padding: '0.6rem 0', fontSize: '0.85rem', textAlign: 'center', outline: 'none' }}
-                />
-                <button onClick={() => setDiscountType(discountType === '%' ? 'R$' : '%')} style={{ border: 'none', background: 'none', color: '#3b82f6', fontWeight: '800', fontSize: '0.8rem' }}>{discountType}</button>
-             </div>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ color: '#64748b', fontWeight: '600', fontSize: '0.85rem' }}>Total com Desconto</span>
-            <span style={{ fontSize: '1.4rem', fontWeight: '900', color: '#1e293b' }}>
-                R$ {(cart.reduce((acc, i) => acc + (i.quantity * (i.preco || 35)), 0) * (discountType === '%' ? (1 - discount/100) : 1) - (discountType === 'R$' ? discount : 0)).toFixed(2)}
-            </span>
-          </div>
-          <button
-            onClick={finalizeSale}
-            disabled={processing}
-            style={{ 
-              width: '100%', background: '#10b981', color: 'white', border: 'none', 
-              borderRadius: '12px', padding: '1.1rem', fontSize: '1.1rem', fontWeight: '800',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.8rem'
-            }}
-          >
-            <CheckCircle size={22} /> FINALIZAR VENDA
-          </button>
-        </div>
-      )}
 
       {/* Scanner Overlay */}
       {isScanning && (
         <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 200, display: 'flex', flexDirection: 'column' }}>
           <div id="checkout-reader" style={{ flex: 1 }}></div>
-          <button onClick={stopScanner} style={{ padding: '1.5rem', background: '#ef4444', color: 'white', border: 'none', fontWeight: 'bold' }}>CANCELAR SCANNER</button>
+          <button onClick={stopScanner} style={{ padding: '1.5rem', background: '#ef4444', color: 'white', border: 'none', fontWeight: 'bold' }}>CANCELAR</button>
         </div>
       )}
 
-      {/* Modal Catálogo Visual */}
+      {/* Modal Catálogo */}
       {isManualSelectionOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.75)', zIndex: 300, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-          <div style={{ background: 'white', height: '85vh', maxHeight: '85vh', borderTopLeftRadius: '24px', borderTopRightRadius: '24px', display: 'flex', flexDirection: 'column', animation: 'slideUp 0.3s ease-out' }}>
-            <div style={{ padding: '1.2rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800' }}>Catálogo de Produtos</h3>
-              <button onClick={() => setIsManualSelectionOpen(false)} style={{ background: '#f1f5f9', border: 'none', color: '#64748b', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <X size={18} />
-              </button>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.75)', zIndex: 300, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+          <div style={{ background: 'white', height: '88vh', borderTopLeftRadius: '24px', borderTopRightRadius: '24px', display: 'flex', flexDirection: 'column' }}>
+            {/* Header */}
+            <div style={{ padding: '1rem 1.2rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '800' }}>Catálogo de Produtos</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{catalogStock.length} itens</span>
+                <button onClick={() => setIsManualSelectionOpen(false)} style={{ background: '#f1f5f9', border: 'none', width: '30px', height: '30px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} /></button>
+              </div>
             </div>
-            <div style={{ padding: '0.8rem 1.2rem', borderBottom: '1px solid #e2e8f0' }}>
-               <input 
-                  type="text"
-                  placeholder="Buscar no catálogo..."
-                  value={modalSearchTerm}
-                  onChange={(e) => setModalSearchTerm(e.target.value)}
-                  style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '0.95rem', outline: 'none', background: '#f8fafc' }}
-                />
+
+            {/* Search */}
+            <div style={{ padding: '0.6rem 1.2rem', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+              <input type="text" placeholder="🔍 Buscar produto..." value={modalSearchTerm} onChange={(e) => setModalSearchTerm(e.target.value)}
+                style={{ width: '100%', padding: '0.7rem', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '0.9rem', outline: 'none', background: '#f8fafc' }} />
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.8rem', paddingBottom: '2rem' }}>
-              {(() => {
-                const filteredStock = stock.filter(s => 
-                  s.produto.toLowerCase().includes(modalSearchTerm.toLowerCase()) || 
-                  s.codigoBarra?.includes(modalSearchTerm)
-                );
 
-                const grouped = filteredStock.reduce((acc, item) => {
-                  if (!acc[item.produto]) {
-                    acc[item.produto] = { totalEstoque: 0, variants: [] };
-                  }
-                  acc[item.produto].totalEstoque += item.estoque;
-                  acc[item.produto].variants.push(item);
-                  return acc;
-                }, {} as Record<string, { totalEstoque: number, variants: StockItem[] }>);
-
-                return Object.entries(grouped).map(([produto, data]) => {
-                  const isExpanded = expandedProducts.includes(produto);
-                  return (
-                    <div key={produto} style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                      <div 
-                        onClick={() => toggleProductExpand(produto)}
-                        style={{ padding: '0.8rem 1rem', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: isExpanded ? '#f8fafc' : 'white', gap: '0.5rem' }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flex: 1, minWidth: 0 }}>
-                           <div style={{ width: '36px', height: '36px', background: '#eff6ff', color: '#3b82f6', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 'bold' }}>
-                            {data.variants.length}
-                           </div>
-                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: '800', fontSize: '0.9rem', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{produto}</div>
-                            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{data.variants.length} variações</div>
-                           </div>
+            {/* Content */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0.8rem 1rem', paddingBottom: '2rem' }}>
+              {catalogLoading ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem', gap: '0.8rem' }}>
+                  <div style={{ width: '40px', height: '40px', border: '3px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                  <span style={{ color: '#64748b', fontSize: '0.85rem', fontWeight: '600' }}>Carregando produtos...</span>
+                </div>
+              ) : catalogStock.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
+                  <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📦</div>
+                  <p style={{ fontSize: '0.85rem' }}>Nenhum produto encontrado. Sincronize o estoque primeiro.</p>
+                </div>
+              ) : (
+                <div className="catalog-grid">
+                  {catalogStock
+                    .filter(item => {
+                      if (!modalSearchTerm) return true;
+                      const term = modalSearchTerm.toLowerCase();
+                      return (item.produto || '').toLowerCase().includes(term) ||
+                             String(item.codigoBarra || '').includes(term) ||
+                             (item.cor || '').toLowerCase().includes(term);
+                    })
+                    .map((item, i) => {
+                      const imgUrl = convertGoogleDriveUrl(item.imagem || '');
+                      const preco = item.precoDesconto || item.preco || 35;
+                      return (
+                        <div key={`${item.codigoBarra}-${item.tamanho}-${item.cor}-${i}`} className="catalog-card">
+                          <div className="catalog-img-wrap">
+                            {imgUrl ? (
+                              <img src={imgUrl} alt={item.produto} className="catalog-img" loading="lazy"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                            ) : (
+                              <div className="catalog-img-placeholder">👕</div>
+                            )}
+                            {item.estoque <= 0 && (
+                              <div className="catalog-out-badge">Esgotado</div>
+                            )}
+                          </div>
+                          <div className="catalog-info">
+                            <div className="catalog-name">{item.produto}</div>
+                            <div className="catalog-variant">
+                              <span className="catalog-tag-tam">{item.tamanho}</span>
+                              <span className="catalog-tag-cor">{item.cor}</span>
+                            </div>
+                            <div className="catalog-price">R$ {preco.toFixed(2)}</div>
+                          </div>
+                          <button
+                            className="catalog-add-btn"
+                            disabled={item.estoque <= 0}
+                            onClick={() => { addItemToCart(item); }}
+                          >
+                            + Adicionar
+                          </button>
                         </div>
-                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                           <div style={{ fontWeight: '700', color: '#3b82f6', fontSize: '0.85rem' }}>A partir de R$ {Math.min(...data.variants.map(v => v.preco || 35))}</div>
-                           <div style={{ fontSize: '0.65rem', fontWeight: 'bold', color: data.totalEstoque > 0 ? '#10b981' : '#ef4444', background: data.totalEstoque > 0 ? '#dcfce7' : '#fee2e2', padding: '0.2rem 0.5rem', borderRadius: '6px', display: 'inline-block', marginTop: '0.2rem' }}>
-                              Estoque: {data.totalEstoque}
-                           </div>
-                        </div>
-                      </div>
-
-                      {isExpanded && (
-                        <div style={{ borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
-                           {data.variants.map((variant, i) => (
-                             <div 
-                               key={i} 
-                               onClick={() => { addItemToCart(variant); setIsManualSelectionOpen(false); }}
-                               style={{ padding: '0.6rem 0.8rem 0.6rem 0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', borderBottom: i < data.variants.length - 1 ? '1px solid #e2e8f0' : 'none', gap: '0.5rem' }}
-                             >
-                               <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontWeight: '600', fontSize: '0.8rem', color: '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Tam: {variant.tamanho} • {variant.cor}</div>
-                               </div>
-                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexShrink: 0 }}>
-                                 <span style={{ fontWeight: '700', color: '#3b82f6', fontSize: '0.85rem' }}>R$ {variant.preco || 35}</span>
-                                 <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: variant.estoque > 0 ? '#10b981' : '#ef4444', background: variant.estoque > 0 ? '#dcfce7' : '#fee2e2', padding: '0.2rem 0.3rem', borderRadius: '4px' }}>
-                                    Qtd: {variant.estoque}
-                                 </span>
-                                 <button style={{ background: '#3b82f6', color: 'white', border: 'none', width: '24px', height: '24px', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Plus size={14} />
-                                 </button>
-                               </div>
-                             </div>
-                           ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                });
-              })()}
-              {stock.length === 0 && <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Nenhum produto em estoque. Sincronize primeiro.</div>}
+                      );
+                    })}
+                </div>
+              )}
             </div>
           </div>
         </div>

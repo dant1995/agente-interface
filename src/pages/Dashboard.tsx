@@ -29,9 +29,6 @@ const Dashboard = () => {
     estrategia: null as any,
   });
 
-
-
-
   const [syncing, setSyncing] = useState(true);
   const [lastSync, setLastSync] = useState<string | null>(null);
 
@@ -42,13 +39,11 @@ const Dashboard = () => {
   const autoSync = async () => {
     setSyncing(true);
 
-    // Sincronizar pedidos e vendas (marketplaces)
     try {
       const [extOrders, extSales] = await Promise.all([
         apiSync.fetchPedidos(),
         apiSync.fetchVendas()
       ]);
-
       const allExternalOrders = [...(extOrders || []), ...(extSales || [])];
       if (allExternalOrders.length > 0) {
         await storage.syncExternalOrders(allExternalOrders);
@@ -57,7 +52,6 @@ const Dashboard = () => {
       console.warn('Não foi possível sincronizar pedidos/vendas:', e);
     }
 
-    // Sincronizar gastos/financeiro e caixa
     let financeiro = { totalCustos: 0, totalVendas: 0, lucroBruto: 0, totalNegocio: 0, totalPessoal: 0 };
     let caixa = { summary: { entrada: 0, saida: 0, saldo: 0 } };
     let contas: any[] = [];
@@ -75,20 +69,14 @@ const Dashboard = () => {
       console.warn('Não foi possível sincronizar dados financeiros extras:', e);
     }
 
-    // Calcular métricas
     const orders = await storage.getOrders();
     const stockData = await storage.getStock();
 
-    // 1. Total de Vendas (Todos os pedidos ativos - App + Marketplace)
     const activeSales = orders.filter(o => {
       const s = String(o.status).toLowerCase();
       return !s.includes('cancelado') && !s.includes('estorno');
     });
 
-    // 2. Vendas Realizadas (Apenas Prontas ou Entregues)
-
-
-    // 2. Em Produção (Todos os estágios ativos)
     const emProducaoItems = orders.filter(o => {
       const s = String(o.status);
       return s === OrderStatus.PRODUCAO || s === OrderStatus.CORTE || s === OrderStatus.ESTAMPA || s === OrderStatus.COSTURA || s === OrderStatus.REVISAO ||
@@ -96,7 +84,6 @@ const Dashboard = () => {
     });
     const emProducaoCount = emProducaoItems.length;
 
-    // 2. Previsão de Recebimento Curta (Prox 10 dias)
     let proximaData: Date | null = null;
     const totalPrevisao = orders.reduce((acc, o) => {
       if (o.previsaoRecebimento) {
@@ -110,18 +97,11 @@ const Dashboard = () => {
       return acc;
     }, 0);
 
-    // 3. Lógica Financeira Avançada (Previsão 30 dias)
     const hoje = new Date();
-    const trintaDias = new Date();
-    trintaDias.setDate(hoje.getDate() + 30);
-
-    const aReceber = contas.filter(c => c.tipo === 'receber' && c.status === 'pendente').reduce((acc, c) => acc + c.valor, 0);
-    const aPagar = contas.filter(c => c.tipo === 'pagar' && c.status === 'pendente').reduce((acc, c) => acc + c.valor, 0);
-
-    // Saldo projetado = Saldo Atual + Receber - Pagar
+    const aReceber = contas.filter(c => c.tipo === 'receber' && c.status === 'pendente').reduce((acc: number, c: any) => acc + c.valor, 0);
+    const aPagar = contas.filter(c => c.tipo === 'pagar' && c.status === 'pendente').reduce((acc: number, c: any) => acc + c.valor, 0);
     const previsao30Dias = caixa.summary.saldo + aReceber - aPagar;
 
-    // 4. Sistema de Alertas
     const novosAlertas: string[] = [];
     if (previsao30Dias < 0) novosAlertas.push(`Atenção: Saldo previsto para 30 dias é negativo (R$ ${previsao30Dias.toFixed(2)})`);
 
@@ -132,19 +112,12 @@ const Dashboard = () => {
     });
     if (vencendoHoje.length > 0) novosAlertas.push(`Você tem ${vencendoHoje.length} conta(s) a pagar vencendo hoje!`);
 
-    // 4. Fallbacks Financeiros - PRIORIDADE PARA O TOTAL CALCULADO DOS PEDIDOS
-    const totalPedidosAtivosSoma = activeSales.reduce((acc, o) => acc + (Number(o.valorTotal) || 0), 0);
-    
-    // O valor principal (topo do Dashboard) deve ser o total de pedidos ativos ou o financeiro, o que for MAIOR/MAIS RECENTE
-    // Mas para o usuário, o "Total de Vendas" deve refletir o que ele vê na planilha de Pedidos.
+    const totalPedidosAtivosSoma = activeSales.reduce((acc: number, o: any) => acc + (Number(o.valorTotal) || 0), 0);
     const totalVendasExibir = Math.max(totalPedidosAtivosSoma, financeiro.totalVendas);
-    
+
     let totalCustosFinal = financeiro.totalCustos;
     if (caixa.summary.saida > totalCustosFinal) totalCustosFinal = caixa.summary.saida;
 
-    const saldoCaixaFinal = caixa.summary.saldo;
-
-    // 5. Buscar Estratégia da IA (Gerente Geral)
     let iaStrategy = null;
     try {
       iaStrategy = await apiSync.fetchStrategy();
@@ -168,7 +141,7 @@ const Dashboard = () => {
         const preco = item.precoDesconto || item.preco || 35;
         return acc + ((item.estoque || 0) * preco);
       }, 0),
-      saldoCaixa: saldoCaixaFinal,
+      saldoCaixa: caixa.summary.saldo,
       totalPrevisao,
       proximaPrevisao: proximaData ? (proximaData as Date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '',
       previsao30Dias,
@@ -210,31 +183,21 @@ const Dashboard = () => {
   ];
 
   return (
-    <div style={{ background: '#f5f5f5', minHeight: '100vh', paddingBottom: '80px' }}>
-      {/* Insight da IA - Gerente Geral */}
+    <div className="dash-root">
+      {/* Insight da IA */}
       {metrics.estrategia && (
-        <div style={{
+        <div className="dash-section" style={{
           background: 'white',
-          margin: '0.8rem 0.8rem 0',
-          borderRadius: '12px',
-          padding: '1rem',
-          boxShadow: '0 4px 12px rgba(99, 102, 241, 0.12)',
+          borderRadius: 0,
+          padding: '0.8rem 1.2rem',
+          borderBottom: '1px solid #e2e8f0',
           borderLeft: '4px solid #6366f1',
-          position: 'relative',
-          zIndex: 10
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
             <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               🤖 Insight do Gerente IA
             </span>
-            <span style={{ 
-              fontSize: '0.7rem', 
-              background: '#e0e7ff', 
-              color: '#4338ca', 
-              padding: '2px 8px', 
-              borderRadius: '20px', 
-              fontWeight: '600' 
-            }}>
+            <span style={{ fontSize: '0.7rem', background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: '20px', fontWeight: '600' }}>
               {metrics.estrategia.nivel_atual || 'Estabilidade'}
             </span>
           </div>
@@ -242,125 +205,44 @@ const Dashboard = () => {
             {metrics.estrategia.resumo_dono || metrics.estrategia.resumo}
           </div>
           {metrics.estrategia.plano_semana?.foco_principal && (
-            <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#64748b', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-              <span style={{ color: '#ef4444' }}>🎯</span> 
+            <div style={{ marginTop: '0.4rem', fontSize: '0.75rem', color: '#64748b', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+              <span style={{ color: '#ef4444' }}>🎯</span>
               <b>Foco:</b> {metrics.estrategia.plano_semana.foco_principal}
             </div>
           )}
         </div>
       )}
 
-      {/* Header com total de vendas */}
-      <div style={{
-        background: 'linear-gradient(135deg, #EE4D2D 0%, #FF6633 50%, #FF8844 100%)',
-        padding: '1.5rem 1.2rem 2rem',
-        color: 'white',
-        position: 'relative',
-        overflow: 'hidden',
-      }}>
-        {/* Decoração de fundo */}
-        <div style={{
-          position: 'absolute',
-          top: '-30px',
-          right: '-30px',
-          width: '120px',
-          height: '120px',
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.1)',
-        }} />
-        <div style={{
-          position: 'absolute',
-          bottom: '-20px',
-          left: '40%',
-          width: '80px',
-          height: '80px',
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.06)',
-        }} />
+      {/* ── BANNER LARANJA (FULL WIDTH) ── */}
+      <div className="dash-banner">
+        {/* Decoração */}
+        <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '120px', height: '120px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)' }} />
+        <div style={{ position: 'absolute', bottom: '-20px', left: '40%', width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(255,255,255,0.06)' }} />
 
-        {/* Logo + nome */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.2rem', position: 'relative', zIndex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <div style={{
-              width: '36px', height: '36px',
-              background: 'rgba(255,255,255,0.2)',
-              borderRadius: '8px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '1.2rem',
-            }}>👕</div>
-            <span style={{ fontWeight: '600', fontSize: '1rem' }}>Lojas Capel</span>
-          </div>
-          <button
-            onClick={autoSync}
-            disabled={syncing}
-            style={{
-              background: 'rgba(255,255,255,0.2)',
-              border: 'none',
-              color: 'white',
-              borderRadius: '50%',
-              width: '36px', height: '36px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer',
-              fontSize: '1.1rem',
-            }}
-          >
-            {syncing ? '⏳' : '🔄'}
-          </button>
-          
-          <button
-            onClick={handleLogout}
-            style={{
-              background: 'rgba(255,255,255,0.2)',
-              border: 'none',
-              color: 'white',
-              borderRadius: '50%',
-              width: '36px', height: '36px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer',
-              fontSize: '1rem',
-            }}
-            title="Sair / Bloquear"
-          >
-            <LogOut size={18} />
-          </button>
-        </div>
-
-        {/* Total de vendas da planilha financeira */}
-        <div style={{ position: 'relative', zIndex: 1 }}>
-          <div style={{
-            fontSize: '2rem',
-            fontWeight: '700',
-            letterSpacing: '-0.5px',
-            marginBottom: '0.3rem',
-          }}>
-            R$ {(metrics.totalVendasFinanceiro || metrics.totalVendas).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-          <div style={{
-            fontSize: '0.8rem',
-            opacity: 0.8,
-            fontWeight: '400',
-            marginBottom: '0.8rem',
-          }}>
-            Total de vendas • {metrics.totalPedidos} pedidos
+        <div className="dash-banner-inner">
+          {/* Coluna esquerda: logo + valor */}
+          <div className="dash-banner-left">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.6rem' }}>
+              <div style={{ width: '32px', height: '32px', background: 'rgba(255,255,255,0.2)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>👕</div>
+              <span style={{ fontWeight: '600', fontSize: '0.95rem' }}>Lojas Capel</span>
+            </div>
+            <div style={{ fontSize: '2rem', fontWeight: '700', letterSpacing: '-0.5px', marginBottom: '0.2rem' }}>
+              R$ {(metrics.totalVendasFinanceiro || metrics.totalVendas).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div style={{ fontSize: '0.8rem', opacity: 0.8, fontWeight: '400' }}>
+              Total de vendas • {metrics.totalPedidos} pedidos
+            </div>
           </div>
 
-          {/* Mini cards financeiros */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
-            <div style={{
-              background: 'rgba(255,255,255,0.15)',
-              borderRadius: '8px',
-              padding: '0.5rem 0.6rem',
-            }}>
+          {/* Coluna direita: todos os mini-cards em linha */}
+          <div className="dash-banner-cards">
+            <div className="dash-mini-card">
               <div style={{ fontSize: '0.65rem', opacity: 0.8 }}>💸 Custos</div>
               <div style={{ fontSize: '0.9rem', fontWeight: '600' }}>
                 R$ {metrics.totalCustos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </div>
             </div>
-            <div style={{
-              background: 'rgba(255,255,255,0.15)',
-              borderRadius: '8px',
-              padding: '0.5rem 0.6rem',
-            }}>
+            <div className="dash-mini-card">
               <div style={{ fontSize: '0.65rem', opacity: 0.8 }}>
                 {metrics.lucroBruto >= 0 ? '📈 Lucro' : '📉 Prejuízo'}
               </div>
@@ -368,96 +250,59 @@ const Dashboard = () => {
                 R$ {Math.abs(metrics.lucroBruto).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </div>
             </div>
-            <div style={{
-              background: 'rgba(255,255,255,0.15)',
-              borderRadius: '8px',
-              padding: '0.5rem 0.6rem',
-            }}>
+            <div className="dash-mini-card">
               <div style={{ fontSize: '0.65rem', opacity: 0.8 }}>💰 Saldo Caixa</div>
               <div style={{ fontSize: '0.9rem', fontWeight: '600' }}>
                 R$ {metrics.saldoCaixa.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </div>
             </div>
-          </div>
-
-          {/* Novos mini cards de estoque */}
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-            <div style={{
-              flex: 1,
-              background: 'rgba(255,255,255,0.15)',
-              borderRadius: '8px',
-              padding: '0.5rem 0.6rem',
-            }}>
-              <div style={{ fontSize: '0.65rem', opacity: 0.8 }}>📦 Itens em Estoque</div>
-              <div style={{ fontSize: '0.95rem', fontWeight: '600' }}>
+            <div className="dash-mini-card">
+              <div style={{ fontSize: '0.65rem', opacity: 0.8 }}>📦 Estoque</div>
+              <div style={{ fontSize: '0.9rem', fontWeight: '600' }}>
                 {metrics.totalEstoque} un.
               </div>
             </div>
-            <div style={{
-              flex: 1,
-              background: 'rgba(255,255,255,0.15)',
-              borderRadius: '8px',
-              padding: '0.5rem 0.6rem',
-            }}>
+            <div className="dash-mini-card">
               <div style={{ fontSize: '0.65rem', opacity: 0.8 }}>
-                📅 Previsão Receb. {metrics.proximaPrevisao ? `(Prox: ${metrics.proximaPrevisao})` : '(10d)'}
+                📅 Previsão {metrics.proximaPrevisao ? `(${metrics.proximaPrevisao})` : '(10d)'}
               </div>
-              <div style={{ fontSize: '0.95rem', fontWeight: '800' }}>
+              <div style={{ fontSize: '0.9rem', fontWeight: '700' }}>
                 R$ {metrics.totalPrevisao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </div>
             </div>
           </div>
+
+          {/* Botões topo-direita */}
+          <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
+            <button onClick={autoSync} disabled={syncing} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', borderRadius: '8px', width: '34px', height: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '1rem' }}>
+              {syncing ? '⏳' : '🔄'}
+            </button>
+            <button onClick={handleLogout} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', borderRadius: '8px', width: '34px', height: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '1rem' }} title="Sair / Bloquear">
+              <LogOut size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Grid de atalhos */}
-      <div style={{
-        background: 'white',
-        margin: '-1rem 0.8rem 0.8rem',
-        borderRadius: '12px',
-        padding: '1.2rem 0.8rem',
-        boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
-        position: 'relative',
-        zIndex: 2,
-      }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '0.8rem',
-        }}>
+      {/* ── GRID DE ATALHOS (SEM CAIXA BRANCA no desktop) ── */}
+      <div className="dash-section">
+        <div className="dash-shortcut-grid">
           {navItems.map(item => (
             <button
               key={item.label}
               onClick={() => navigate(item.route)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '0.4rem',
-                padding: '0.6rem 0',
-              }}
+              className="dash-shortcut-btn"
             >
               <div style={{
-                width: '48px', height: '48px',
+                width: '44px', height: '44px',
                 borderRadius: '12px',
                 background: `${item.color}15`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '1.5rem',
-                transition: 'transform 0.2s',
+                fontSize: '1.4rem',
               }}>
                 {item.icon}
               </div>
-              <span style={{
-                fontSize: '0.72rem',
-                color: '#555',
-                fontWeight: '500',
-                textAlign: 'center',
-                lineHeight: '1.2',
-                whiteSpace: 'pre-line',
-              }}>
+              <span style={{ fontSize: '0.7rem', color: '#555', fontWeight: '500', textAlign: 'center', lineHeight: '1.2', whiteSpace: 'pre-line' }}>
                 {item.label}
               </span>
             </button>
@@ -465,174 +310,74 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Sessão Gerência */}
-      <div style={{
-        background: 'white',
-        margin: '0 0.8rem 0.8rem',
-        borderRadius: '12px',
-        padding: '1rem 0.8rem',
-        boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-      }}>
-        <div style={{
-          fontSize: '0.82rem',
-          fontWeight: '600',
-          color: '#333',
-          marginBottom: '0.8rem',
-          paddingLeft: '0.3rem',
-        }}>
-          Gerência
-        </div>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '0.8rem',
-        }}>
+      {/* ── SEÇÃO GERÊNCIA (COMPACTA, ALINHADA À ESQUERDA) ── */}
+      <div className="dash-section">
+        <div className="dash-gerencia-label">Gerência</div>
+        <div className="dash-gerencia-grid">
           {gerenciaItems.map(item => (
             <button
               key={item.label}
               onClick={() => item.action ? item.action() : navigate(item.route || '/')}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '0.4rem',
-                padding: '0.6rem 0',
-              }}
+              className="dash-shortcut-btn"
             >
-
               <div style={{
-                width: '48px', height: '48px',
-                borderRadius: '12px',
+                width: '40px', height: '40px',
+                borderRadius: '10px',
                 background: `${item.color}15`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '1.5rem',
+                fontSize: '1.3rem',
               }}>
                 {item.icon}
               </div>
-              <span style={{
-                fontSize: '0.72rem',
-                color: '#555',
-                fontWeight: '500',
-                textAlign: 'center',
-              }}>
+              <span style={{ fontSize: '0.68rem', color: '#555', fontWeight: '500', textAlign: 'center', whiteSpace: 'pre-line', lineHeight: '1.2' }}>
                 {item.label}
               </span>
             </button>
           ))}
-
-          {/* Sincronização card */}
-          <button
-            onClick={autoSync}
-            disabled={syncing}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '0.4rem',
-              padding: '0.6rem 0',
-            }}
-          >
+          <button onClick={autoSync} disabled={syncing} className="dash-shortcut-btn">
             <div style={{
-              width: '48px', height: '48px',
-              borderRadius: '12px',
+              width: '40px', height: '40px',
+              borderRadius: '10px',
               background: syncing ? '#FEF3C7' : '#D1FAE5',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '1.5rem',
-              transition: 'all 0.3s',
+              fontSize: '1.3rem',
             }}>
               {syncing ? '⏳' : '🔄'}
             </div>
-            <span style={{
-              fontSize: '0.72rem',
-              color: '#555',
-              fontWeight: '500',
-              textAlign: 'center',
-            }}>
-              {syncing ? 'Sincronizando' : 'Sincronizar'}
+            <span style={{ fontSize: '0.68rem', color: '#555', fontWeight: '500', textAlign: 'center' }}>
+              {syncing ? 'Sync' : 'Sincronizar'}
             </span>
           </button>
         </div>
       </div>
 
-      {/* Resumo de pedidos - cards de status */}
-      <div style={{
-        margin: '0 0.8rem 0.8rem',
-      }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(2, 1fr)',
-          gap: '0.6rem',
-        }}>
-          <div onClick={() => navigate('/pedidos')} style={{
-            background: 'white',
-            borderRadius: '10px',
-            padding: '1rem',
-            boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-            cursor: 'pointer',
-            borderLeft: '3px solid #3B82F6',
-          }}>
+      {/* ── STATUS CARDS (4 colunas full width) ── */}
+      <div className="dash-section">
+        <div className="dash-status-grid">
+          <div onClick={() => navigate('/pedidos')} className="dash-status-card" style={{ borderLeft: '3px solid #3B82F6' }}>
             <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: '0.3rem' }}>Pedidos Recebidos</div>
             <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#3B82F6' }}>{metrics.recebidos}</div>
           </div>
-
-          <div onClick={() => navigate('/producao')} style={{
-            background: 'white',
-            borderRadius: '10px',
-            padding: '1rem',
-            boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-            cursor: 'pointer',
-            borderLeft: '3px solid #F59E0B',
-          }}>
+          <div onClick={() => navigate('/producao')} className="dash-status-card" style={{ borderLeft: '3px solid #F59E0B' }}>
             <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: '0.3rem' }}>Em Produção</div>
             <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#F59E0B' }}>{metrics.emProducao}</div>
           </div>
-
-          <div onClick={() => navigate('/pedidos')} style={{
-            background: 'white',
-            borderRadius: '10px',
-            padding: '1rem',
-            boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-            cursor: 'pointer',
-            borderLeft: '3px solid #10B981',
-          }}>
+          <div onClick={() => navigate('/pedidos')} className="dash-status-card" style={{ borderLeft: '3px solid #10B981' }}>
             <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: '0.3rem' }}>Camisetas Prontas</div>
             <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#10B981' }}>{metrics.prontos}</div>
           </div>
-
-          <div onClick={() => navigate('/pedidos')} style={{
-            background: 'white',
-            borderRadius: '10px',
-            padding: '1rem',
-            boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-            cursor: 'pointer',
-            borderLeft: '3px solid #8B5CF6',
-          }}>
+          <div onClick={() => navigate('/pedidos')} className="dash-status-card" style={{ borderLeft: '3px solid #8B5CF6' }}>
             <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: '0.3rem' }}>Entregues</div>
             <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#8B5CF6' }}>{metrics.entregues}</div>
           </div>
         </div>
       </div>
 
-      {/* Sistema de Alertas Dinâmicos */}
+      {/* Alertas */}
       {metrics.alertas.length > 0 && (
-        <div style={{ margin: '0 0.8rem 0.8rem' }}>
+        <div className="dash-section">
           {metrics.alertas.map((alerta, idx) => (
-            <div key={idx} style={{
-              background: '#FFFBEB',
-              border: '1px solid #FEF3C7',
-              borderRadius: '10px',
-              padding: '0.8rem 1rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.6rem',
-              marginBottom: '0.5rem',
-            }}>
+            <div key={idx} style={{ background: '#FFFBEB', border: '1px solid #FEF3C7', borderRadius: '10px', padding: '0.8rem 1rem', display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem' }}>
               <span style={{ fontSize: '1.2rem' }}>💡</span>
               <div style={{ fontSize: '0.8rem', color: '#92400E', fontWeight: '500' }}>{alerta}</div>
             </div>
@@ -640,61 +385,36 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Alerta de estoque baixo */}
+      {/* Alerta estoque baixo */}
       {metrics.estoqueBaixo > 0 && (
-        <div onClick={() => navigate('/estoque')} style={{
-          margin: '0 0.8rem 0.8rem',
-          background: '#FEF2F2',
-          border: '1px solid #FECACA',
-          borderRadius: '10px',
-          padding: '0.8rem 1rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.6rem',
-          cursor: 'pointer',
-        }}>
-          <span style={{ fontSize: '1.3rem' }}>⚠️</span>
-          <div>
-            <div style={{ fontSize: '0.82rem', fontWeight: '600', color: '#B91C1C' }}>
-              Estoque baixo!
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#DC2626' }}>
-              {metrics.estoqueBaixo} produto(s) com estoque ≤ 5 unidades
+        <div className="dash-section">
+          <div onClick={() => navigate('/estoque')} style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '10px', padding: '0.8rem 1rem', display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer' }}>
+            <span style={{ fontSize: '1.3rem' }}>⚠️</span>
+            <div>
+              <div style={{ fontSize: '0.82rem', fontWeight: '600', color: '#B91C1C' }}>Estoque baixo!</div>
+              <div style={{ fontSize: '0.75rem', color: '#DC2626' }}>{metrics.estoqueBaixo} produto(s) com estoque ≤ 5 unidades</div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Previsão Financeira 30 Dias */}
-      <div style={{
-        margin: '0 0.8rem 1.2rem',
-        background: metrics.previsao30Dias >= 0 ? '#ECFDF5' : '#FEF2F2',
-        borderRadius: '12px',
-        padding: '1rem',
-        border: `1px dashed ${metrics.previsao30Dias >= 0 ? '#10B981' : '#EF4444'}`,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <div>
-          <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.8)' }}>Faturamento Total</div>
-          <div style={{ fontSize: '2.5rem', fontWeight: '900', color: 'white', lineHeight: '1.1', marginBottom: '0.4rem' }}>
-            R$ {metrics.totalVendas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-          </div>
-          <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.9)', fontWeight: '500' }}>
-            Volume total de {metrics.totalPedidos} pedidos
+      {/* ── PAINEL FINANCEIRO INFERIOR (FULL WIDTH) ── */}
+      <div className="dash-section">
+        <div className="dash-finance-panel" style={{ background: metrics.previsao30Dias >= 0 ? '#ECFDF5' : '#FEF2F2', border: `1px dashed ${metrics.previsao30Dias >= 0 ? '#10B981' : '#EF4444'}` }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.8)' }}>Faturamento Total</div>
+            <div style={{ fontSize: '2.2rem', fontWeight: '900', color: 'white', lineHeight: '1.1', marginBottom: '0.4rem' }}>
+              R$ {metrics.totalVendas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </div>
+            <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.9)', fontWeight: '500' }}>
+              Volume total de {metrics.totalPedidos} pedidos
+            </div>
           </div>
         </div>
-        {/* Removed the icon div as it's not in the new structure */}
       </div>
 
-      {/* Última sincronização */}
-      <div style={{
-        textAlign: 'center',
-        padding: '0.8rem',
-        fontSize: '0.72rem',
-        color: '#bbb',
-      }}>
+      {/* Sync info */}
+      <div style={{ textAlign: 'center', padding: '0.8rem', fontSize: '0.72rem', color: '#bbb' }}>
         {lastSync ? `Última sincronização: ${lastSync}` : syncing ? 'Sincronizando dados...' : ''}
       </div>
     </div>

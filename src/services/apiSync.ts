@@ -1,9 +1,11 @@
 import type { Order, StockItem, FabricacaoItem, CaixaItem } from '../types';
 import { OrderStatus as OrderStatusValue } from '../types';
+import { generateVariationBarCode } from '../utils/barcode';
 export { OrderStatusValue };
 
 const N8N_HOST = 'https://n8n-n8n.sd8jyi.easypanel.host';
-const BASE_URL = import.meta.env.VITE_N8N_URL || N8N_HOST;
+const DEV_MODE = import.meta.env.DEV;
+const BASE_URL = import.meta.env.VITE_N8N_URL || (DEV_MODE ? '' : N8N_HOST);
 
 const N8N_WEBHOOK_URLS = {
   NEW_ORDER: `${BASE_URL}/webhook/pedidos`,
@@ -80,7 +82,9 @@ const sendWebhook = async (url: string, data: any) => {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error(`Status: ${response.status}`);
-    return await response.json();
+    const text = await response.text();
+    if (!text || !text.trim()) return { ok: true };
+    try { return JSON.parse(text); } catch { return { ok: true, raw: text }; }
   } catch (error) {
     console.error(`Erro no webhook (${url}):`, error);
     throw error;
@@ -525,32 +529,55 @@ export const apiSync = {
         items = Object.values(rawData).find(val => Array.isArray(val)) as any[] || [rawData];
       }
 
-      return items
+      const mapped = items
         .filter(item => item['Produto'])
-        .map((item: any, index: number) => ({
-          row_number: item.row_number || index + 1,
-          data: item['Data'] || '',
-          produto: item['Produto'] || '',
-          tamanho: item['Tamnho'] || item['tamanho'] || '',
-          cor: item['Cor'] || item['cor'] || '',
-          pedidos: Number(item['pedidos']) || 0,
-          estoque: Number(item['Estoque']) || 0,
-          faltando: Number(item['Fantando']) || 0,
-          reserva: Number(item['Reserva de troca']) || 0,
-          preco: Number(item['Preço']) || Number(item['Preco']) || 35,
-          precoDesconto: Number(item['Valor com desconto']) || undefined,
-          origem: item['Origem'] || '',
-          codigoBarra: item['Codigo de barra'] || item['codigo_barra'] || '',
-          // Tenta pegar de qualquer coluna de imagem comum
-          imagem: item['foto_base64'] || item['imagem'] || item['Foto'] || item['url imagem'] || item['URL Imagem'] || '',
-          sku: item['SKU'] || item['sku'] || '',
-          tipo: item['Tipo'] || item['tipo'] || 'Estoque Próprio',
-          precoConcorrente: parseReal(item['Preço Concorrente'] || item['preco_concorrente']),
-          frete: parseReal(item['Frete'] || item['frete']),
-          taxaPlataforma: parseReal(item['Taxa Plataforma'] || item['taxa_plataforma'] || 18),
-          margemMinima: parseReal(item['Margem Minima'] || item['margem_minima'] || 10),
-          fornecedorId: item['ID Fornecedor'] || item['fornecedor_id'] || '',
+        .map((item: any, index: number) => {
+          const originalBarcode = item['Codigo de barra'] || item['codigo_barra'] || '';
+          return {
+            row_number: item.row_number || index + 1,
+            data: item['Data'] || '',
+            produto: item['Produto'] || '',
+            tamanho: item['Tamnho'] || item['tamanho'] || '',
+            cor: item['Cor'] || item['cor'] || '',
+            pedidos: Number(item['pedidos']) || 0,
+            estoque: Number(item['Estoque']) || 0,
+            faltando: Number(item['Fantando']) || 0,
+            reserva: Number(item['Reserva de troca']) || 0,
+            preco: Number(item['Preço']) || Number(item['Preco']) || 35,
+            precoDesconto: Number(item['Valor com desconto']) || undefined,
+            origem: item['Origem'] || '',
+            codigoBarra: originalBarcode || generateVariationBarCode(
+              item['Produto'] || '', item['Tamnho'] || item['tamanho'] || '', item['Cor'] || item['cor'] || ''
+            ),
+            imagem: item['foto_base64'] || item['imagem'] || item['Foto'] || item['url imagem'] || item['URL Imagem'] || '',
+            sku: item['SKU'] || item['sku'] || '',
+            tipo: item['Tipo'] || item['tipo'] || 'Estoque Próprio',
+            precoConcorrente: parseReal(item['Preço Concorrente'] || item['preco_concorrente']),
+            frete: parseReal(item['Frete'] || item['frete']),
+            taxaPlataforma: parseReal(item['Taxa Plataforma'] || item['taxa_plataforma'] || 18),
+            margemMinima: parseReal(item['Margem Minima'] || item['margem_minima'] || 10),
+            fornecedorId: item['ID Fornecedor'] || item['fornecedor_id'] || '',
+            _barcodeWasMissing: !originalBarcode,
+          };
+        });
+
+      // Envia de volta para a planilha os códigos de barra que foram auto-gerados
+      const missingBarcodes = mapped.filter(i => i._barcodeWasMissing && i.codigoBarra);
+      if (missingBarcodes.length > 0) {
+        console.log(`[Estoque] 📤 Enviando ${missingBarcodes.length} códigos de barra auto-gerados para a planilha`);
+        const linhas = missingBarcodes.map(i => ({
+          action: 'update_codigo_barra',
+          'Produto': i.produto,
+          'Tamnho': i.tamanho,
+          'Cor': i.cor,
+          'Codigo de barra': i.codigoBarra,
         }));
+        sendWebhook(`${BASE_URL}/webhook/estoque`, { linhas }).catch(e =>
+          console.warn('[Estoque] ⚠️ Falha ao enviar códigos de barra:', e)
+        );
+      }
+
+      return mapped.map(({ _barcodeWasMissing, ...rest }) => rest);
     } catch (error) {
       console.error('Erro buscando estoque:', error);
       return [];
@@ -610,6 +637,14 @@ export const apiSync = {
       codigo_barra: item.codigoBarra,
       quantidade_vendida: quantidadeVendida,
       novo_estoque: novoEstoque,
+      timestamp: new Date().toISOString()
+    });
+  },
+
+  updateCodigoBarra: async (produto: string, tamanho: string, cor: string, codigoBarra: string) => {
+    return sendWebhook(`${BASE_URL}/webhook/estoque`, {
+      action: 'update_codigo_barra',
+      produto, tamanho, cor, codigo_barra: codigoBarra,
       timestamp: new Date().toISOString()
     });
   },

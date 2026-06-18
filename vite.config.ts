@@ -27,6 +27,10 @@ export default defineConfig({
         target: 'https://n8n-n8n.sd8jyi.easypanel.host',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api-contas/, '')
+      },
+      '/webhook': {
+        target: 'https://n8n-n8n.sd8jyi.easypanel.host',
+        changeOrigin: true
       }
     }
   }

@@ -65,8 +65,10 @@ export interface ClienteCampanha {
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'erp_campanhas_v2';
-const WEBHOOK_CAMPANHA = 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/campanha';
-const WEBHOOK_CHAT = 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/chat';
+const DEV_MODE = import.meta.env.DEV;
+const BASE = DEV_MODE ? '' : 'https://n8n-n8n.sd8jyi.easypanel.host';
+const WEBHOOK_CAMPANHA = `${BASE}/webhook/campanha`;
+const WEBHOOK_CHAT = `${BASE}/webhook/chat`;
 const getId = () => `camp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
 // Auxiliar para pegar o ISO local (sem o 'Z' que joga 3h pra frente)

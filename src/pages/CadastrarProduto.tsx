@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { ImageEditor } from './ImageEditor';
+import { generateVariationBarCode } from '../utils/barcode';
 
 interface Variacao {
   id: string;
@@ -155,9 +156,10 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
 
   const adicionarVariacao = () => {
     if (!variacaoAtual.cor) { setErro('Informe a cor da variação'); return; }
+    const barcode = variacaoAtual.codigoBarra || generateVariationBarCode(produto.nome || 'produto', variacaoAtual.tamanho, variacaoAtual.cor);
     setProduto(p => ({
       ...p,
-      variacoes: [...p.variacoes, { ...variacaoAtual, id: Date.now().toString() }]
+      variacoes: [...p.variacoes, { ...variacaoAtual, codigoBarra: barcode, id: Date.now().toString() }]
     }));
     setVariacaoAtual({ id: Date.now().toString(), tamanho: 'M', cor: '', codigoBarra: '', quantidade: 1, imagem: '' });
     setErro('');
@@ -173,7 +175,13 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
     setSalvando(true);
     setErro('');
     try {
-      await onSave(produto);
+      // Auto-gerar código de barras para variações e produto que não tenham
+      const mainBarcode = produto.codigoBarra || generateVariationBarCode(produto.nome, 'unico', 'padrao');
+      const variacoesComBarcode = produto.variacoes.map(v => ({
+        ...v,
+        codigoBarra: v.codigoBarra || generateVariationBarCode(produto.nome, v.tamanho, v.cor)
+      }));
+      await onSave({ ...produto, codigoBarra: mainBarcode, variacoes: variacoesComBarcode });
       onClose();
     } catch {
       setErro('Erro ao salvar produto. Tente novamente.');

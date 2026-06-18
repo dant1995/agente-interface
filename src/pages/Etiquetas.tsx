@@ -36,7 +36,7 @@ const Etiquetas = () => {
 
   const filteredStock = stockItems.filter(item => 
     item.produto.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.codigoBarra?.toLowerCase().includes(searchTerm.toLowerCase())
+    String(item.codigoBarra || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const toggleStockSelection = (id: string | number) => {

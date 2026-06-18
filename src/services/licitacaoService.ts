@@ -1,6 +1,8 @@
 import type { Licitacao, AnaliseLicitacao } from '../types';
 import { apiSync } from './apiSync';
 
+const DEV_MODE = import.meta.env.DEV;
+const BASE = DEV_MODE ? '' : 'https://n8n-n8n.sd8jyi.easypanel.host';
 const STORAGE_KEY = '@capel-erp:licitacoes';
 
 export const licitacaoService = {
@@ -39,7 +41,7 @@ export const licitacaoService = {
   async sendToWebhook(licitacao: Licitacao, action: 'nova_licitacao' | 'analise' = 'nova_licitacao'): Promise<{ success: boolean; message: string }> {
     try {
       // @ts-ignore
-      const url = apiSync.N8N_WEBHOOK_URLS?.LICITACOES || 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/licitacoes';
+      const url = apiSync.N8N_WEBHOOK_URLS?.LICITACOES || `${BASE}/webhook/licitacoes`;
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -61,7 +63,7 @@ export const licitacaoService = {
   async fetchAnaliseFromWebhook(idLicitacao: string): Promise<AnaliseLicitacao | null> {
     try {
       // @ts-ignore
-      const GET_URL = apiSync.N8N_WEBHOOK_URLS?.LICITACAO_ANALISE || 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/licitacao-analise';
+      const GET_URL = apiSync.N8N_WEBHOOK_URLS?.LICITACAO_ANALISE || `${BASE}/webhook/licitacao-analise`;
       const response = await fetch(`${GET_URL}?id=${encodeURIComponent(idLicitacao)}`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' },
@@ -111,7 +113,7 @@ export const licitacaoService = {
   // --- PNCP Search Integration ---
   async searchPNCP(filters: { palavraChave?: string; uf?: string; dataInicial?: string; dataFinal?: string }): Promise<any[]> {
     try {
-      const SEARCH_URL = 'https://n8n-n8n.sd8jyi.easypanel.host/webhook/buscar-pncp';
+      const SEARCH_URL = `${BASE}/webhook/buscar-pncp`;
       
       const response = await fetch(SEARCH_URL, {
         method: 'POST',
@@ -133,7 +135,7 @@ export const licitacaoService = {
   // --- Robô Pescador Noturno ---
   async getAchadosRobo(): Promise<any[]> {
     try {
-      const response = await fetch('https://n8n-n8n.sd8jyi.easypanel.host/webhook/buscar-achados', {
+      const response = await fetch(`${BASE}/webhook/buscar-achados`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
       });

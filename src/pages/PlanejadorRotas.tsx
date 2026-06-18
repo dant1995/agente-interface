@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
-import Tesseract from 'tesseract.js';
+
 
 // ── Tipos ────────────────────────────────────────────────────────
 interface Pacote {
@@ -158,8 +158,9 @@ export default function PlanejadorRotas() {
   const processarImagemEtiqueta = useCallback(async (imageSrc: string) => {
     setReadingOCR(true);
     try {
+      const Tesseract = (await import('tesseract.js')).default;
       const { data: { text } } = await Tesseract.recognize(imageSrc, 'por', {
-        logger: m => console.log(m)
+        logger: (m: any) => console.log(m)
       });
       
       // Tenta extrair endereço e CEP via Regex (padrão Shopee)

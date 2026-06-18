@@ -52,6 +52,11 @@ body {
 }
 
 /* Base App Container */
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
 .app-container {
   max-width: 600px;
   margin: 0 auto;
@@ -59,6 +64,7 @@ body {
   position: relative;
   background: var(--bg-main);
   box-shadow: 0 0 20px rgba(0,0,0,0.05); /* Soft shadow on desktop to look like mobile frame */
+  width: 100%;
 }
 
 /* Typography styles */
@@ -462,3 +468,912 @@ h1, h2, h3, h4 {
 .border-dashed { border-style: dashed; }
 .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
 .shadow-2xl { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
+
+/* =========================================================
+   DESKTOP LAYOUT (lg: breakpoint - 1024px+)
+   ========================================================= */
+
+/* --- Sidebar (Desktop Only) --- */
+.desktop-sidebar {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .desktop-sidebar {
+    display: flex;
+    flex-direction: column;
+    width: 240px;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    background: #ffffff;
+    border-right: 1px solid #e2e8f0;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04);
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .sidebar-header {
+    padding: 1.25rem 1rem;
+    border-bottom: 1px solid #f1f5f9;
+    flex-shrink: 0;
+  }
+
+  .sidebar-logo {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .sidebar-logo-icon {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, #EE4D2D, #FF6633);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+  }
+
+  .sidebar-brand {
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--text-main);
+    letter-spacing: -0.02em;
+  }
+
+  .sidebar-nav {
+    flex: 1;
+    padding: 0.75rem 0;
+    overflow-y: auto;
+  }
+
+  .sidebar-section {
+    margin-bottom: 0.25rem;
+  }
+
+  .sidebar-section-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0.5rem 1rem 0.3rem;
+  }
+
+  .sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 1rem;
+    margin: 1px 0.5rem;
+    border-radius: 8px;
+    text-decoration: none;
+    color: #475569;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.15s ease;
+    cursor: pointer;
+    border: none;
+    background: none;
+    width: calc(100% - 1rem);
+    text-align: left;
+  }
+
+  .sidebar-link:hover {
+    background: #f1f5f9;
+    color: var(--text-main);
+  }
+
+  .sidebar-link.active {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.08));
+    color: var(--color-primary);
+    font-weight: 600;
+  }
+
+  .sidebar-link.active svg {
+    color: var(--color-primary);
+  }
+
+  .sidebar-link svg {
+    flex-shrink: 0;
+  }
+
+  .sidebar-footer {
+    padding: 0.75rem;
+    border-top: 1px solid #f1f5f9;
+    flex-shrink: 0;
+  }
+
+  .sidebar-lock-btn {
+    color: #94a3b8;
+    font-size: 0.8rem;
+  }
+
+  .sidebar-lock-btn:hover {
+    background: #fef2f2;
+    color: #ef4444;
+  }
+
+  /* --- App Container Desktop Layout --- */
+  .app-layout {
+    display: flex;
+  }
+
+  .app-container {
+    max-width: 100%;
+    margin-left: 240px;
+    margin-right: 0;
+    margin-top: 0;
+    box-shadow: none;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Hide bottom nav on desktop */
+  .bottom-nav {
+    display: none;
+  }
+
+  /* Remove mobile bottom padding */
+  body {
+    margin-bottom: 0;
+  }
+
+  .page-content {
+    padding-bottom: 1.5rem;
+  }
+}
+
+/* =========================================================
+   DASHBOARD DESKTOP STYLES
+   ========================================================= */
+
+/* ── Mobile base (always applies) ── */
+.dash-root {
+  background: #f5f5f5;
+  min-height: 100vh;
+  padding-bottom: 80px;
+}
+
+.dash-section {
+  margin: 0 0.8rem 0.8rem;
+}
+
+.dash-banner {
+  background: linear-gradient(135deg, #EE4D2D 0%, #FF6633 50%, #FF8844 100%);
+  padding: 1.2rem;
+  color: white;
+  position: relative;
+  overflow: hidden;
+  margin: 0 0 0.6rem;
+}
+
+.dash-banner-inner {
+  position: relative;
+  z-index: 1;
+}
+
+.dash-banner-left {
+  margin-bottom: 0.8rem;
+}
+
+.dash-banner-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.4rem;
+}
+
+.dash-mini-card {
+  background: rgba(255,255,255,0.15);
+  border-radius: 8px;
+  padding: 0.45rem 0.5rem;
+}
+
+.dash-shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  background: white;
+  border-radius: 12px;
+  padding: 1rem 0.6rem;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+
+.dash-shortcut-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0;
+}
+
+.dash-gerencia-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.6rem;
+  padding-left: 0.3rem;
+}
+
+.dash-gerencia-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  background: white;
+  border-radius: 12px;
+  padding: 0.8rem 0.6rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+
+.dash-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.dash-status-card {
+  background: white;
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  cursor: pointer;
+}
+
+.dash-finance-panel {
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ── Desktop overrides (1024px+) ── */
+@media (min-width: 1024px) {
+  .dash-root {
+    padding-bottom: 0;
+    background: #f5f5f5;
+  }
+
+  /* Remove all horizontal margins - full width */
+  .dash-section {
+    margin: 0;
+    padding: 0 1.5rem 1rem;
+  }
+
+  /* Banner full width, no margins */
+  .dash-banner {
+    margin: 0;
+    padding: 1.5rem 2rem 1.8rem;
+    border-radius: 0;
+  }
+
+  .dash-banner-inner {
+    display: flex;
+    align-items: flex-start;
+    gap: 2rem;
+  }
+
+  .dash-banner-left {
+    flex: 0 0 auto;
+    margin-bottom: 0;
+  }
+
+  .dash-banner-cards {
+    flex: 1;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.6rem;
+    align-items: stretch;
+  }
+
+  .dash-mini-card {
+    padding: 0.6rem 0.8rem;
+  }
+
+  /* Shortcut grid: 7 columns, no white bg wrapper */
+  .dash-shortcut-grid {
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.5rem;
+    background: transparent;
+    border-radius: 0;
+    padding: 1.2rem 0;
+    box-shadow: none;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .dash-shortcut-btn {
+    padding: 0.6rem 0.3rem;
+    border-radius: 10px;
+    transition: background 0.15s;
+  }
+
+  .dash-shortcut-btn:hover {
+    background: rgba(0,0,0,0.04);
+  }
+
+  /* Gerencia compacta, alinhada à esquerda */
+  .dash-gerencia-grid {
+    grid-template-columns: repeat(5, auto);
+    gap: 0.4rem;
+    background: transparent;
+    border-radius: 0;
+    padding: 0.5rem 0 1rem;
+    box-shadow: none;
+    justify-content: start;
+  }
+
+  .dash-gerencia-label {
+    padding-left: 0;
+  }
+
+  /* Status cards: 4 columns full width */
+  .dash-status-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.8rem;
+  }
+
+  .dash-status-card {
+    padding: 1rem 1.2rem;
+  }
+
+  /* Finance panel full width */
+  .dash-finance-panel {
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+  }
+}
+
+/* =========================================================
+   CHECKOUT / PDV DESKTOP STYLES
+   ========================================================= */
+
+/* ── Mobile base ── */
+.checkout-root {
+  background: #f8fafc;
+  min-height: 100vh;
+  padding-bottom: 120px;
+}
+
+.checkout-header {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  padding: 1.2rem;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.checkout-body {
+  padding: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.checkout-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.checkout-right {
+  display: none;
+}
+
+.checkout-card {
+  background: white;
+  border-radius: 14px;
+  padding: 1rem;
+  border: 1px solid #f1f5f9;
+}
+
+.checkout-search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+  z-index: 50;
+  max-height: 250px;
+  overflow-y: auto;
+  margin-top: 4px;
+  border: 1px solid #e2e8f0;
+}
+
+.checkout-search-item {
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid #f1f5f9;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.checkout-search-item:last-child { border-bottom: none; }
+
+.checkout-btn-catalog {
+  flex: 1;
+  background: #f8fafc;
+  color: #3b82f6;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  padding: 0.7rem;
+  font-weight: '700';
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.checkout-btn-scan {
+  flex: 1;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 0.7rem;
+  font-weight: '700';
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.checkout-cart-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.checkout-cart-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem;
+  border-radius: 10px;
+  background: #fafbfc;
+  border: 1px solid #f1f5f9;
+}
+
+.checkout-qty-controls {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.checkout-qty-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.checkout-qty-plus {
+  color: #3b82f6;
+  background: #eff6ff;
+}
+
+.checkout-qty-value {
+  font-weight: 800;
+  font-size: 0.85rem;
+  min-width: 24px;
+  text-align: center;
+}
+
+.checkout-recent {
+  padding: 0.8rem 1rem;
+}
+
+.checkout-recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.checkout-recent-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.checkout-recent-item:last-child { border-bottom: none; }
+
+/* ── Checkout Right Panel (hidden on mobile) ── */
+.checkout-panel {
+  padding: 1.2rem;
+}
+
+.checkout-panel-section {
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.checkout-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+.checkout-input {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  font-size: 0.85rem;
+  margin-bottom: 0.4rem;
+  outline: none;
+}
+
+.checkout-input:focus {
+  border-color: #3b82f6;
+}
+
+.checkout-channel-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.3rem;
+}
+
+.checkout-channel-btn {
+  padding: 0.4rem 0.3rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  font-size: 0.65rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  transition: all 0.15s;
+}
+
+.checkout-channel-btn.active {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.checkout-payment-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.3rem;
+}
+
+.checkout-payment-btn {
+  padding: 0.6rem 0.3rem;
+  border-radius: 10px;
+  border: 2px solid #e2e8f0;
+  background: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  transition: all 0.15s;
+}
+
+.checkout-payment-btn.active {
+  border-color: #10b981;
+  background: #f0fdf4;
+  color: #059669;
+}
+
+.checkout-summary-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-bottom: 0.3rem;
+}
+
+.checkout-summary-total {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: #1e293b;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 2px solid #e2e8f0;
+}
+
+.checkout-finalize-btn {
+  width: 100%;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 1rem;
+  font-size: 1rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  margin-top: 0.8rem;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  transition: transform 0.15s;
+}
+
+.checkout-finalize-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ═══════ DESKTOP: 2 COLUNAS ═══════ */
+@media (min-width: 1024px) {
+  .checkout-root {
+    padding-bottom: 0;
+  }
+
+  .checkout-body {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    align-items: start;
+  }
+
+  .checkout-left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+
+  .checkout-right {
+    display: block;
+    position: sticky;
+    top: 70px;
+  }
+
+  .checkout-panel {
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  }
+
+  .checkout-header {
+    padding: 1rem 1.5rem;
+  }
+
+  .checkout-card {
+    padding: 1.2rem;
+  }
+
+  .checkout-cart-list {
+    max-height: calc(100vh - 320px);
+    overflow-y: auto;
+  }
+
+  .checkout-cart-item {
+    padding: 0.6rem 0.8rem;
+  }
+
+  .checkout-recent-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.3rem;
+  }
+
+  .checkout-recent-item {
+    padding: 0.3rem 0.5rem;
+    background: #f8fafc;
+    border-radius: 6px;
+    border: 1px solid #f1f5f9;
+  }
+
+  .checkout-channel-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.4rem;
+  }
+
+  .checkout-channel-btn {
+    padding: 0.5rem 0.3rem;
+    font-size: 0.7rem;
+  }
+
+  .checkout-payment-btn {
+    padding: 0.7rem 0.4rem;
+    font-size: 0.8rem;
+  }
+
+  .checkout-input {
+    padding: 0.7rem 0.8rem;
+    font-size: 0.9rem;
+  }
+
+  .checkout-finalize-btn {
+    padding: 1.1rem;
+    font-size: 1.05rem;
+  }
+}
+
+/* =========================================================
+   CATALOG MODAL STYLES
+   ========================================================= */
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.catalog-card {
+  background: white;
+  border-radius: 14px;
+  border: 1px solid #f1f5f9;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.15s;
+}
+
+.catalog-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.catalog-img-wrap {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  background: #f9f9f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px 14px 0 0;
+}
+
+.catalog-img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  background-color: #f9f9f9;
+}
+
+.catalog-img-placeholder {
+  font-size: 2rem;
+  opacity: 0.35;
+}
+
+.catalog-out-badge {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background: #ef4444;
+  color: white;
+  font-size: 0.5rem;
+  font-weight: 700;
+  padding: 0.12rem 0.35rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.catalog-info {
+  padding: 0.4rem 0.5rem 0.2rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.catalog-name {
+  font-weight: 700;
+  font-size: 0.7rem;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.catalog-variant {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.catalog-tag-tam {
+  font-size: 0.55rem;
+  font-weight: 700;
+  background: #eef2ff;
+  color: #4f46e5;
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+}
+
+.catalog-tag-cor {
+  font-size: 0.55rem;
+  font-weight: 700;
+  background: #fef3c7;
+  color: #92400e;
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+}
+
+.catalog-price {
+  font-weight: 800;
+  font-size: 0.75rem;
+  color: #3b82f6;
+  margin-top: 0.1rem;
+}
+
+.catalog-add-btn {
+  margin: 0.25rem 0.4rem 0.4rem;
+  padding: 0.35rem;
+  border-radius: 8px;
+  border: none;
+  background: #10b981;
+  color: white;
+  font-size: 0.6rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.catalog-add-btn:hover:not(:disabled) {
+  background: #059669;
+}
+
+.catalog-add-btn:disabled {
+  background: #e2e8f0;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+@media (min-width: 600px) {
+  .catalog-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .catalog-grid {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.6rem;
+  }
+}
+
+@media (min-width: 1400px) {
+  .catalog-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
