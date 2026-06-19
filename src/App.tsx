@@ -46,6 +46,16 @@ function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    return localStorage.getItem('sidebar_collapsed') === 'true';
+  });
+
+  const toggleSidebar = () => {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    localStorage.setItem('sidebar_collapsed', String(next));
+  };
+
   const handleLogin = (user: LoggedUser) => {
     localStorage.setItem('app_user', JSON.stringify(user));
     setLoggedUser(user);
@@ -78,8 +88,8 @@ function App() {
   return (
     <BrowserRouter>
       <div className="app-layout">
-        <Sidebar key={permissoes.join(',')} user={loggedUser} onLogout={handleLogout} permissoes={permissoes} />
-        <div className="app-container">
+        <Sidebar key={permissoes.join(',')} user={loggedUser} onLogout={handleLogout} permissoes={permissoes} collapsed={sidebarCollapsed} onToggleCollapse={toggleSidebar} />
+        <div className="app-container" style={{ marginLeft: sidebarCollapsed ? 64 : undefined, transition: 'margin-left 0.3s ease' }}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/vendas" element={<Checkout />} />

@@ -231,3 +231,49 @@ export interface Licitacao {
   historico: HistoricoLicitacao[];
   dataCriacao: string;
 }
+
+// ── Cliente (Client Management) ──
+
+export interface Cliente {
+  nome: string;
+  whatsapp: string;
+  email?: string;
+  cidade?: string;
+  estado?: string;
+  dataRegistro?: string;
+  totalPedidos: number;
+  totalGasto: number;
+  ultimoPedido: string;
+  status: 'Ativo' | 'Pendente' | 'Inativo' | 'Novo';
+  tags: ClienteTag[];
+  notasInternas?: string;
+  origem?: 'Site' | 'Instagram' | 'Shopee' | 'WhatsApp' | 'Indicacao';
+}
+
+export type ClienteTag = 'VIP' | 'Atacado' | 'Reclamacao' | 'Fiel' | 'Novo';
+
+export interface ClienteKPIs {
+  ticketMedio: number;
+  novosClientes: number;
+  retencaoPercentual: number;
+  totalClientes: number;
+}
+
+export interface ClienteFiltros {
+  busca: string;
+  valorMin: number;
+  valorMax: number;
+  dataInicio: string;
+  dataFim: string;
+  origens: string[];
+  statuses: string[];
+  tags: ClienteTag[];
+}
+
+export interface ModeloMensagem {
+  id: string;
+  nome: string;
+  tipo: 'Envio' | 'Cobranca' | 'Reativacao';
+  mensagem: string;
+  variaveis: string[];
+}
