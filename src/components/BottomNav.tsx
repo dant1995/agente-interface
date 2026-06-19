@@ -1,42 +1,50 @@
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, FileText, Factory, Package, ShoppingBag, Tag, Truck, Briefcase } from 'lucide-react';
 
-const BottomNav = () => {
+interface BottomNavProps {
+  permissoes?: string[];
+}
+
+interface NavItem {
+  icon: any;
+  label: string;
+  route: string;
+  perm?: string;
+}
+
+const allNavItems: NavItem[] = [
+  { icon: LayoutDashboard, label: 'Geral', route: '/', perm: '' },
+  { icon: FileText, label: 'Pedidos', route: '/pedidos', perm: 'pedidos' },
+  { icon: Factory, label: 'Fabricar', route: '/producao', perm: 'produção' },
+  { icon: Package, label: 'Estoque', route: '/estoque', perm: 'estoque' },
+  { icon: ShoppingBag, label: 'Vendas', route: '/vendas', perm: 'vendas' },
+  { icon: Tag, label: 'Etiquetas', route: '/etiquetas', perm: 'estoque' },
+  { icon: Briefcase, label: 'Gestor', route: '/tarefas', perm: '' },
+  { icon: Truck, label: 'Entregas', route: '/entregas', perm: '' },
+];
+
+const BottomNav = ({ permissoes = [] }: BottomNavProps) => {
+  const hasPermission = (perm?: string) => {
+    if (!perm) return true;
+    if (permissoes.length === 0) return true;
+    return permissoes.includes(perm);
+  };
+
+  const navItems = allNavItems.filter(item => hasPermission(item.perm));
+
   return (
     <nav className="bottom-nav glass">
-      <NavLink to="/" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-        <LayoutDashboard size={20} />
-        <span>Geral</span>
-      </NavLink>
-      <NavLink to="/pedidos" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-        <FileText size={20} />
-        <span>Pedidos</span>
-      </NavLink>
-      <NavLink to="/producao" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-        <Factory size={20} />
-        <span>Fabricar</span>
-      </NavLink>
-      <NavLink to="/estoque" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-        <Package size={20} />
-        <span>Estoque</span>
-      </NavLink>
-      <NavLink to="/vendas" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-        <ShoppingBag size={20} />
-        <span>Vendas</span>
-      </NavLink>
-      <NavLink to="/etiquetas" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-        <Tag size={20} />
-        <span>Etiquetas</span>
-      </NavLink>
-      <NavLink to="/tarefas" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-        <Briefcase size={20} />
-        <span>Gestor</span>
-      </NavLink>
-      <NavLink to="/entregas" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-        <Truck size={20} />
-        <span>Entregas</span>
-      </NavLink>
-      {/* Note: Produtos can be nested under Estoque or accessed via Settings. We'll leave it out of standard bottom nav to save space. */}
+      {navItems.map((item) => (
+        <NavLink
+          key={item.route}
+          to={item.route}
+          end={item.route === '/'}
+          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+        >
+          <item.icon size={20} />
+          <span>{item.label}</span>
+        </NavLink>
+      ))}
     </nav>
   );
 };

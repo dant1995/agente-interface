@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import BottomNav from './components/BottomNav';
 import Sidebar from './components/Sidebar';
 import QueueMonitor from './components/campanhas/QueueMonitor';
@@ -32,6 +32,7 @@ import Fornecedores from './pages/Fornecedores';
 import TikTokPost from './pages/TiktokPost';
 import TriagemRotas from './pages/TriagemRotas';
 import NavegacaoRota from './pages/NavegacaoRota';
+import Tarefas from './pages/Tarefas';
 
 interface LoggedUser {
   nome: string;
@@ -81,36 +82,25 @@ function App() {
         <div className="app-container">
           <Routes>
             <Route path="/" element={<Dashboard />} />
-            {permissoes.includes('vendas') && (
-              <>
-                <Route path="/vendas" element={<Checkout />} />
-                <Route path="/vendas-historico" element={<VendaHistorico />} />
-              </>
-            )}
-            {permissoes.includes('pedidos') && <Route path="/pedidos" element={<Pedidos />} />}
-            {permissoes.includes('produção') && <Route path="/producao" element={<Producao />} />}
-            {permissoes.includes('estoque') && (
-              <>
-                <Route path="/estoque" element={<Estoque />} />
-                <Route path="/etiquetas" element={<Etiquetas />} />
-                <Route path="/materia-prima" element={<MateriaPrima />} />
-              </>
-            )}
-            {permissoes.includes('financeiro') && (
-              <>
-                <Route path="/gastos" element={<Gastos />} />
-                <Route path="/relatorios" element={<Relatorios />} />
-                <Route path="/licitacoes" element={<Licitacoes />} />
-                <Route path="/licitacoes/nova" element={<LicitacaoNova />} />
-                <Route path="/licitacoes/:id" element={<LicitacaoDetalhe />} />
-              </>
-            )}
+            <Route path="/vendas" element={<Checkout />} />
+            <Route path="/vendas-historico" element={<VendaHistorico />} />
+            <Route path="/pedidos" element={<Pedidos />} />
+            <Route path="/producao" element={<Producao />} />
+            <Route path="/estoque" element={<Estoque />} />
+            <Route path="/etiquetas" element={<Etiquetas />} />
+            <Route path="/materia-prima" element={<MateriaPrima />} />
+            <Route path="/gastos" element={<Gastos />} />
+            <Route path="/relatorios" element={<Relatorios />} />
+            <Route path="/licitacoes" element={<Licitacoes />} />
+            <Route path="/licitacoes/nova" element={<LicitacaoNova />} />
+            <Route path="/licitacoes/:id" element={<LicitacaoDetalhe />} />
             <Route path="/clientes" element={<Clientes />} />
             <Route path="/cliente/:nome" element={<ClienteDetalhe />} />
             <Route path="/chat-ia" element={<ChatIA />} />
             <Route path="/campanhas" element={<Campanhas />} />
             <Route path="/entregas" element={<Entregas />} />
             <Route path="/usuarios" element={<Usuarios />} />
+            <Route path="/tarefas" element={<Tarefas />} />
             <Route path="/produtos" element={<Produtos />} />
             <Route path="/analise-produto" element={<AnaliseProduto />} />
             <Route path="/gestao-produtos" element={<GestaoProdutos />} />
@@ -119,10 +109,9 @@ function App() {
             <Route path="/triagem-rotas" element={<TriagemRotas />} />
             <Route path="/navegacao-rota" element={<NavegacaoRota />} />
             <Route path="/planejador-rotas" element={<PlanejadorRotas />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           <QueueMonitor />
-          <BottomNav />
+          <BottomNav permissoes={permissoes} />
         </div>
       </div>
     </BrowserRouter>
