@@ -42,12 +42,30 @@ const normalizeString = (str: string) => {
 const parseReal = (val: any): number => {
   if (!val) return 0;
   if (typeof val === 'number') return val;
-  const cleaned = String(val)
-    .replace('R$', '')
-    .replace(/\./g, '')
-    .replace(',', '.')
-    .trim();
-  const parsed = parseFloat(cleaned);
+  
+  let str = String(val).trim();
+  if (!str) return 0;
+  
+  // Remove R$ e espaços
+  str = str.replace(/R\$/g, '').trim();
+  
+  // Detecta formato: se termina com vírgula + 2 dígitos = brasileiro (235,00)
+  // Se termina com ponto + 2 dígitos = americano (235.00)
+  const endsWithComma = /,\d{2}$/.test(str);
+  const endsWithDot = /\.\d{2}$/.test(str);
+  
+  if (endsWithComma) {
+    // Formato brasileiro: 1.235,00 → remove pontos (milhar), vírgula vira ponto
+    str = str.replace(/\./g, '').replace(',', '.');
+  } else if (endsWithDot) {
+    // Formato americano: 1,235.00 → remove vírgulas (milhar), mantém ponto decimal
+    str = str.replace(/,/g, '');
+  } else {
+    // Sem separador decimal claro: remove vírgulas e pontos (provavelmente só milhar)
+    str = str.replace(/[,.]/g, '');
+  }
+  
+  const parsed = parseFloat(str);
   return isNaN(parsed) ? 0 : parsed;
 };
 
@@ -393,56 +411,93 @@ export const apiSync = {
       const rawData = await response.json();
       let items: any[] = [];
       if (Array.isArray(rawData)) {
-        items = rawData;
+        items = rawData.map(r => r.json ? r.json : r);
       } else if (rawData && typeof rawData === 'object') {
         const found = Object.values(rawData).find(val => Array.isArray(val));
-        if (found) items = found as any[];
+        if (found) items = (found as any[]).map(r => r.json ? r.json : r);
+        else if (rawData.json) items = [rawData.json];
         else items = [rawData];
       }
+
+      // Pula header (linha com "data"/"Item de Custo") e total (linha com "TOTAL CUSTOS")
+      const dataItems = items.filter(item => {
+        const vals = Object.values(item).map(v => String(v).toLowerCase().trim());
+        if (vals.includes('data') || vals.includes('item de custo') || vals.includes('valor total')) return false;
+        if (vals.includes('total custos') || vals.includes('total')) return false;
+        return true;
+      });
 
       let totalCustosCalc = 0;
       let totalVendasCalc = 0;
       let totalNegocio = 0;
       let totalPessoal = 0;
+      let totalCustoMercadoria = 0;
+      let totalOutrosGastos = 0;
 
-      const gastos: any[] = items.map((item, index) => {
-        const data = String(getValueByKeywords(item, ['DATA']) || '');
-        const descricao = String(getValueByKeywords(item, ['DESCRICAO', 'DESCRICAO']) || '');
+      const gastos: any[] = dataItems.map((item, index) => {
+        // Mapeamento: col_1=data, CUSTOS=Item de Custo, col_3=Valor Total, col_4=Quantidade, col_7=Observação, col_8=Outros Gastos (coluna H)
+        const data = String(item.col_1 || '');
+        const descricao = String(item.CUSTOS || item.col_2 || '');
+        const observacao = String(item.col_7 === 'empty' ? '' : item.col_7 || '');
+        const outrosGastosRaw = parseReal(item['Outras saidas'] || item['Outras saídas'] || item.col_8); // Coluna H - Outros Gastos
         const row_number = item.row_number || index + 1;
+        const valorLinha = parseReal(item.col_3);
+        const quantidade = parseReal(item.col_4) || 0;
+        const custoUnitario = quantidade > 0 ? valorLinha / quantidade : 0;
 
-        const valorLinha = parseReal(getValueByKeywords(item, ['TOTAL PAGO', 'PAGO', 'VALOR PAGO', 'TOTAL', 'VALOR', 'GASTO', 'CUSTO', 'SAIDA']));
-        const valorPessoal = parseReal(getValueByKeywords(item, ['CUSTOS PESSOAIS', 'PESSOAL', 'GASTO PESSOAL']));
-        const valorNegocio = valorPessoal > 0 ? 0 : valorLinha;
+        console.log(`[fetchGastos] Item: "${descricao}" | valor: ${valorLinha} | outrosGastos(H): ${outrosGastosRaw}`);
 
-        if (data || descricao || valorLinha > 0) {
-          totalCustosCalc += valorLinha;
+        // Se a coluna H tem valor, é "Outros Gastos" (separado da mercadoria)
+        const valorOutrosGastos = outrosGastosRaw > 0 ? outrosGastosRaw : 0;
+
+        // Detecta se é pessoal (apenas para mercadoria)
+        const textoCombinado = (observacao + ' ' + descricao).toLowerCase();
+        const valorPessoal = textoCombinado.includes('pessoal') ? valorLinha : 0;
+
+        // Se NÃO é pessoal e NÃO tem valor na coluna H, é custo do negócio (mercadoria)
+        const valorNegocio = (valorPessoal > 0 || valorOutrosGastos > 0) ? 0 : valorLinha;
+
+        // Se tem descrição e valor, é custo (mercadoria por padrão)
+        const custoMercadoria = valorNegocio;
+
+        let categoria = 'Mercadoria'; // Padrão
+        if (valorOutrosGastos > 0) categoria = 'Outros Gastos';
+        else if (valorPessoal > 0) categoria = 'Pessoal';
+
+        if (data || descricao || valorLinha > 0 || valorOutrosGastos > 0) {
+          totalCustosCalc += valorLinha + valorOutrosGastos;
           totalNegocio += valorNegocio;
           totalPessoal += valorPessoal;
+          totalCustoMercadoria += custoMercadoria;
+          totalOutrosGastos += valorOutrosGastos;
         }
-
-        const tv = parseReal(getValueByKeywords(item, ['TOTAL DE VENDAS', 'TOTAL VENDAS', 'VENDAS', 'ENTRADA']));
-        if (tv > 0 && totalVendasCalc === 0) totalVendasCalc = tv;
-
-        if (!data && !descricao) return null;
 
         return {
           row_number,
           data,
           descricao,
-          quantidade: Number(getValueByKeywords(item, ['QUANTIDADE', 'QTD'])) || 0,
+          observacao,
           valorNegocio,
           valorPessoal,
-          total: valorLinha,
-          categoria: valorPessoal > 0 ? 'Pessoal' : 'Negócio'
+          outrosGastos: valorOutrosGastos,
+          custoMercadoria,
+          total: valorOutrosGastos > 0 ? valorOutrosGastos : valorLinha,
+          quantidade,
+          custoUnitario,
+          categoria
         };
-      }).filter(Boolean);
+      });
 
       return {
         totalCustos: totalCustosCalc,
         totalVendas: totalVendasCalc,
-        lucroBruto: totalVendasCalc - totalCustosCalc,
+        lucroBruto: totalVendasCalc - totalCustoMercadoria,
+        lucroLiquido: totalVendasCalc - totalCustosCalc,
         totalNegocio,
         totalPessoal,
+        totalCustoMercadoria,
+        totalOutrosGastos,
+        totalDespesasOperacionais: 0,
         gastos,
       };
     } catch (error) {
@@ -696,51 +751,81 @@ export const apiSync = {
       if (!response.ok) throw new Error('Falha ao buscar vendas');
 
       const rawData = await response.json();
+      console.log('Vendas raw:', rawData);
+      
       let items: any[] = [];
       if (Array.isArray(rawData)) {
-        items = rawData;
+        items = rawData.map(r => r.json ? r.json : r);
       } else if (rawData && typeof rawData === 'object') {
-        items = Object.values(rawData).find(val => Array.isArray(val)) as any[] || [rawData];
+        const found = Object.values(rawData).find(val => Array.isArray(val));
+        if (found) {
+          items = (found as any[]).map(r => r.json ? r.json : r);
+        } else if (rawData.json) {
+          items = [rawData.json];
+        } else {
+          items = [rawData];
+        }
       }
       // Mapeamento de todas as vendas (removido filtro de marketplace para incluir físico/balcão)
+      // DEBUG: log completo dos itens para diagnóstico de colunas
+      if (items.length > 0) {
+        console.log('[fetchVendas] DEBUG - Todas as chaves do primeiro item:', Object.keys(items[0]));
+        console.log('[fetchVendas] DEBUG - Primeiro item completo:', items[0]);
+      }
       return (items || []).map((item: any, index: number) => {
-        const baseDateStr = getValueByKeywords(item, ['DATA', 'CARIMBO', 'CRIADO']);
+        const baseDateStr = getValueByKeywords(item, ['DATA', 'CARIMBO', 'CRIADO', 'data']);
         const baseDate = parseBRDate(baseDateStr) || new Date();
         const forecastDate = new Date(baseDate);
         forecastDate.setDate(forecastDate.getDate() + 10);
         
-        const precoVenda = parseReal(getValueByKeywords(item, ['VALOR UNITARIO', 'PRECO', 'PRICE', 'UNITARIO', 'VALOR UNITÁRIO']));
-        const qtdVenda = Number(getValueByKeywords(item, ['QUANTIDADE', 'QTD', 'AMOUNT']) || 1);
+        const precoVenda = parseReal(getValueByKeywords(item, ['preço', 'PRECO', 'VALOR UNITARIO', 'PRICE', 'UNITARIO', 'VALOR UNITÁRIO', 'preco', 'VALOR', 'PREÇO UNITÁRIO', 'VALOR VENDA', 'PRECO VENDA']));
+        const qtdVenda = Number(getValueByKeywords(item, ['quantidade', 'QUANTIDADE', 'QTD', 'AMOUNT', 'QTD VENDA', 'QUANTIDADE VENDIDA']) || 1);
         
         // Prioriza o valor com desconto, se não houver, usa o preço unitário * quantidade
-        const comDesconto = parseReal(getValueByKeywords(item, ['COM DESCONTO', 'TOTAL', 'TOTAL PAGO', 'VALOR PAGO', 'PAGO']));
-        const previsaoRecebimento = parseReal(getValueByKeywords(item, ['PREVISAO DE RECEBIMENTO']));
+        const comDesconto = parseReal(getValueByKeywords(item, ['total com desconto', 'COM DESCONTO', 'TOTAL', 'TOTAL PAGO', 'VALOR PAGO', 'PAGO', 'VALOR TOTAL', 'PRECO TOTAL', 'PREÇO TOTAL', 'VALOR FINAL', 'TOTAL VENDA', 'VALOR VENDA TOTAL', 'PRECO FINAL', 'PREÇO FINAL']));
+        const previsaoRecebimento = parseReal(getValueByKeywords(item, ['previsao de recebimento', 'PREVISAO DE RECEBIMENTO']));
         
         const finalValue = comDesconto > 0 ? comDesconto : (precoVenda * qtdVenda > 0 ? precoVenda * qtdVenda : previsaoRecebimento);
 
+        // Debug: log detalhado para cada venda
+        const generatedId = `venda-row-${item.row_number || index}`;
+        console.log(`[fetchVendas] Item "${item.produto || item.Produto}" | id=${generatedId} | preço=${precoVenda} | qtd=${qtdVenda} | comDesconto=${comDesconto} | finalValue=${finalValue}`);
+
+        // Debug: log quando valorTotal = 0 para diagnóstico
+        if (finalValue === 0) {
+          console.warn('[fetchVendas] Venda com valorTotal = 0:', {
+            id: item.ID || item.id || item.row_number,
+            item: item,
+            precoVenda,
+            qtdVenda,
+            comDesconto,
+            previsaoRecebimento
+          });
+        }
+
         return {
-          id_pedido: String(item.ID || item.id || item.row_number || `venda-${index}`),
+          id_pedido: `venda-row-${item.row_number || index}`,
           data: baseDate.toISOString(),
           dataCriacao: baseDate.toISOString(),
-          cliente: String(getValueByKeywords(item, ['CLIENTE', 'NOME', 'RESPONSAVEL']) || 'Venda Marketplace'),
+          cliente: String(getValueByKeywords(item, ['Cliente', 'CLIENTE', 'NOME', 'RESPONSAVEL']) || 'Venda Marketplace'),
           whatsapp: String(getValueByKeywords(item, ['TELEFONE', 'WHATSAPP', 'CELULAR']) || ''),
           status: OrderStatusValue.ENTREGUE,
-          produtoNome: String(getValueByKeywords(item, ['PRODUTO', 'DESCRICAO', 'DESC']) || 'Produto'),
-          produtoId: String(getValueByKeywords(item, ['PRODUTO', 'SKU', 'ID']) || ''),
-          tamanho: String(getValueByKeywords(item, ['TAMANHO', 'TAM', 'SIZE']) || 'M'),
-          cor: String(getValueByKeywords(item, ['COR', 'COLOR']) || ''),
+          produtoNome: String(getValueByKeywords(item, ['produto', 'PRODUTO', 'DESCRICAO', 'DESC']) || 'Produto'),
+          produtoId: String(getValueByKeywords(item, ['ID', 'produto', 'SKU']) || ''),
+          tamanho: String(getValueByKeywords(item, ['taamnho', 'TAMANHO', 'TAM', 'SIZE']) || 'M'),
+          cor: String(getValueByKeywords(item, ['cor', 'COR', 'COLOR']) || ''),
           quantidade: qtdVenda,
           valorTotal: finalValue,
-          preco: precoVenda,
+          preco: precoVenda || (finalValue > 0 && qtdVenda > 0 ? finalValue / qtdVenda : 0),
           custo: 15,
           lucro: finalValue - (15 * qtdVenda),
           codigo_barra: item.ID || item.codigo_barra || item.codigo_barras || '',
           pago: true,
           entregue: true,
           previsaoRecebimento: forecastDate.toISOString(),
-          formaPagamento: String(getValueByKeywords(item, ['FORMA DE PAGAMENTO', 'FORMA_PAGAMENTO', 'PAGAMENTO', 'METODO', 'METHOD', 'FORMA_PAGTO']) || ''),
+          formaPagamento: String(getValueByKeywords(item, ['metodo de pagamento', 'FORMA DE PAGAMENTO', 'FORMA_PAGAMENTO', 'PAGAMENTO', 'METODO', 'METHOD', 'FORMA_PAGTO']) || ''),
           origem: (() => {
-            const org = normalizeString(String(getValueByKeywords(item, ['ORIGEM', 'SOURCE', 'TIPO']) || ''));
+            const org = normalizeString(String(getValueByKeywords(item, ['origem', 'ORIGEM', 'SOURCE', 'TIPO']) || ''));
             if (org.includes('shopee')) return 'Shopee';
             if (org.includes('tiktok')) return 'TikTok';
             if (org.includes('site') || org.includes('online')) return 'Site';

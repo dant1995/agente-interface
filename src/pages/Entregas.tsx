@@ -34,7 +34,7 @@ const Entregas = () => {
   }, []);
 
   const carregarPedidos = async () => {
-    const ordens = await storage.getOrders();
+    const ordens = await storage.getAllOrders();
     setTodasOrdens(ordens);
     ordensRef.current = ordens;
   };

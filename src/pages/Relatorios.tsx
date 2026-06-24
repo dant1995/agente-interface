@@ -17,6 +17,7 @@ const Relatorios = () => {
   });
   const [dataFim, setDataFim] = useState(() => new Date().toISOString().split('T')[0]);
   const [stockItems, setStockItems] = useState<any[]>([]);
+  const [gastosData, setGastosData] = useState<any>(null);
 
   useEffect(() => {
     loadData();
@@ -28,13 +29,23 @@ const Relatorios = () => {
 
   const loadData = async () => {
     setLoading(true);
-    const [allOrders, stock] = await Promise.all([
-      storage.getOrders(),
+    
+    // Sincroniza vendas da planilha primeiro
+    try {
+      const extSales = await apiSync.fetchVendas().catch(() => []);
+      if (extSales && extSales.length > 0) {
+        await storage.syncExternalVendas(extSales);
+      }
+    } catch {}
+
+    const [allOrders, stock, gastos] = await Promise.all([
+      storage.getAllOrders(),
       storage.getStock(),
       apiSync.fetchGastos().catch(() => null),
     ]);
     setOrders(allOrders);
     setStockItems(stock);
+    setGastosData(gastos);
     setLoading(false);
   };
 
@@ -102,6 +113,40 @@ const Relatorios = () => {
       .sort((a, b) => b.qtd - a.qtd)
       .slice(0, 5);
 
+    // Lucro por produto: cruza vendas com custos da planilha
+    const lucroPorProduto = Array.from(prodMap.entries()).map(([nome, qtdVendida]) => {
+      const vendasDoProduto = filteredOrders.filter(o => o.produtoNome === nome);
+      const receita = vendasDoProduto.reduce((acc, o) => acc + (o.valorTotal || 0), 0);
+      
+      // Busca custo na planilha de gastos (fuzzy match)
+      const gastoEncontrado = gastosData?.gastos?.find((g: any) => {
+        const desc = (g.descricao || '').toLowerCase().trim();
+        const nomeLower = nome.toLowerCase().trim();
+        return desc === nomeLower || 
+               desc.includes(nomeLower) || 
+               nomeLower.includes(desc) ||
+               (desc.includes('meia') && nomeLower.includes('meia')) ||
+               (desc.includes('camiseta') && nomeLower.includes('camiseta'));
+      });
+      
+      // Usa custoUnitario direto da planilha (coluna D / quantidade)
+      const custoUnitario = gastoEncontrado?.custoUnitario || 0;
+      const custoTotal = custoUnitario * qtdVendida;
+      const lucro = receita - custoTotal;
+      const margem = receita > 0 ? (lucro / receita) * 100 : 0;
+
+      return {
+        nome,
+        qtdVendida,
+        receita,
+        custoUnitario,
+        custoTotal,
+        lucro,
+        margem,
+        custoEncontrado: gastoEncontrado ? true : false,
+      };
+    }).sort((a, b) => b.receita - a.receita);
+
     const totalVendido = filteredOrders.reduce((acc, o) => acc + (o.valorTotal || 0), 0);
     const totalQtd = filteredOrders.reduce((acc, o) => acc + o.quantidade, 0);
 
@@ -123,13 +168,14 @@ const Relatorios = () => {
       lucroReal,
       markupMedio: totalCustoMP > 0 ? totalVendido / totalCustoMP : 0,
       topProdutos: topProds,
+      lucroPorProduto,
       vendasPorTamanho: tamMap,
       vendasPorCor: corMap,
       vendasPorCanal: canalMap,
       totalQtd,
       ticketMedio: filteredOrders.length > 0 ? totalVendido / filteredOrders.length : 0,
     };
-  }, [filteredOrders]);
+  }, [filteredOrders, gastosData]);
 
   // Alerta de matéria-prima: projeção de esgotamento
   const alertasInsumos = useMemo(() => {
@@ -322,6 +368,40 @@ const Relatorios = () => {
           ))}
         </div>
       </div>
+
+      {/* Lucro por Produto */}
+      {stats.lucroPorProduto.length > 0 && (
+        <div style={{ background: 'white', padding: '1.2rem', borderRadius: '14px', marginBottom: '1rem', border: '1px solid #f1f5f9' }}>
+          <h3 style={{ fontSize: '0.85rem', fontWeight: '700', color: '#1e293b', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <DollarSign size={16} color="#10b981" /> LUCRO POR PRODUTO
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {stats.lucroPorProduto.map((p, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '0.6rem 0.8rem', borderRadius: '10px',
+                background: p.lucro >= 0 ? '#f0fdf4' : '#fef2f2',
+                border: p.lucro >= 0 ? '1px solid #dcfce7' : '1px solid #fecaca',
+              }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#1e293b' }}>{p.nome}</div>
+                  <div style={{ fontSize: '0.65rem', color: '#64748b' }}>
+                    {p.qtdVendida} un. × R$ {(p.receita / Math.max(p.qtdVendida, 1)).toFixed(2)} = R$ {p.receita.toFixed(2)}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '0.85rem', fontWeight: '700', color: p.lucro >= 0 ? '#166534' : '#991b1b' }}>
+                    {p.lucro >= 0 ? '+' : ''}R$ {p.lucro.toFixed(2)}
+                  </div>
+                  <div style={{ fontSize: '0.6rem', color: p.margem >= 0 ? '#15803d' : '#b91c1c' }}>
+                    {p.margem.toFixed(1)}% margem
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Demanda por Tamanho + Canal de Venda lado a lado */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', marginBottom: '1rem' }}>

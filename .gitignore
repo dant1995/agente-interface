@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Temporary / test files
+gerar_qr_pix.py
+qrcode_pix.png
+req.json
+test_body.json
+test_estoque.json

@@ -7,6 +7,8 @@ import { Search, Scan, ShoppingBag, CheckCircle, X, Calendar, History } from 'lu
 
 interface CartItem extends StockItem {
   quantity: number;
+  preco: number;
+  descricao?: string;
 }
 
 const Checkout = () => {
@@ -27,6 +29,11 @@ const Checkout = () => {
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState<'%' | 'R$'>('%');
   const [vendaRetroativa, setVendaRetroativa] = useState(false);
+  const [permitirSemEstoque, setPermitirSemEstoque] = useState(false);
+  const [descricaoProduto, setDescricaoProduto] = useState('');
+  const [precoCustomizado, setPrecoCustomizado] = useState('');
+  const [quantidadeCustomizada, setQuantidadeCustomizada] = useState('');
+  const [nomeProdutoManual, setNomeProdutoManual] = useState('');
   const [dataManual, setDataManual] = useState(new Date().toISOString().split('T')[0]);
   const [clientResults, setClientResults] = useState<{ nome: string; whatsapp: string; cidade?: string }[]>([]);
   const [showClientDropdown, setShowClientDropdown] = useState(false);
@@ -83,7 +90,7 @@ const Checkout = () => {
   }, []);
 
   const loadData = async () => {
-    const [stockData, orders] = await Promise.all([storage.getStock(), storage.getOrders()]);
+    const [stockData, orders] = await Promise.all([storage.getStock(), storage.getAllOrders()]);
     setStock(stockData);
     const sortedSales = orders
       .filter(o => String(o.id_pedido).startsWith('VENDA-') || o.cliente === 'Venda Marketplace')
@@ -97,7 +104,7 @@ const Checkout = () => {
     try {
       const [externalStock, extSales] = await Promise.all([apiSync.fetchEstoque(), apiSync.fetchVendas()]);
       if (externalStock) { await storage.syncExternalStock(externalStock); setStock(externalStock); }
-      if (extSales && extSales.length > 0) await storage.syncExternalOrders(extSales);
+      if (extSales && extSales.length > 0) await storage.syncExternalVendas(extSales);
       await loadData();
     } catch (e) { console.error(e); }
     setSyncing(false);
@@ -149,15 +156,45 @@ const Checkout = () => {
   };
 
   const addItemToCart = (item: StockItem) => {
-    if (item.estoque <= 0) { alert('Produto sem estoque!'); return; }
+    if (item.estoque <= 0 && !permitirSemEstoque) {
+      alert('Produto sem estoque! Ative a opção "Vender sem estoque" para vender.');
+      return;
+    }
+    const preco = (permitirSemEstoque && precoCustomizado) ? Number(precoCustomizado) : (item.preco || 35);
+    const qtd = (permitirSemEstoque && quantidadeCustomizada) ? Math.max(1, Number(quantidadeCustomizada)) : 1;
     setCart(prev => {
       const existing = prev.find(i => i.produto === item.produto && i.tamanho === item.tamanho && i.cor === item.cor);
       if (existing) {
-        if (existing.quantity >= item.estoque) { alert('Estoque insuficiente!'); return prev; }
-        return prev.map(i => i === existing ? { ...i, quantity: i.quantity + 1 } : i);
+        if (!permitirSemEstoque && existing.quantity >= item.estoque) { alert('Estoque insuficiente!'); return prev; }
+        return prev.map(i => i === existing ? { ...i, quantity: i.quantity + qtd } : i);
       }
-      return [...prev, { ...item, quantity: 1 }];
+      return [...prev, { ...item, quantity: qtd, preco, descricao: descricaoProduto || undefined }];
     });
+  };
+
+  const addManualItemToCart = () => {
+    if (!nomeProdutoManual.trim()) { alert('Digite o nome do produto!'); return; }
+    const preco = Number(precoCustomizado) || 0;
+    if (preco <= 0) { alert('Digite um valor válido!'); return; }
+    const qtd = Math.max(1, Number(quantidadeCustomizada) || 1);
+
+    const manualItem: StockItem = {
+      data: new Date().toISOString(),
+      produto: nomeProdutoManual.trim(),
+      tamanho: '-',
+      cor: '-',
+      pedidos: 0,
+      estoque: 0,
+      faltando: 0,
+      reserva: 0,
+      preco,
+    };
+
+    setCart(prev => [...prev, { ...manualItem, quantity: qtd, preco, descricao: descricaoProduto || undefined }]);
+    setNomeProdutoManual('');
+    setPrecoCustomizado('');
+    setQuantidadeCustomizada('');
+    setDescricaoProduto('');
   };
 
   const updateQuantity = (index: number, delta: number) => {
@@ -165,7 +202,7 @@ const Checkout = () => {
       const n = [...prev];
       const newQty = n[index].quantity + delta;
       if (newQty <= 0) return prev.filter((_, i) => i !== index);
-      if (newQty > n[index].estoque) { alert('Estoque insuficiente!'); return prev; }
+      if (!permitirSemEstoque && newQty > n[index].estoque) { alert('Estoque insuficiente!'); return prev; }
       n[index] = { ...n[index], quantity: newQty };
       return n;
     });
@@ -199,8 +236,11 @@ const Checkout = () => {
       forecastDate.setDate(forecastDate.getDate() + (isMarketplace ? 10 : 1));
 
       for (const item of cart) {
-        await storage.updateStockQuantity(item.produto, item.tamanho, item.cor, item.quantity);
-        await apiSync.updateEstoque(item, item.quantity);
+        const semEstoque = permitirSemEstoque && item.estoque <= 0;
+        if (!semEstoque) {
+          storage.updateStockQuantity(item.produto, item.tamanho, item.cor, item.quantity).catch(() => {});
+          apiSync.updateEstoque(item, item.quantity).catch(() => {});
+        }
         const unitPrice = item.preco || 35;
         const unitCost = 15;
         let itemTotal = item.quantity * unitPrice;
@@ -220,7 +260,8 @@ const Checkout = () => {
           lucro: itemTotal - (item.quantity * unitCost), pago: true, entregue: true,
           metodoPagamento: paymentMethod, codigo_barra: item.codigoBarra || '',
           previsaoRecebimento: forecastDate.toISOString(),
-          observacoes: `Pagamento: ${paymentMethod}${discount > 0 ? ` | Desc: ${discountType === '%' ? discount + '%' : 'R$ ' + discount}` : ''}${vendaRetroativa ? ' | RETROATIVA' : ''}`
+          observacoes: `Pagamento: ${paymentMethod}${discount > 0 ? ` | Desc: ${discountType === '%' ? discount + '%' : 'R$ ' + discount}` : ''}${vendaRetroativa ? ' | RETROATIVA' : ''}${item.estoque <= 0 ? ' | PRÉ-VENDA (sem estoque)' : ''}`,
+          descricaoProduto: item.descricao || descricaoProduto || undefined
         };
         await storage.addOrder(orderData);
       }
@@ -229,26 +270,31 @@ const Checkout = () => {
         action: "nova_venda", data: saleDate.toISOString(), previsao_recebimento: forecastDate.toISOString(),
         cliente: customerName || 'Venda Balcão', telefone: customerPhone || '',
         origem_venda: saleOrigin, metodo_pagamento: paymentMethod,
-        itens: cart.map(i => ({ produto: i.produto, tamanho: i.tamanho, cor: i.cor, quantidade: i.quantity, preco_unitario: i.preco || 35, ID: `${i.produto}-${i.tamanho}` })),
+        itens: cart.map(i => ({ produto: i.produto, tamanho: i.tamanho, cor: i.cor, quantidade: i.quantity, preco_unitario: i.preco || 35, ID: `${i.produto}-${i.tamanho}`, descricao: i.descricao || '' })),
         total_bruto: subtotal, desconto: discountType === '%' ? subtotal * (discount / 100) : discount,
-        total_liquido: totalComDesconto, observacoes: `Desc: ${discountType === '%' ? discount + '%' : 'R$ ' + discount}`
+        total_liquido: totalComDesconto, observacoes: `Desc: ${discountType === '%' ? discount + '%' : 'R$ ' + discount}`,
+        descricao_produto: cart.map(i => i.descricao || '').filter(Boolean).join(' | ') || ''
       };
-      await apiSync.notifyNewSale(salePayload);
-      await apiSync.notifyCaixa({ action: "nova_entrada", data: saleDate.toISOString(), descricao: `Venda ${saleOrigin} - ${customerName || 'Balcão'} (${cart.length} itens)`, categoria: "Vendas", entrada: totalComDesconto, saida: 0, metodo_pagamento: paymentMethod });
+      await apiSync.notifyNewSale(salePayload).catch(e => console.warn('Aviso venda (não bloqueante):', e));
+      await apiSync.notifyCaixa({ action: "nova_entrada", data: saleDate.toISOString(), descricao: `Venda ${saleOrigin} - ${customerName || 'Balcão'} (${cart.length} itens)`, categoria: "Vendas", entrada: totalComDesconto, saida: 0, metodo_pagamento: paymentMethod }).catch(e => console.warn('Aviso caixa (não bloqueante):', e));
 
       if (customerPhone) {
         const cleanPhone = customerPhone.replace(/\D/g, '');
         const itemsList = cart.map(i => `${i.quantity}x ${i.produto} (${i.tamanho}/${i.cor}) - R$ ${(i.quantity * (i.preco || 35)).toFixed(2)}`).join('\n');
         const message = encodeURIComponent(`*RECIBO - LOJAS CAPEL*\n\nOlá ${customerName || 'Cliente'}!\n\n${itemsList}\n\n*TOTAL: R$ ${totalComDesconto.toFixed(2)}*\n\nObrigado! 😊`);
-        window.open(`https://wa.me/55${cleanPhone}?text=${message}`, '_blank');
+        try { window.open(`https://wa.me/55${cleanPhone}?text=${message}`, '_blank'); } catch {}
       }
 
       alert('Venda finalizada!');
       setCart([]); setCustomerName(''); setCustomerPhone(''); setDiscount(0); setDiscountType('%');
-      setPaymentMethod('Pix'); setSaleOrigin('Físico'); setVendaRetroativa(false);
+      setPaymentMethod('Pix'); setSaleOrigin('Físico'); setVendaRetroativa(false); setPermitirSemEstoque(false); setDescricaoProduto(''); setPrecoCustomizado(''); setQuantidadeCustomizada(''); setNomeProdutoManual('');
       setDataManual(new Date().toISOString().split('T')[0]);
       loadData();
-    } catch (e: any) { console.error('Erro finalizar:', e); alert(`Erro ao processar venda: ${e?.message || e}`); }
+    } catch (e: any) {
+      console.error('Erro finalizar:', e);
+      const msg = e?.message || e?.toString() || 'Erro desconhecido';
+      alert(`Erro ao processar venda:\n\n${msg}`);
+    }
     setProcessing(false);
   };
 
@@ -333,10 +379,17 @@ const Checkout = () => {
                     <div style={{ width: '42px', height: '42px', background: '#f1f5f9', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', flexShrink: 0 }}>👕</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: '700', fontSize: '0.85rem', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.produto}</div>
+                      {item.descricao && (
+                        <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.15rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.descricao}</div>
+                      )}
                       <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.2rem', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '0.65rem', fontWeight: '700', background: '#eef2ff', color: '#4f46e5', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>{item.tamanho}</span>
                         <span style={{ fontSize: '0.65rem', fontWeight: '700', background: '#fef3c7', color: '#92400e', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>{item.cor}</span>
-                        <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Est: {item.estoque}</span>
+                        {item.estoque <= 0 ? (
+                          <span style={{ fontSize: '0.65rem', fontWeight: '700', background: '#fef2f2', color: '#ef4444', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>Pré-venda</span>
+                        ) : (
+                          <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Est: {item.estoque}</span>
+                        )}
                         <span style={{ fontSize: '0.65rem', fontWeight: '600', color: '#3b82f6' }}>R$ {(item.preco || 35).toFixed(2)}</span>
                       </div>
                     </div>
@@ -348,6 +401,11 @@ const Checkout = () => {
                     <div style={{ fontWeight: '800', fontSize: '0.85rem', color: '#1e293b', textAlign: 'right', flexShrink: 0, minWidth: '60px' }}>
                       R$ {((item.preco || 35) * item.quantity).toFixed(2)}
                     </div>
+                    <button
+                      onClick={() => setCart(prev => prev.filter((_, i) => i !== idx))}
+                      style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', flexShrink: 0, display: 'flex', alignItems: 'center', fontSize: '1.1rem' }}
+                      title="Remover item"
+                    >✕</button>
                   </div>
                 ))}
               </div>
@@ -422,6 +480,81 @@ const Checkout = () => {
                   )}
                 </div>
               )}
+            </div>
+
+            {/* Vender sem Estoque + Descrição do Produto */}
+            <div className="checkout-panel-section" style={{ background: permitirSemEstoque ? '#fffbeb' : 'transparent', border: permitirSemEstoque ? '1px dashed #fbbf24' : 'none', borderRadius: '10px', padding: permitirSemEstoque ? '0.8rem' : '0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: permitirSemEstoque ? '0.6rem' : 0 }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: '700', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', margin: 0 }}>
+                  📦 VENDER SEM ESTOQUE
+                </label>
+                <button
+                  onClick={() => setPermitirSemEstoque(!permitirSemEstoque)}
+                  style={{
+                    width: '44px', height: '24px', borderRadius: '12px', border: 'none',
+                    background: permitirSemEstoque ? '#22c55e' : '#cbd5e1',
+                    position: 'relative', cursor: 'pointer', transition: 'background 0.2s',
+                    padding: 0
+                  }}
+                >
+                  <div style={{
+                    width: '20px', height: '20px', borderRadius: '50%', background: 'white',
+                    position: 'absolute', top: '2px', left: permitirSemEstoque ? '22px' : '2px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s'
+                  }} />
+                </button>
+              </div>
+              {permitirSemEstoque && (
+                <p style={{ fontSize: '0.7rem', color: '#92400e', margin: '0 0 0.6rem' }}>
+                  Produtos serão marcados como PRÉ-VENDA
+                </p>
+              )}
+              <label className="checkout-label" style={{ marginTop: '0.5rem' }}>💰 VALOR UNITÁRIO (R$)</label>
+              <input
+                type="number"
+                placeholder={permitirSemEstoque ? "Ex: 55,00" : "Preço do catálogo"}
+                value={precoCustomizado}
+                onChange={(e) => setPrecoCustomizado(e.target.value)}
+                step="0.01"
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem', fontWeight: '700', outline: 'none' }}
+              />
+              <label className="checkout-label" style={{ marginTop: '0.5rem' }}>🔢 QUANTIDADE</label>
+              <input
+                type="number"
+                placeholder={permitirSemEstoque ? "Ex: 10" : "1"}
+                value={quantidadeCustomizada}
+                onChange={(e) => setQuantidadeCustomizada(e.target.value)}
+                min="1"
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem', fontWeight: '700', outline: 'none' }}
+              />
+              <label className="checkout-label" style={{ marginTop: '0.5rem' }}>📝 DESCRIÇÃO DO PRODUTO</label>
+              <textarea
+                placeholder="Ex: Camiseta personalizada, cor preta, estampa personalizada..."
+                value={descricaoProduto}
+                onChange={(e) => setDescricaoProduto(e.target.value)}
+                rows={2}
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.85rem', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
+              />
+              <label className="checkout-label" style={{ marginTop: '0.5rem' }}>🏷️ NOME DO PRODUTO</label>
+              <input
+                type="text"
+                placeholder="Ex: Camiseta personalizada"
+                value={nomeProdutoManual}
+                onChange={(e) => setNomeProdutoManual(e.target.value)}
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem', fontWeight: '600', outline: 'none' }}
+              />
+              <button
+                onClick={addManualItemToCart}
+                style={{
+                  width: '100%', marginTop: '0.6rem', padding: '0.7rem',
+                  borderRadius: '10px', border: 'none',
+                  background: '#22c55e', color: 'white',
+                  fontWeight: '700', fontSize: '0.9rem', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem'
+                }}
+              >
+                + ADICIONAR AO CARRINHO
+              </button>
             </div>
 
             {/* Canal de Venda */}
@@ -554,7 +687,10 @@ const Checkout = () => {
                             ) : (
                               <div className="catalog-img-placeholder">👕</div>
                             )}
-                            {item.estoque <= 0 && (
+                            {item.estoque <= 0 && permitirSemEstoque && (
+                              <div className="catalog-out-badge" style={{ background: '#fbbf24', color: '#92400e' }}>Pré-venda</div>
+                            )}
+                            {item.estoque <= 0 && !permitirSemEstoque && (
                               <div className="catalog-out-badge">Esgotado</div>
                             )}
                           </div>
@@ -568,10 +704,10 @@ const Checkout = () => {
                           </div>
                           <button
                             className="catalog-add-btn"
-                            disabled={item.estoque <= 0}
+                            disabled={item.estoque <= 0 && !permitirSemEstoque}
                             onClick={() => { addItemToCart(item); }}
                           >
-                            + Adicionar
+                            {item.estoque <= 0 && permitirSemEstoque ? '+ Pré-venda' : '+ Adicionar'}
                           </button>
                         </div>
                       );

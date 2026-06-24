@@ -36,21 +36,16 @@ const Vendas = () => {
   }, []);
 
   const loadOrders = async () => {
-    const data = await storage.getOrders();
+    const data = await storage.getAllOrders();
     setOrders(data);
   };
 
   const handleSyncN8N = async () => {
     setSyncing(true);
     try {
-      const [extOrders, extSales] = await Promise.all([
-        apiSync.fetchPedidos(),
-        apiSync.fetchVendas()
-      ]);
-
-      const allExt = [...(extOrders || []), ...(extSales || [])];
-      if (allExt.length > 0) {
-        const updatedOrders = await storage.syncExternalOrders(allExt);
+      const extSales = await apiSync.fetchVendas();
+      if (extSales && extSales.length > 0) {
+        const updatedOrders = await storage.syncExternalVendas(extSales);
         setOrders(updatedOrders);
       }
     } catch (e) {

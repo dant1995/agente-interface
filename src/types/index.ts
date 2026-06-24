@@ -97,6 +97,7 @@ export interface Order {
   dataPronta?: string;
   previsaoRecebimento?: string; // New field for sales forecast
   observacoes?: string;
+  descricaoProduto?: string;
   metodoPagamento?: 'Pix' | 'Dinheiro' | 'Cartão';
   origem?: string;
 }
@@ -122,6 +123,7 @@ export interface Gasto {
   quantidade: number;
   total: number;
   categoria?: string;
+  outrosGastos?: number;
 }
 
 // Resumo financeiro extraído da planilha
@@ -131,6 +133,7 @@ export interface FinanceiroSummary {
   lucroBruto: number;
   totalNegocio: number;
   totalPessoal: number;
+  totalOutrosGastos?: number;
   saldoReal?: number;
   totalEntradas?: number;
   totalSaidas?: number;

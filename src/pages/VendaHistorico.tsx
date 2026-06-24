@@ -13,12 +13,22 @@ const VendaHistorico = () => {
 
   useEffect(() => {
     loadSales();
-    window.addEventListener('focus', loadSales);
-    return () => window.removeEventListener('focus', loadSales);
+    const syncAndLoad = async () => {
+      try {
+        const extSales = await apiSync.fetchVendas().catch(() => []);
+        if (extSales && extSales.length > 0) {
+          await storage.syncExternalVendas(extSales);
+        }
+        await loadSales();
+      } catch {}
+    };
+    syncAndLoad();
+    window.addEventListener('focus', syncAndLoad);
+    return () => window.removeEventListener('focus', syncAndLoad);
   }, []);
 
   const loadSales = async () => {
-    const orders = await storage.getOrders();
+    const orders = await storage.getAllOrders();
     // Vendas do App (com prefixo VENDA-) ou vendas da planilha (que não têm id_pedido fixo da produção)
     const finalized = orders
       .filter(o => 
@@ -35,11 +45,11 @@ const VendaHistorico = () => {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      const extSales = await apiSync.fetchVendas();
-      if (extSales) {
-        await storage.syncExternalOrders(extSales);
-        await loadSales();
+      const extSales = await apiSync.fetchVendas().catch(() => []);
+      if (extSales && extSales.length > 0) {
+        await storage.syncExternalVendas(extSales);
       }
+      await loadSales();
     } catch (e) {
       console.error(e);
     }

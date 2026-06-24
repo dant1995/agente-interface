@@ -19,6 +19,8 @@ const Dashboard = () => {
     totalCustos: 0,
     totalVendasFinanceiro: 0,
     lucroBruto: 0,
+    totalCustoMercadoria: 0,
+    totalDespesasOperacionais: 0,
     totalEstoque: 0,
     totalValorPrevisto: 0,
     saldoCaixa: 0,
@@ -34,25 +36,23 @@ const Dashboard = () => {
 
   useEffect(() => {
     autoSync();
+    window.addEventListener('focus', autoSync);
+    return () => window.removeEventListener('focus', autoSync);
   }, []);
 
   const autoSync = async () => {
     setSyncing(true);
 
     try {
-      const [extOrders, extSales] = await Promise.all([
-        apiSync.fetchPedidos(),
-        apiSync.fetchVendas()
-      ]);
-      const allExternalOrders = [...(extOrders || []), ...(extSales || [])];
-      if (allExternalOrders.length > 0) {
-        await storage.syncExternalOrders(allExternalOrders);
+      const extSales = await apiSync.fetchVendas();
+      if (extSales && extSales.length > 0) {
+        await storage.syncExternalVendas(extSales);
       }
     } catch (e) {
-      console.warn('Não foi possível sincronizar pedidos/vendas:', e);
+      console.warn('Não foi possível sincronizar vendas:', e);
     }
 
-    let financeiro = { totalCustos: 0, totalVendas: 0, lucroBruto: 0, totalNegocio: 0, totalPessoal: 0 };
+    let financeiro: { totalCustos: number; totalVendas: number; lucroBruto: number; totalNegocio: number; totalPessoal: number; totalCustoMercadoria?: number; totalDespesasOperacionais?: number; totalOutrosGastos?: number } = { totalCustos: 0, totalVendas: 0, lucroBruto: 0, totalNegocio: 0, totalPessoal: 0 };
     let caixa = { summary: { entrada: 0, saida: 0, saldo: 0 } };
     let contas: any[] = [];
 
@@ -69,7 +69,7 @@ const Dashboard = () => {
       console.warn('Não foi possível sincronizar dados financeiros extras:', e);
     }
 
-    const orders = await storage.getOrders();
+    const orders = await storage.getAllOrders();
     const stockData = await storage.getStock();
 
     const activeSales = orders.filter(o => {
@@ -113,7 +113,7 @@ const Dashboard = () => {
     if (vencendoHoje.length > 0) novosAlertas.push(`Você tem ${vencendoHoje.length} conta(s) a pagar vencendo hoje!`);
 
     const totalPedidosAtivosSoma = activeSales.reduce((acc: number, o: any) => acc + (Number(o.valorTotal) || 0), 0);
-    const totalVendasExibir = Math.max(totalPedidosAtivosSoma, financeiro.totalVendas);
+    const totalVendasExibir = totalPedidosAtivosSoma;
 
     let totalCustosFinal = financeiro.totalCustos;
     if (caixa.summary.saida > totalCustosFinal) totalCustosFinal = caixa.summary.saida;
@@ -135,7 +135,9 @@ const Dashboard = () => {
       estoqueBaixo: stockData.filter(i => (i.estoque || 0) <= (i.estoqueMinimo || 5)).length,
       totalCustos: totalCustosFinal,
       totalVendasFinanceiro: totalVendasExibir,
-      lucroBruto: totalVendasExibir - totalCustosFinal,
+      lucroBruto: totalVendasExibir - (financeiro.totalCustoMercadoria || 0),
+      totalCustoMercadoria: financeiro.totalCustoMercadoria || 0,
+      totalDespesasOperacionais: financeiro.totalDespesasOperacionais || 0,
       totalEstoque: stockData.reduce((acc, item) => acc + (item.estoque || 0), 0),
       totalValorPrevisto: stockData.reduce((acc, item) => {
         const preco = item.precoDesconto || item.preco || 35;
@@ -237,14 +239,20 @@ const Dashboard = () => {
           {/* Coluna direita: todos os mini-cards em linha */}
           <div className="dash-banner-cards">
             <div className="dash-mini-card">
-              <div style={{ fontSize: '0.65rem', opacity: 0.8 }}>💸 Custos</div>
+              <div style={{ fontSize: '0.65rem', opacity: 0.8 }}>📦 Mercadoria</div>
               <div style={{ fontSize: '0.9rem', fontWeight: '600' }}>
-                R$ {metrics.totalCustos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                R$ {metrics.totalCustoMercadoria.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </div>
+            </div>
+            <div className="dash-mini-card">
+              <div style={{ fontSize: '0.65rem', opacity: 0.8 }}>🏢 Despesas</div>
+              <div style={{ fontSize: '0.9rem', fontWeight: '600' }}>
+                R$ {metrics.totalDespesasOperacionais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </div>
             </div>
             <div className="dash-mini-card">
               <div style={{ fontSize: '0.65rem', opacity: 0.8 }}>
-                {metrics.lucroBruto >= 0 ? '📈 Lucro' : '📉 Prejuízo'}
+                {metrics.lucroBruto >= 0 ? '📈 Lucro Bruto' : '📉 Prejuízo'}
               </div>
               <div style={{ fontSize: '0.9rem', fontWeight: '600' }}>
                 R$ {Math.abs(metrics.lucroBruto).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}

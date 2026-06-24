@@ -10,6 +10,7 @@ const Gastos = () => {
     lucroBruto: 0,
     totalNegocio: 0,
     totalPessoal: 0,
+    totalOutrosGastos: 0,
     gastos: [],
     caixa: [],
   });
@@ -18,7 +19,7 @@ const Gastos = () => {
   const [activeTab, setActiveTab] = useState<'despesas' | 'caixa'>('caixa');
   const [selectedMonth, setSelectedMonth] = useState<string>(''); // Formato: "MM/YYYY"
   const [typeFilter, setTypeFilter] = useState<'all' | 'entrada' | 'saida'>('all');
-  const [categoryFilter, setCategoryFilter] = useState<'all' | 'Negócio' | 'Pessoal'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'Negócio' | 'Pessoal' | 'Outros Gastos'>('all');
 
   useEffect(() => {
     syncGastos();
@@ -84,6 +85,7 @@ const Gastos = () => {
         lucroBruto,
         totalNegocio,
         totalPessoal: data?.totalPessoal || 0,
+        totalOutrosGastos: data?.totalOutrosGastos || 0,
         saldoReal: caixaData?.summary?.saldo || 0,
         totalEntradas: caixaData?.summary?.entrada || 0,
         totalSaidas: caixaData?.summary?.saida || 0,
@@ -112,7 +114,16 @@ const Gastos = () => {
     .filter(g => {
       const searchMatch = !searchTerm || g.descricao?.toLowerCase().includes(searchTerm.toLowerCase());
       const monthMatch = !selectedMonth || getMonthKey(g.data) === selectedMonth;
-      const categoryMatch = categoryFilter === 'all' || g.categoria === categoryFilter;
+      let categoryMatch = true;
+      if (categoryFilter === 'Negócio') {
+        const gCat = (g.categoria || '').toLowerCase();
+        categoryMatch = !gCat.includes('pessoal') && !gCat.includes('pessoais') && gCat !== 'outros' && gCat !== 'outros gastos';
+      } else if (categoryFilter === 'Pessoal') {
+        const gCat = (g.categoria || '').toLowerCase();
+        categoryMatch = gCat.includes('pessoal') || gCat.includes('pessoais');
+      } else if (categoryFilter === 'Outros Gastos') {
+        categoryMatch = (g.categoria || '').toLowerCase() === 'outros gastos';
+      }
       return searchMatch && monthMatch && categoryMatch;
     })
     .sort((a, b) => parseToSortableDate(b.data) - parseToSortableDate(a.data));
@@ -125,7 +136,10 @@ const Gastos = () => {
       .filter(i => (i.categoria || '').toLowerCase().includes('venda'))
       .reduce((acc, i) => acc + (i.entrada || 0), 0),
     negocio: gastosFiltrados
-      .filter(g => (g.categoria || '').includes('Negócio'))
+      .filter(g => (g.categoria || '').includes('Negócio') || (g.categoria || '').toLowerCase() === 'mercadoria')
+      .reduce((acc, g) => acc + (g.total || 0), 0),
+    outrosGastos: gastosFiltrados
+      .filter(g => (g.categoria || '').toLowerCase() === 'outros gastos')
       .reduce((acc, g) => acc + (g.total || 0), 0),
   };
 
@@ -316,7 +330,7 @@ const Gastos = () => {
       {/* Resumo detalhado (Só aparece se estiver em despesas) */}
       {activeTab === 'despesas' && (
         <div style={{
-          display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) 1fr 1fr', 
+          display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', 
           gap: '0.5rem', margin: '0 0.8rem 0.8rem',
         }}>
           <div 
@@ -360,6 +374,20 @@ const Gastos = () => {
           >
             <div style={{ fontSize: '0.6rem', color: '#888', fontWeight: 'bold' }}>👤 Pessoal</div>
             <div style={{ fontSize: '0.85rem', fontWeight: '700' }}>R$ {financeiro.totalPessoal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+          </div>
+          <div 
+            onClick={() => setCategoryFilter('Outros Gastos')}
+            style={{ 
+              background: 'white', borderRadius: '10px', padding: '0.8rem', 
+              boxShadow: categoryFilter === 'Outros Gastos' ? '0 0 10px rgba(59, 130, 246, 0.4)' : '0 2px 8px rgba(0,0,0,0.06)', 
+              borderTop: '4px solid #8B5CF6',
+              border: categoryFilter === 'Outros Gastos' ? '2px solid #3b82f6' : 'none',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            <div style={{ fontSize: '0.6rem', color: '#888', fontWeight: 'bold' }}>📋 Outros Gastos</div>
+            <div style={{ fontSize: '0.85rem', fontWeight: '700' }}>R$ {(financeiro.totalOutrosGastos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
           </div>
         </div>
       )}
@@ -491,10 +519,11 @@ const Gastos = () => {
           )
         ) : (
           // LISTA DE DESPESAS (Geral)
-          ['Custos do Negócio', 'Custo Pessoal', 'Outros'].map(cat => {
+          ['Outros Gastos', 'Custos do Negócio', 'Custo Pessoal', 'Outros'].map(cat => {
             const gastosDaCategoria = gastosFiltrados.filter(g => {
               const gCat = (g.categoria || 'Outros').toLowerCase();
-              if (cat === 'Custos do Negócio') return !gCat.includes('pessoal') && !gCat.includes('pessoais') && gCat !== 'outros';
+              if (cat === 'Outros Gastos') return gCat === 'outros gastos';
+              if (cat === 'Custos do Negócio') return !gCat.includes('pessoal') && !gCat.includes('pessoais') && gCat !== 'outros' && gCat !== 'outros gastos';
               if (cat === 'Custo Pessoal') return gCat.includes('pessoal') || gCat.includes('pessoais');
               return gCat === 'outros';
             });
@@ -504,7 +533,7 @@ const Gastos = () => {
             return (
               <div key={cat} style={{ marginBottom: '1.5rem' }}>
                 <div style={{ 
-                  fontSize: '0.75rem', fontWeight: '800', color: cat === 'Custo Pessoal' ? '#F59E0B' : '#EF4444', 
+                  fontSize: '0.75rem', fontWeight: '800', color: cat === 'Custo Pessoal' ? '#F59E0B' : cat === 'Outros Gastos' ? '#8B5CF6' : '#EF4444', 
                   textTransform: 'uppercase', marginBottom: '0.6rem', paddingLeft: '0.2rem',
                   display: 'flex', justifyContent: 'space-between'
                 }}>
@@ -527,7 +556,7 @@ const Gastos = () => {
                       </div>
                     </div>
                     <div style={{
-                      fontSize: '0.95rem', fontWeight: '600', color: cat === 'Custo Pessoal' ? '#F59E0B' : '#EF4444',
+                      fontSize: '0.95rem', fontWeight: '600', color: cat === 'Custo Pessoal' ? '#F59E0B' : cat === 'Outros Gastos' ? '#8B5CF6' : '#EF4444',
                       whiteSpace: 'nowrap', marginLeft: '0.8rem',
                     }}>
                       R$ {gasto.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}

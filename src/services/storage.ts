@@ -15,6 +15,7 @@ const KEYS = {
   PRODUCTS: 'erp_products',
   ORDERS: 'erp_orders',
   SALES: 'erp_sales',
+  EXTERNAL_SALES: 'erp_external_sales',
   STOCK: 'erp_stock',
   FABRICACAO: 'erp_fabricacao',
   CUSTOMERS: 'erp_customers',
@@ -77,7 +78,7 @@ export const storage = {
     return Promise.resolve();
   },
 
-  // Orders
+  // Orders (Pedidos de produção)
   getOrders: async (): Promise<Order[]> => {
     let list = getList<Order>(KEYS.ORDERS);
     return list;
@@ -86,19 +87,74 @@ export const storage = {
   syncExternalOrders: (externalOrders: Order[]): Promise<Order[]> => {
     const localOrders = getList<Order>(KEYS.ORDERS);
     
+    // Deduplica externos por ID
+    const seen = new Set<string>();
+    const uniqueExternal = externalOrders.filter(o => {
+      const id = String(o.id_pedido);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+
     if (localOrders.length === 0) {
-      saveList(KEYS.ORDERS, externalOrders);
-      return Promise.resolve(externalOrders);
+      saveList(KEYS.ORDERS, uniqueExternal);
+      return Promise.resolve(uniqueExternal);
     }
 
-    const externalIds = new Set(externalOrders.map(o => String(o.id_pedido)));
+    const externalIds = new Set(uniqueExternal.map(o => String(o.id_pedido)));
     const pendingLocals = localOrders.filter(o => 
       String(o.id_pedido).startsWith('VENDA-') && !externalIds.has(String(o.id_pedido))
     );
     
-    const mergedList = [...externalOrders, ...pendingLocals];
+    const mergedList = [...uniqueExternal, ...pendingLocals];
     saveList(KEYS.ORDERS, mergedList);
     return Promise.resolve(mergedList);
+  },
+
+  // External Sales (Vendas da planilha Google Sheets)
+  getExternalSales: async (): Promise<Order[]> => {
+    return getList<Order>(KEYS.EXTERNAL_SALES);
+  },
+
+  syncExternalVendas: (vendas: Order[]): Promise<Order[]> => {
+    // Substitui completamente — dados sempre vêm inteiros da planilha
+    const seen = new Set<string>();
+    const unique = vendas.filter(o => {
+      const id = String(o.id_pedido);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    saveList(KEYS.EXTERNAL_SALES, unique);
+    return Promise.resolve(unique);
+  },
+
+  // Combina pedidos + vendas externas para exibição
+  getAllOrders: async (): Promise<Order[]> => {
+    const pedidos = getList<Order>(KEYS.ORDERS);
+    const vendas = getList<Order>(KEYS.EXTERNAL_SALES);
+    
+    // Deduplica por ID (vendas externas têm prioridade)
+    const seen = new Set<string>();
+    const merged: Order[] = [];
+    
+    vendas.forEach(o => {
+      const id = String(o.id_pedido);
+      if (!seen.has(id)) {
+        seen.add(id);
+        merged.push(o);
+      }
+    });
+    
+    pedidos.forEach(o => {
+      const id = String(o.id_pedido);
+      if (!seen.has(id)) {
+        seen.add(id);
+        merged.push(o);
+      }
+    });
+    
+    return merged;
   },
   addOrder: (order: Order): Promise<Order> => {
     const list = getList<Order>(KEYS.ORDERS);
