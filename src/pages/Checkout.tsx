@@ -137,7 +137,7 @@ const Checkout = () => {
     setIsScanning(true);
     setTimeout(async () => {
       try {
-        const html5QrCode = new Html5Qrcode("checkout-reader", { verbose: false, formatsToSupport: [Html5QrcodeSupportedFormats.CODE_128] });
+        const html5QrCode = new Html5Qrcode("checkout-reader", { verbose: false, formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE, Html5QrcodeSupportedFormats.CODE_128] });
         html5QrCodeRef.current = html5QrCode;
         await html5QrCode.start(
           { facingMode: "environment" },

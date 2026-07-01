@@ -71,7 +71,7 @@ const Vendas = () => {
     // Pequeno delay para garantir que o div #reader esteja no DOM
     setTimeout(async () => {
       try {
-        const html5QrCode = new Html5Qrcode("reader", { verbose: false, formatsToSupport: [Html5QrcodeSupportedFormats.CODE_128] });
+        const html5QrCode = new Html5Qrcode("reader", { verbose: false, formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE, Html5QrcodeSupportedFormats.CODE_128] });
         html5QrCodeRef.current = html5QrCode;
         
         const config = { 
