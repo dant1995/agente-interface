@@ -97,6 +97,12 @@ const Checkout = () => {
       .sort((a, b) => new Date(b.data || b.dataCriacao || 0).getTime() - new Date(a.data || a.dataCriacao || 0).getTime())
       .slice(0, 5);
     setRecentSales(sortedSales);
+    
+    // Auto-sync se estoque vazio
+    if (stockData.length === 0) {
+      console.log('[Checkout] Estoque vazio, sincronizando automaticamente...');
+      handleSync();
+    }
   };
 
   const handleSync = async () => {
@@ -151,8 +157,9 @@ const Checkout = () => {
 
   const addToCartByCode = (code: string) => {
     const cleanCode = String(code).trim();
+    console.log(`[Scanner] Código lido: "${cleanCode}", estoque tem ${stock.length} itens`);
     
-    // 1. Match exato
+    // 1. Match exato por barcode
     let item = stock.find(s => String(s.codigoBarra).trim() === cleanCode);
     
     // 2. Match parcial (barcode pode ter prefixo/sufixo extra)
@@ -163,12 +170,18 @@ const Checkout = () => {
       });
     }
 
+    // 3. Tentar por nome do produto (match parcial)
+    if (!item) {
+      item = stock.find(s => String(s.produto || '').toLowerCase().includes(cleanCode.toLowerCase()));
+    }
+
     if (item) {
       addItemToCart(item);
     } else {
-      // Debug: mostrar os primeiros barcodes para ajudar a identificar o problema
-      const sample = stock.slice(0, 5).map(s => `${s.produto} (${s.tamanho}/${s.cor}) → BC: "${s.codigoBarra}"`).join('\n');
-      alert(`Código "${cleanCode}" não encontrado no estoque.\n\nVerifique se:\n1. O barcode na etiqueta é o mesmo da planilha\n2. Clique em "Sincronizar" na aba Estoque\n\nAmostra de barcodes no sistema:\n${sample}`);
+      const total = stock.length;
+      const withBarcode = stock.filter(s => s.codigoBarra).length;
+      const sample = stock.filter(s => s.codigoBarra).slice(0, 8).map(s => `"${s.codigoBarra}" → ${s.produto} (${s.tamanho}/${s.cor})`).join('\n');
+      alert(`Código "${cleanCode}" não encontrado.\n\n📊 Estoque: ${total} itens (${withBarcode} com barcode)\n\nBarcodes no sistema:\n${sample || 'NENHUM barcode cadastrado!'}\n\n💡 Clique em "Sincronizar" se o estoque estiver vazio.`);
     }
   };
 
