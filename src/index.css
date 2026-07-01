@@ -1624,19 +1624,22 @@ input[type="range"]::-moz-range-thumb {
 /* Grid de Produtos */
 .estoque-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.5rem;
-  padding: 0.6rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+  padding: 0.5rem;
 }
 
-@media (min-width: 600px) {
-  .estoque-grid { grid-template-columns: repeat(3, 1fr); }
-}
-@media (min-width: 900px) {
+@media (min-width: 500px) {
   .estoque-grid { grid-template-columns: repeat(4, 1fr); }
 }
-@media (min-width: 1200px) {
+@media (min-width: 700px) {
   .estoque-grid { grid-template-columns: repeat(5, 1fr); }
+}
+@media (min-width: 900px) {
+  .estoque-grid { grid-template-columns: repeat(6, 1fr); }
+}
+@media (min-width: 1200px) {
+  .estoque-grid { grid-template-columns: repeat(7, 1fr); }
 }
 
 .estoque-card {
@@ -1676,42 +1679,42 @@ input[type="range"]::-moz-range-thumb {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.5rem;
+  font-size: 1.8rem;
   opacity: 0.3;
 }
 
 .estoque-card-origin {
   position: absolute;
-  top: 6px;
-  left: 6px;
+  top: 3px;
+  left: 3px;
   background: rgba(59, 130, 246, 0.9);
   color: white;
-  font-size: 0.55rem;
+  font-size: 0.45rem;
   font-weight: 700;
-  padding: 0.15rem 0.4rem;
-  border-radius: 4px;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
   text-transform: uppercase;
 }
 
 .estoque-card-badge {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 3px;
+  right: 3px;
   background: rgba(239, 68, 68, 0.9);
   color: white;
-  font-size: 0.55rem;
+  font-size: 0.45rem;
   font-weight: 700;
-  padding: 0.15rem 0.4rem;
-  border-radius: 4px;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
 }
 
 /* Card Body */
 .estoque-card-body {
-  padding: 0.5rem 0.6rem 0.3rem;
+  padding: 0.35rem 0.4rem 0.2rem;
 }
 
 .estoque-card-title {
-  font-size: 0.75rem;
+  font-size: 0.65rem;
   font-weight: 700;
   color: #1e293b;
   line-height: 1.2;
@@ -1719,30 +1722,30 @@ input[type="range"]::-moz-range-thumb {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  min-height: 1.8em;
+  min-height: 1.5em;
 }
 
 .estoque-card-price {
-  font-size: 0.9rem;
+  font-size: 0.75rem;
   font-weight: 800;
   color: #EE4D2D;
-  margin-top: 0.2rem;
+  margin-top: 0.15rem;
 }
 
 .old-price {
-  font-size: 0.65rem;
+  font-size: 0.55rem;
   color: #94a3b8;
   text-decoration: line-through;
   font-weight: 500;
-  margin-right: 0.3rem;
+  margin-right: 0.2rem;
 }
 
 .estoque-card-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.3rem;
-  margin-top: 0.3rem;
-  font-size: 0.6rem;
+  gap: 0.2rem;
+  margin-top: 0.2rem;
+  font-size: 0.5rem;
   color: #94a3b8;
 }
 
@@ -1763,7 +1766,7 @@ input[type="range"]::-moz-range-thumb {
 
 .estoque-card-actions button {
   flex: 1;
-  padding: 0.45rem;
+  padding: 0.35rem;
   background: none;
   border: none;
   border-top: none;
@@ -1891,9 +1894,9 @@ input[type="range"]::-moz-range-thumb {
 /* Desktop */
 @media (min-width: 1024px) {
   .estoque-grid {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 0.8rem;
-    padding: 1rem 1.5rem;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0.5rem;
+    padding: 0.8rem 1.5rem;
   }
   .estoque-summary {
     padding: 0.8rem 1.5rem;
