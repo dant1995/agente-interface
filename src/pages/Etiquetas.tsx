@@ -196,12 +196,11 @@ const Etiquetas = () => {
             {o.codigo_barra && (
               <div className="barcode-box">
                 <img 
-                  src={`https://chart.googleapis.com/chart?cht=p3&chld=L|1&chs=100x40&cht=barcode&chl=${o.codigo_barra}`} 
+                  src={`https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(o.codigo_barra)}&scale=2&rotate=N&includetext=false&height=8mm`}
                   alt={o.codigo_barra}
                   className="barcode-img"
                   onError={(e) => {
-                    // Fallback se o Google Charts falhar ou precisar de outro formato
-                    (e.target as HTMLImageElement).src = `https://bwipjs-api.metafloor.com/?bcid=code128&text=${o.codigo_barra}&scale=1&rotate=N&includetext=false`;
+                    (e.target as HTMLImageElement).src = `https://chart.googleapis.com/chart?cht=qr&chs=120x120&choe=ISO-8859-1&chl=${encodeURIComponent(o.codigo_barra)}`;
                   }}
                 />
                 <div className="barcode-text">{o.codigo_barra}</div>
@@ -219,7 +218,7 @@ const Etiquetas = () => {
             {s.codigoBarra && (
               <div className="barcode-box">
                 <img 
-                  src={`https://bwipjs-api.metafloor.com/?bcid=code128&text=${s.codigoBarra}&scale=1&rotate=N&includetext=false`} 
+                  src={`https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(s.codigoBarra)}&scale=2&rotate=N&includetext=false&height=8mm`} 
                   alt={s.codigoBarra}
                   className="barcode-img"
                 />
@@ -287,8 +286,8 @@ const Etiquetas = () => {
           width: 100%;
         }
         .barcode-img {
-          width: 90%;
-          height: 8mm;
+          width: 95%;
+          height: 10mm;
           object-fit: contain;
         }
         .barcode-text {

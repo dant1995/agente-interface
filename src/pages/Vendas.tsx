@@ -75,14 +75,14 @@ const Vendas = () => {
         html5QrCodeRef.current = html5QrCode;
         
         const config = { 
-          fps: 15, // Aumentado para 15 para melhor resposta mobile
+          fps: 15,
           qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
             const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-            const size = Math.floor(minEdge * 0.7);
-            return { width: size, height: size };
+            const s = Math.floor(minEdge * 0.5);
+            return { width: s * 2, height: s };
           },
-          aspectRatio: 1.0,
-          disableFlip: true, // Importante para não espelhar no mobile
+          aspectRatio: 2.0,
+          disableFlip: false,
         };
 
         await html5QrCode.start(

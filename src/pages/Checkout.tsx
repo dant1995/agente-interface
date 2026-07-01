@@ -141,7 +141,7 @@ const Checkout = () => {
         html5QrCodeRef.current = html5QrCode;
         await html5QrCode.start(
           { facingMode: "environment" },
-          { fps: 15, qrbox: (w: number, h: number) => { const s = Math.floor(Math.min(w, h) * 0.7); return { width: s, height: s }; }, aspectRatio: 1.0, disableFlip: true },
+          { fps: 15, qrbox: (w: number, h: number) => { const s = Math.floor(Math.min(w, h) * 0.5); return { width: s * 2, height: s }; }, aspectRatio: 2.0, disableFlip: false },
           (decodedText) => { addToCartByCode(decodedText); stopScanner(); },
           undefined
         );
