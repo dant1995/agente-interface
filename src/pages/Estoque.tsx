@@ -3,15 +3,17 @@ import type { StockItem } from '../types';
 import { storage } from '../services/storage';
 import { apiSync } from '../services/apiSync';
 import { CadastrarProduto } from './CadastrarProduto';
+import { Search, ChevronDown, Package, AlertTriangle, TrendingUp, ShoppingCart, RefreshCw, Eye } from 'lucide-react';
 
 const Estoque = () => {
   const [items, setItems] = useState<StockItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [syncing, setSyncing] = useState(false);
-  const [activeTab, setActiveTab] = useState('Ativo');
+  const [activeTab, setActiveTab] = useState('Todos');
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
   const [showCadastro, setShowCadastro] = useState(false);
   const [salvouProduto, setSalvouProduto] = useState('');
+  const [originFilter, setOriginFilter] = useState('');
 
   useEffect(() => {
     loadStock();
@@ -40,19 +42,17 @@ const Estoque = () => {
     await apiSync.cadastrarProduto(produto);
     setSalvouProduto(produto.nome);
     setTimeout(() => setSalvouProduto(''), 4000);
-    // Recarrega estoque após cadastro
     setTimeout(() => handleSync(), 1500);
   };
 
   const handleSyncToWoo = async (group: any) => {
     setSyncing(true);
     try {
-      // Prepara o objeto no formato esperado pela API
       const produtoParaWoo = {
         nome: group.produto,
         preco: group.preco || 35,
         precoDesconto: group.precoDesconto,
-        descricao: group.variants[0]?.descricao || '', // Pega a descrição da primeira variante
+        descricao: group.variants[0]?.descricao || '',
         sku: group.variants[0]?.sku || '',
         categoria: group.variants[0]?.categoria || '',
         imagem: group.variants.find((v: any) => v.imagem)?.imagem || '',
@@ -66,7 +66,6 @@ const Estoque = () => {
           imagem: v.imagem
         }))
       };
-
       await apiSync.syncProductToWooCommerce(produtoParaWoo);
       setSalvouProduto(`${group.produto} enviado ao WooCommerce!`);
       setTimeout(() => setSalvouProduto(''), 4000);
@@ -77,9 +76,9 @@ const Estoque = () => {
   };
 
   const toggleGroup = (produto: string) => {
-    setExpandedGroups(prev => 
-      prev.includes(produto) 
-        ? prev.filter(p => p !== produto) 
+    setExpandedGroups(prev =>
+      prev.includes(produto)
+        ? prev.filter(p => p !== produto)
         : [...prev, produto]
     );
   };
@@ -89,22 +88,24 @@ const Estoque = () => {
       const preco = item.precoDesconto || item.preco || 35;
       return {
         estoque: acc.estoque + (item.estoque || 0),
-        valor: acc.valor + ((item.estoque || 0) * preco)
+        valor: acc.valor + ((item.estoque || 0) * preco),
+        produtos: acc.produtos + 1
       };
-    }, { estoque: 0, valor: 0 });
+    }, { estoque: 0, valor: 0, produtos: 0 });
   }, [items]);
 
   const groupedStock = useMemo(() => {
-    const groups: { [key: string]: { 
-      produto: string; 
-      totalEstoque: number; 
-      totalPedidos: number; 
+    const groups: { [key: string]: {
+      produto: string;
+      totalEstoque: number;
+      totalPedidos: number;
       totalFaltando: number;
       totalValor: number;
       origem?: string;
       preco?: number;
       precoDesconto?: number;
-      variants: StockItem[] 
+      imagem?: string;
+      variants: StockItem[]
     }} = {};
 
     items.forEach(item => {
@@ -119,6 +120,7 @@ const Estoque = () => {
           origem: item.origem,
           preco: item.preco,
           precoDesconto: item.precoDesconto,
+          imagem: item.imagem,
           variants: []
         };
       }
@@ -128,29 +130,29 @@ const Estoque = () => {
       groups[key].totalPedidos += (item.pedidos || 0);
       groups[key].totalFaltando += (item.faltando || 0);
       groups[key].totalValor += (estoque * preco);
+      if (!groups[key].imagem && item.imagem) groups[key].imagem = item.imagem;
       groups[key].variants.push(item);
     });
 
     return Object.values(groups);
   }, [items]);
 
+  const uniqueOrigins = [...new Set(items.map(i => i.origem).filter(Boolean))].sort();
+
   const filteredGroups = groupedStock.filter(group => {
     const matchesSearch = group.produto.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    // Na aba Ativo, mostramos tudo que tem algum estoque
-    if (activeTab === 'Ativo') return matchesSearch && group.totalEstoque > 0;
-    
-    // Na aba Esgotado, mostramos produtos que têm PELO MENOS UMA variação zerada
+    const matchesOrigin = !originFilter || group.origem === originFilter;
+
+    if (activeTab === 'Ativo') return matchesSearch && matchesOrigin && group.totalEstoque > 0;
     if (activeTab === 'Esgotado') {
       const hasOutStockVariant = group.variants.some(v => (v.estoque || 0) === 0);
-      return matchesSearch && hasOutStockVariant;
+      return matchesSearch && matchesOrigin && hasOutStockVariant;
     }
-    
-    return matchesSearch;
+    return matchesSearch && matchesOrigin;
   });
 
   return (
-    <div className="page-content" style={{ background: '#f5f5f5', minHeight: '100vh', padding: '0', paddingBottom: '100px' }}>
+    <div className="estoque-root">
 
       {/* Modal de Cadastro */}
       {showCadastro && (
@@ -160,359 +162,213 @@ const Estoque = () => {
         />
       )}
 
-      {/* Toast de sucesso */}
+      {/* Toast */}
       {salvouProduto && (
-        <div style={{
-          position: 'fixed', top: '1rem', left: '50%', transform: 'translateX(-50%)',
-          background: '#2ecc71', color: 'white', padding: '0.7rem 1.4rem',
-          borderRadius: '20px', zIndex: 2000, fontSize: '0.85rem', fontWeight: '600',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.2)', whiteSpace: 'nowrap'
-        }}>
+        <div className="estoque-toast">
           ✅ {salvouProduto} exportado com sucesso!
         </div>
       )}
-      
-      {/* Header Shopee */}
-      <div style={{
-        background: 'white',
-        padding: '1rem',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        position: 'sticky',
-        top: 0,
-        zIndex: 10,
-        borderBottom: '1px solid #eee'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <span style={{ fontSize: '1.2rem', color: '#EE4D2D' }}>📦</span>
-          <h1 style={{ fontSize: '1.1rem', margin: 0, fontWeight: '600' }}>Meu Estoque</h1>
+
+      {/* ═══════ HEADER COMPACTO ═══════ */}
+      <div className="estoque-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <Package size={20} color="#EE4D2D" />
+          <h1 style={{ fontSize: '1.1rem', margin: 0, fontWeight: '700', color: '#1e293b' }}>Meu Estoque</h1>
         </div>
-        <button
-          onClick={handleSync}
-          disabled={syncing}
-          style={{
-            background: syncing ? '#ccc' : '#EE4D2D',
-            color: 'white',
-            border: 'none',
-            borderRadius: '20px',
-            padding: '0.4rem 1rem',
-            fontSize: '0.8rem',
-            fontWeight: '600',
-            cursor: syncing ? 'default' : 'pointer'
-          }}
-        >
+        <button onClick={handleSync} disabled={syncing} className="estoque-sync-btn">
+          <RefreshCw size={14} className={syncing ? 'spin' : ''} />
           {syncing ? 'Sincronizando...' : 'Sincronizar'}
         </button>
       </div>
 
-      {/* Tabs */}
-      <div style={{ background: 'white', display: 'flex', borderBottom: '1px solid #eee' }}>
-        {['Ativo', 'Esgotado', 'Todos'].map(tab => (
-          <div 
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            style={{
-              flex: 1,
-              textAlign: 'center',
-              padding: '0.8rem 0',
-              fontSize: '0.85rem',
-              color: activeTab === tab ? '#EE4D2D' : '#666',
-              borderBottom: activeTab === tab ? '2px solid #EE4D2D' : 'none',
-              fontWeight: activeTab === tab ? '600' : '400'
-            }}
-          >
-            {tab}
-          </div>
-        ))}
-      </div>
-
-      {/* Search Bar */}
-      <div style={{ padding: '0.8rem 1rem', background: 'white', borderBottom: '1px solid #f0f0f0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', background: '#f5f5f5', borderRadius: '4px', padding: '0 0.8rem' }}>
-          <span style={{ color: '#999', fontSize: '0.9rem', marginRight: '0.5rem' }}>🔍</span>
-          <input
-            type="text"
-            placeholder="Buscar produto no estoque..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{ border: 'none', outline: 'none', padding: '0.65rem 0', fontSize: '0.85rem', background: 'transparent', width: '100%' }}
-          />
-        </div>
-      </div>
-
-      {/* Summary Dashboard */}
+      {/* ═══════ MICRO-CARDS DE RESUMO ═══════ */}
       {items.length > 0 && (
-        <div style={{ padding: '0.8rem 1rem', background: '#fff', borderBottom: '1px solid #eee' }}>
-          <div style={{ 
-            display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem',
-            background: 'linear-gradient(135deg, #EE4D2D 0%, #ff7337 100%)',
-            padding: '1.2rem', borderRadius: '12px', color: 'white'
-          }}>
+        <div className="estoque-summary">
+          <div className="estoque-micro-card">
+            <Package size={16} color="#3b82f6" />
             <div>
-              <div style={{ fontSize: '0.75rem', opacity: 0.9, marginBottom: '0.2rem' }}>ESTOQUE TOTAL</div>
-              <div style={{ fontSize: '1.4rem', fontWeight: '800' }}>{totals.estoque} <span style={{ fontSize: '0.8rem', fontWeight: 'normal' }}>un.</span></div>
+              <div className="estoque-micro-value">{totals.estoque}</div>
+              <div className="estoque-micro-label">Estoque</div>
             </div>
-            <div style={{ borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '0.8rem' }}>
-              <div style={{ fontSize: '0.75rem', opacity: 0.9, marginBottom: '0.2rem' }}>VALOR PREVISTO</div>
-              <div style={{ fontSize: '1.4rem', fontWeight: '800' }}>
+          </div>
+          <div className="estoque-micro-card">
+            <TrendingUp size={16} color="#10b981" />
+            <div>
+              <div className="estoque-micro-value">
                 {totals.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               </div>
+              <div className="estoque-micro-label">Valor</div>
+            </div>
+          </div>
+          <div className="estoque-micro-card">
+            <ShoppingCart size={16} color="#f59e0b" />
+            <div>
+              <div className="estoque-micro-value">{totals.produtos}</div>
+              <div className="estoque-micro-label">Produtos</div>
+            </div>
+          </div>
+          <div className="estoque-micro-card">
+            <AlertTriangle size={16} color="#ef4444" />
+            <div>
+              <div className="estoque-micro-value">
+                {groupedStock.filter(g => g.variants.some(v => (v.estoque || 0) === 0)).length}
+              </div>
+              <div className="estoque-micro-label">Esgotados</div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Stock List (Cards) */}
-      <div style={{ padding: '0.6rem' }}>
+      {/* ═══════ TABS ═══════ */}
+      <div className="estoque-tabs">
+        {['Todos', 'Ativo', 'Esgotado'].map(tab => (
+          <div
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`estoque-tab ${activeTab === tab ? 'active' : ''}`}
+          >
+            {tab}
+            {tab === 'Ativo' && <span className="estoque-tab-count">{groupedStock.filter(g => g.totalEstoque > 0).length}</span>}
+            {tab === 'Esgotado' && <span className="estoque-tab-count warn">{groupedStock.filter(g => g.variants.some(v => (v.estoque || 0) === 0)).length}</span>}
+          </div>
+        ))}
+      </div>
+
+      {/* ═══════ BUSCA + FILTROS ═══════ */}
+      <div className="estoque-filters">
+        <div className="estoque-search">
+          <Search size={16} color="#94a3b8" />
+          <input
+            type="text"
+            placeholder="Buscar produto..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <select
+          value={originFilter}
+          onChange={e => setOriginFilter(e.target.value)}
+          className="estoque-filter-select"
+        >
+          <option value="">Todas origens</option>
+          {uniqueOrigins.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      </div>
+
+      {/* ═══════ GRID DE PRODUTOS ═══════ */}
+      <div className="estoque-grid">
         {items.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '4rem 1rem', background: 'white', borderRadius: '8px' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📦</div>
-            <p style={{ color: '#999' }}>Toque em sincronizar para ler a planilha</p>
+          <div className="estoque-empty">
+            <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📦</div>
+            <p>Toque em Sincronizar para carregar o estoque</p>
           </div>
         ) : filteredGroups.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>
-            <p style={{ color: '#999' }}>Nenhum produto encontrado</p>
+          <div className="estoque-empty">
+            <p>Nenhum produto encontrado</p>
           </div>
         ) : (
-          filteredGroups.map((group, idx) => (
-            <div key={idx} style={{
-              background: 'white',
-              borderRadius: '8px',
-              padding: '0.8rem',
-              marginBottom: '0.6rem',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-            }}>
-              <div style={{ display: 'flex', gap: '0.8rem', marginBottom: '0.8rem' }}>
-                <div style={{ 
-                  width: '70px', height: '70px', background: '#f9f9f9', borderRadius: '4px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                  fontSize: '1.8rem', border: '1px solid #eee', overflow: 'hidden'
-                }}>
-                  {group.variants.find(v => v.imagem)?.imagem ? (
-                    <img 
-                      src={group.variants.find(v => v.imagem)?.imagem} 
-                      alt={group.produto} 
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                    />
+          filteredGroups.map((group, idx) => {
+            const isExpanded = expandedGroups.includes(group.produto);
+            const hasOutOfStock = group.variants.some(v => (v.estoque || 0) === 0);
+            const imgSrc = group.imagem || group.variants.find(v => v.imagem)?.imagem;
+
+            return (
+              <div key={idx} className={`estoque-card ${hasOutOfStock ? 'out-of-stock' : ''}`}>
+                {/* Imagem */}
+                <div className="estoque-card-img">
+                  {imgSrc ? (
+                    <img src={imgSrc} alt={group.produto} />
                   ) : (
-                    '👕'
+                    <div className="estoque-card-placeholder">👕</div>
+                  )}
+                  {group.origem && (
+                    <span className="estoque-card-origin">{group.origem}</span>
+                  )}
+                  {hasOutOfStock && (
+                    <span className="estoque-card-badge">Esgotado</span>
                   )}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#333', marginBottom: '0.3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>{group.produto}</span>
-                    {group.origem && (
-                      <span style={{ fontSize: '0.65rem', background: '#e1f5fe', color: '#0288d1', padding: '0.2rem 0.6rem', borderRadius: '10px' }}>
-                        {group.origem}
-                      </span>
+
+                {/* Info */}
+                <div className="estoque-card-body">
+                  <div className="estoque-card-title">{group.produto}</div>
+                  <div className="estoque-card-price">
+                    {group.precoDesconto ? (
+                      <>
+                        <span className="old-price">R$ {group.preco?.toFixed(2)}</span>
+                        R$ {group.precoDesconto.toFixed(2)}
+                      </>
+                    ) : (
+                      `R$ ${group.preco?.toFixed(2) || '35,00'}`
                     )}
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: '#888', display: 'flex', gap: '0.5rem' }}>
-                    <span>{group.variants.length} variações</span>
-                    <span style={{ color: '#EE4D2D', fontWeight: '600' }}>
-                      {group.precoDesconto ? (
-                        <>
-                          <span style={{ textDecoration: 'line-through', opacity: 0.6, marginRight: '4px' }}>
-                            R$ {group.preco?.toFixed(2)}
-                          </span>
-                          R$ {group.precoDesconto.toFixed(2)}
-                        </>
-                      ) : (
-                        `R$ ${group.preco?.toFixed(2) || '35.00'}`
-                      )}
-                    </span>
+                  <div className="estoque-card-meta">
+                    <span>Est: <strong>{group.totalEstoque}</strong></span>
+                    {group.totalFaltando > 0 && <span className="warn">Falt: {group.totalFaltando}</span>}
+                    <span>{group.variants.length} var.</span>
                   </div>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSyncToWoo(group);
-                  }}
-                  disabled={syncing}
-                  style={{
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                    padding: '0.5rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: syncing ? 'default' : 'pointer',
-                    transition: 'all 0.2s',
-                    height: 'fit-content'
-                  }}
-                  title="Sincronizar este produto com WooCommerce"
-                >
-                  <span style={{ fontSize: '1.2rem', filter: syncing ? 'grayscale(1)' : 'none' }}>🌐</span>
-                </button>
+
+                {/* Ações */}
+                <div className="estoque-card-actions">
+                  <button onClick={() => toggleGroup(group.produto)} title="Ver variações">
+                    {isExpanded ? <ChevronDown size={16} /> : <Eye size={16} />}
+                  </button>
+                  <button onClick={() => handleSyncToWoo(group)} disabled={syncing} title="Enviar ao WooCommerce">
+                    <span style={{ fontSize: '0.9rem' }}>🌐</span>
+                  </button>
+                </div>
+
+                {/* Variações (Accordion) */}
+                {isExpanded && (
+                  <div className="estoque-card-variations">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>TAM</th>
+                          <th>COR</th>
+                          <th>EST</th>
+                          <th>PED</th>
+                          <th>FAL</th>
+                          <th>BC</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {group.variants.map((v, vIdx) => (
+                          <tr key={vIdx} className={(v.estoque || 0) === 0 ? 'row-out' : ''}>
+                            <td><strong>{v.tamanho}</strong></td>
+                            <td>{v.cor}</td>
+                            <td className={(v.estoque || 0) <= (v.estoqueMinimo || 5) ? 'warn' : ''}>
+                              {v.estoque || 0}
+                              {(v.estoque || 0) <= (v.estoqueMinimo || 5) && <span className="repor-tag">REPOR</span>}
+                            </td>
+                            <td>{v.pedidos || 0}</td>
+                            <td className={(v.faltando || 0) > 0 ? 'warn' : ''}>{v.faltando || 0}</td>
+                            <td className="bc-cell">{v.codigoBarra || '---'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-
-              {/* Stats Grid */}
-              <div style={{ 
-                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', padding: '0.8rem', background: '#fafafa', borderRadius: '6px'
-              }}>
-                <div>
-                  <div style={{ fontSize: '0.65rem', color: '#888', textTransform: 'uppercase' }}>Estoque Total</div>
-                  <div style={{ fontSize: '1rem', fontWeight: 'bold', color: group.totalEstoque <= 5 ? '#EE4D2D' : '#333' }}>
-                    {group.totalEstoque} un.
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.65rem', color: '#888', textTransform: 'uppercase' }}>Reservado (Pedidos)</div>
-                  <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#333' }}>
-                    {group.totalPedidos} un.
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.65rem', color: '#888', textTransform: 'uppercase' }}>Faltando</div>
-                  <div style={{ fontSize: '1rem', fontWeight: 'bold', color: group.totalFaltando > 0 ? '#EE4D2D' : '#333' }}>
-                    {group.totalFaltando} un.
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.65rem', color: '#888', textTransform: 'uppercase' }}>Valor Previsto</div>
-                  <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#2ecc71' }}>
-                    {group.totalValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Detalhes das Variações (Expandível) */}
-              {expandedGroups.includes(group.produto) && (
-                <div style={{ 
-                  marginTop: '1rem', 
-                  borderTop: '1px dashed #eee', 
-                  paddingTop: '1rem' 
-                }}>
-                    <div style={{ 
-                      display: 'grid', 
-                      gridTemplateColumns: '0.8fr 0.8fr 1fr 0.8fr 0.6fr 0.6fr 0.6fr 0.6fr', 
-                      fontSize: '0.65rem', 
-                      color: '#999', 
-                      fontWeight: 'bold',
-                      paddingBottom: '0.5rem',
-                      borderBottom: '1px solid #f9f9f9',
-                      marginBottom: '0.5rem',
-                      alignItems: 'center'
-                    }}>
-                      <span>TAM</span>
-                      <span style={{ textAlign: 'center' }}>FOTO</span>
-                      <span>COR</span>
-                      <span style={{ textAlign: 'center' }}>MIN</span>
-                      <span style={{ textAlign: 'center' }}>EST</span>
-                      <span style={{ textAlign: 'center' }}>PED</span>
-                      <span style={{ textAlign: 'center' }}>FAL</span>
-                      <span style={{ textAlign: 'center' }}>RES</span>
-                    </div>
-                  {group.variants
-                    .filter(v => activeTab === 'Esgotado' ? (v.estoque || 0) === 0 : true)
-                    .map((v, vIdx, arr) => (
-                    <div key={vIdx} style={{ 
-                      display: 'grid', 
-                      gridTemplateColumns: '0.8fr 0.8fr 1fr 0.8fr 0.6fr 0.6fr 0.6fr 0.6fr', 
-                      fontSize: '0.75rem', 
-                      padding: '0.4rem 0',
-                      borderBottom: vIdx === arr.length - 1 ? 'none' : '1px solid #f9f9f9',
-                      alignItems: 'center'
-                    }}>
-                      <span style={{ fontWeight: '600', color: '#555' }}>{v.tamanho}</span>
-                      
-                      <div style={{ display: 'flex', justifyContent: 'center' }}>
-                        <div style={{ 
-                          width: '32px', height: '32px', background: '#f5f5f5', borderRadius: '4px',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          border: '1px solid #eee', overflow: 'hidden'
-                        }}>
-                          {v.imagem ? (
-                            <img src={v.imagem} alt={v.cor} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          ) : (
-                            <span style={{ fontSize: '0.8rem' }}>📷</span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ color: '#555' }}>{v.cor}</span>
-                        {v.codigoBarra && (
-                          <span style={{ fontSize: '0.6rem', color: '#EE4D2D', fontFamily: 'monospace' }}>
-                            [{v.codigoBarra}]
-                          </span>
-                        )}
-                      </div>
-
-                      <div style={{ textAlign: 'center' }}>
-                        <input 
-                           type="number" 
-                           defaultValue={v.estoqueMinimo || 5}                            onBlur={async (e) => {
-                              const novoMin = Number(e.target.value);
-                              await storage.updateStockMin(group.produto, v.tamanho, v.cor, novoMin);
-                              try {
-                                await apiSync.updateStockMin(v, novoMin);
-                              } catch (err) {
-                                console.error('Erro ao sincronizar estoque mínimo:', err);
-                              }
-                              loadStock();
-                            }}
-                           style={{ width: '36px', border: '1px solid #ddd', borderRadius: '4px', textAlign: 'center', fontSize: '0.75rem', padding: '0.1rem' }}
-                        />
-                      </div>
-                      <div style={{ textAlign: 'center' }}>
-                        <span style={{ color: (v.estoque || 0) <= (v.estoqueMinimo || 5) ? '#EE4D2D' : '#333', fontWeight: 'bold' }}>{v.estoque || 0}</span>
-                        {(v.estoque || 0) <= (v.estoqueMinimo || 5) && <div style={{ fontSize: '0.5rem', color: '#EE4D2D', fontWeight: 'bold' }}>REPOR</div>}
-                      </div>
-                      <span style={{ textAlign: 'center', color: '#666' }}>{v.pedidos || 0}</span>
-                      <span style={{ textAlign: 'center', color: (v.faltando || 0) > 0 ? '#EE4D2D' : '#999' }}>{v.faltando || 0}</span>
-                      <span style={{ textAlign: 'center', color: '#999' }}>{v.reserva || 0}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Botão para ver variantes */}
-              <button 
-                onClick={() => toggleGroup(group.produto)}
-                style={{
-                  width: '100%', marginTop: '0.8rem', padding: '0.6rem', background: 'white', border: '1px solid #eee',
-                  borderRadius: '4px', fontSize: '0.8rem', color: '#EE4D2D', fontWeight: '600',
-                  cursor: 'pointer'
-                }}
-              >
-                {expandedGroups.includes(group.produto) ? 'Ocultar detalhes ▲' : 'Ver por Tamanho/Cor ▼'}
-              </button>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
-      {/* FAB — Botão Cadastrar Produto */}
+      {/* FAB */}
       <button
         onClick={() => setShowCadastro(true)}
-        style={{
-          position: 'fixed',
-          bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))',
-          right: '1rem',
-          width: '56px',
-          height: '56px',
-          borderRadius: '50%',
-          background: 'linear-gradient(135deg, #EE4D2D 0%, #ff7337 100%)',
-          color: 'white',
-          border: 'none',
-          fontSize: '1.6rem',
-          cursor: 'pointer',
-          boxShadow: '0 4px 16px rgba(238,77,45,0.5)',
-          zIndex: 1001,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          transition: 'transform 0.15s'
-        }}
-        onMouseDown={e => (e.currentTarget.style.transform = 'scale(0.92)')}
-        onMouseUp={e => (e.currentTarget.style.transform = 'scale(1)')}
-        title="Cadastrar produto"
+        className="estoque-fab"
       >
         +
       </button>
+
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .spin { animation: spin 1s linear infinite; }
+      `}</style>
     </div>
   );
 };
