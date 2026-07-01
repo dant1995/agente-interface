@@ -196,7 +196,7 @@ const Etiquetas = () => {
             {o.codigo_barra && (
               <div className="barcode-box">
                 <img 
-                  src={`https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(o.codigo_barra)}&scale=2&rotate=N&includetext=false&height=8mm`}
+                  src={`https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(o.codigo_barra)}&scale=3&rotate=N&includetext=false&height=10mm`}
                   alt={o.codigo_barra}
                   className="barcode-img"
                   onError={(e) => {
@@ -218,7 +218,7 @@ const Etiquetas = () => {
             {s.codigoBarra && (
               <div className="barcode-box">
                 <img 
-                  src={`https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(s.codigoBarra)}&scale=2&rotate=N&includetext=false&height=8mm`} 
+                  src={`https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(s.codigoBarra)}&scale=3&rotate=N&includetext=false&height=10mm`} 
                   alt={s.codigoBarra}
                   className="barcode-img"
                 />
@@ -286,8 +286,8 @@ const Etiquetas = () => {
           width: 100%;
         }
         .barcode-img {
-          width: 95%;
-          height: 10mm;
+          width: 98%;
+          height: 14mm;
           object-fit: contain;
         }
         .barcode-text {
