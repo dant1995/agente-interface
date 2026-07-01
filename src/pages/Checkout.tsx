@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { OrderStatus, type StockItem, type Order } from '../types';
 import { storage } from '../services/storage';
 import { apiSync } from '../services/apiSync';
@@ -137,7 +137,7 @@ const Checkout = () => {
     setIsScanning(true);
     setTimeout(async () => {
       try {
-        const html5QrCode = new Html5Qrcode("checkout-reader");
+        const html5QrCode = new Html5Qrcode("checkout-reader", { verbose: false, formatsToSupport: [Html5QrcodeSupportedFormats.CODE_128] });
         html5QrCodeRef.current = html5QrCode;
         await html5QrCode.start(
           { facingMode: "environment" },
@@ -150,9 +150,26 @@ const Checkout = () => {
   };
 
   const addToCartByCode = (code: string) => {
-    const item = stock.find(s => String(s.codigoBarra).trim() === String(code).trim());
-    if (item) addItemToCart(item);
-    else alert(`Código "${code}" não cadastrado.`);
+    const cleanCode = String(code).trim();
+    
+    // 1. Match exato
+    let item = stock.find(s => String(s.codigoBarra).trim() === cleanCode);
+    
+    // 2. Match parcial (barcode pode ter prefixo/sufixo extra)
+    if (!item) {
+      item = stock.find(s => {
+        const bc = String(s.codigoBarra).trim();
+        return bc.includes(cleanCode) || cleanCode.includes(bc);
+      });
+    }
+
+    if (item) {
+      addItemToCart(item);
+    } else {
+      // Debug: mostrar os primeiros barcodes para ajudar a identificar o problema
+      const sample = stock.slice(0, 5).map(s => `${s.produto} (${s.tamanho}/${s.cor}) → BC: "${s.codigoBarra}"`).join('\n');
+      alert(`Código "${cleanCode}" não encontrado no estoque.\n\nVerifique se:\n1. O barcode na etiqueta é o mesmo da planilha\n2. Clique em "Sincronizar" na aba Estoque\n\nAmostra de barcodes no sistema:\n${sample}`);
+    }
   };
 
   const addItemToCart = (item: StockItem) => {

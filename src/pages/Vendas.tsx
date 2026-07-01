@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import type { Order } from '../types';
 import { OrderStatus } from '../types';
 import { storage } from '../services/storage';
@@ -71,7 +71,7 @@ const Vendas = () => {
     // Pequeno delay para garantir que o div #reader esteja no DOM
     setTimeout(async () => {
       try {
-        const html5QrCode = new Html5Qrcode("reader");
+        const html5QrCode = new Html5Qrcode("reader", { verbose: false, formatsToSupport: [Html5QrcodeSupportedFormats.CODE_128] });
         html5QrCodeRef.current = html5QrCode;
         
         const config = { 
