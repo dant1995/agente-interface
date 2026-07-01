@@ -196,7 +196,7 @@ const Etiquetas = () => {
             {o.codigo_barra && (
               <div className="barcode-box">
                 <img 
-                  src={`https://bwipjs-api.metafloor.com/?bcid=qrcode&text=${encodeURIComponent(o.codigo_barra)}&scale=3&rotate=N&includetext=false&height=12mm`}
+                  src={`https://bwipjs-api.metafloor.com/?bcid=qrcode&text=${encodeURIComponent(o.codigo_barra)}&scale=3&rotate=N`}
                   alt={o.codigo_barra}
                   className="barcode-img"
                 />
@@ -215,7 +215,7 @@ const Etiquetas = () => {
             {s.codigoBarra && (
               <div className="barcode-box">
                 <img 
-                  src={`https://bwipjs-api.metafloor.com/?bcid=qrcode&text=${encodeURIComponent(s.codigoBarra)}&scale=3&rotate=N&includetext=false&height=12mm`} 
+                  src={`https://bwipjs-api.metafloor.com/?bcid=qrcode&text=${encodeURIComponent(s.codigoBarra)}&scale=3&rotate=N`} 
                   alt={s.codigoBarra}
                   className="barcode-img"
                 />
