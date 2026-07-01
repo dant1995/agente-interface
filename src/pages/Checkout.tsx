@@ -193,12 +193,7 @@ const Checkout = () => {
     const preco = (permitirSemEstoque && precoCustomizado) ? Number(precoCustomizado) : (item.preco || 35);
     const qtd = (permitirSemEstoque && quantidadeCustomizada) ? Math.max(1, Number(quantidadeCustomizada)) : 1;
     setCart(prev => {
-      const existing = prev.find(i => i.produto === item.produto && i.tamanho === item.tamanho && i.cor === item.cor);
-      if (existing) {
-        if (!permitirSemEstoque && existing.quantity >= item.estoque) { alert('Estoque insuficiente!'); return prev; }
-        return prev.map(i => i === existing ? { ...i, quantity: i.quantity + qtd } : i);
-      }
-      return [...prev, { ...item, quantity: qtd, preco, descricao: descricaoProduto || undefined }];
+      return [...prev, { ...item, quantity: qtd, preco, descricao: descricaoProduto || undefined, _cartId: Date.now() + Math.random() }];
     });
   };
 
