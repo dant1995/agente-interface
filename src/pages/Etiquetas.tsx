@@ -229,7 +229,7 @@ const Etiquetas = () => {
             Object.entries(groupedStock).map(([produto, items]) => {
               const allSelected = items.every(i => selectedStock[i.row_number || '']);
               const someSelected = items.some(i => selectedStock[i.row_number || '']);
-              const isExpanded = expandedProducts[produto] !== false; // default open
+              const isExpanded = expandedProducts[produto] === true; // default closed
 
               return (
                 <div key={produto} style={{ marginBottom: '0.5rem', background: 'white', borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
