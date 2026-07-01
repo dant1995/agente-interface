@@ -13,6 +13,7 @@ const Etiquetas = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [colorFilter, setColorFilter] = useState('');
   const [expandedProducts, setExpandedProducts] = useState<Record<string, boolean>>({});
+  const [printQty, setPrintQty] = useState<Record<string, number>>({});
   const [manualEtiquetas, setManualEtiquetas] = useState<{ cliente: string, produto: string, tam: string, cor: string, qtd: number, barcode?: string }[]>([]);
   const [showManualForm, setShowManualForm] = useState(false);
 
@@ -47,6 +48,11 @@ const Etiquetas = () => {
   });
 
   const uniqueColors = [...new Set(stockItems.map(i => i.cor).filter(Boolean))].sort();
+
+  const getPrintQty = (id: string | number) => printQty[String(id)] || 1;
+  const setItemQty = (id: string | number, qty: number) => {
+    setPrintQty(prev => ({ ...prev, [String(id)]: Math.max(1, qty) }));
+  };
 
   const toggleStockSelection = (id: string | number) => {
     setSelectedStock(prev => ({
@@ -91,7 +97,9 @@ const Etiquetas = () => {
     }));
   };
 
-  const selectedStockToPrint = stockItems.filter(item => selectedStock[item.row_number || '']);
+  const selectedStockToPrint = stockItems
+    .filter(item => selectedStock[item.row_number || ''])
+    .flatMap(item => Array.from({ length: getPrintQty(item.row_number || '') }, () => item));
 
   const groupedStock = filteredStock.reduce((acc, item) => {
     const key = item.produto;
@@ -100,7 +108,9 @@ const Etiquetas = () => {
     return acc;
   }, {} as Record<string, StockItem[]>);
 
-  const totalSelected = Object.values(selectedStock).filter(Boolean).length;
+  const totalSelected = stockItems
+    .filter(item => selectedStock[item.row_number || ''])
+    .reduce((sum, item) => sum + getPrintQty(item.row_number || ''), 0);
 
   const handleManualAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -276,6 +286,7 @@ const Etiquetas = () => {
                             <th style={{ padding: '0.5rem', textAlign: 'left', fontWeight: '600', color: '#64748b', fontSize: '0.7rem' }}>BARCODE</th>
                             <th style={{ padding: '0.5rem', textAlign: 'right', fontWeight: '600', color: '#64748b', fontSize: '0.7rem' }}>PREÇO</th>
                             <th style={{ padding: '0.5rem', textAlign: 'center', fontWeight: '600', color: '#64748b', fontSize: '0.7rem' }}>EST</th>
+                            <th style={{ padding: '0.5rem', textAlign: 'center', fontWeight: '600', color: '#64748b', fontSize: '0.7rem' }}>QTD</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -313,6 +324,22 @@ const Etiquetas = () => {
                                   }}>
                                     {item.estoque}
                                   </span>
+                                </td>
+                                <td style={{ padding: '0.4rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max="70"
+                                    value={getPrintQty(item.row_number || '')}
+                                    onChange={(e) => setItemQty(item.row_number || '', Number(e.target.value))}
+                                    style={{
+                                      width: '42px', padding: '0.25rem', textAlign: 'center',
+                                      border: '1px solid #e2e8f0', borderRadius: '6px',
+                                      fontSize: '0.8rem', fontWeight: '700', outline: 'none',
+                                      background: getPrintQty(item.row_number || '') > 1 ? '#eff6ff' : 'white',
+                                      color: '#1e293b'
+                                    }}
+                                  />
                                 </td>
                               </tr>
                             );
