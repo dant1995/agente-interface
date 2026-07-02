@@ -41,6 +41,8 @@ const Checkout = () => {
   const [clientSearching, setClientSearching] = useState(false);
   const [allClients, setAllClients] = useState<{ nome: string; whatsapp: string; cidade?: string }[]>([]);
   const [recentSales, setRecentSales] = useState<Order[]>([]);
+  const [saleSyncStatus, setSaleSyncStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
+  const [lastSaleError, setLastSaleError] = useState<string>('');
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const clientDropdownRef = useRef<HTMLDivElement | null>(null);
 
@@ -263,8 +265,8 @@ const Checkout = () => {
       for (const item of cart) {
         const semEstoque = permitirSemEstoque && item.estoque <= 0;
         if (!semEstoque) {
-          storage.updateStockQuantity(item.produto, item.tamanho, item.cor, item.quantity).catch(() => {});
-          apiSync.updateEstoque(item, item.quantity).catch(() => {});
+          storage.updateStockQuantity(item.produto, item.tamanho, item.cor, item.quantity).catch(e => console.warn('Erro estoque local:', e));
+          apiSync.updateEstoque(item, item.quantity).catch(e => console.warn('Erro estoque remoto:', e));
         }
         const unitPrice = item.preco || 35;
         const unitCost = 15;
@@ -300,8 +302,20 @@ const Checkout = () => {
         total_liquido: totalComDesconto, observacoes: `Desc: ${discountType === '%' ? discount + '%' : 'R$ ' + discount}`,
         descricao_produto: cart.map(i => i.descricao || '').filter(Boolean).join(' | ') || ''
       };
-      await apiSync.notifyNewSale(salePayload).catch(e => console.warn('Aviso venda (não bloqueante):', e));
-      await apiSync.notifyCaixa({ action: "nova_entrada", data: saleDate.toISOString(), descricao: `Venda ${saleOrigin} - ${customerName || 'Balcão'} (${cart.length} itens)`, categoria: "Vendas", entrada: totalComDesconto, saida: 0, metodo_pagamento: paymentMethod }).catch(e => console.warn('Aviso caixa (não bloqueante):', e));
+
+      setSaleSyncStatus('sending');
+      let sheetsError = '';
+      try {
+        await apiSync.notifyNewSale(salePayload);
+      } catch (e: any) {
+        sheetsError = e?.message || 'Erro ao enviar venda para Sheets';
+        console.error('Falha ao enviar venda para Sheets:', e);
+      }
+      try {
+        await apiSync.notifyCaixa({ action: "nova_entrada", data: saleDate.toISOString(), descricao: `Venda ${saleOrigin} - ${customerName || 'Balcão'} (${cart.length} itens)`, categoria: "Vendas", entrada: totalComDesconto, saida: 0, metodo_pagamento: paymentMethod });
+      } catch (e: any) {
+        console.warn('Falha ao enviar caixa:', e);
+      }
 
       if (customerPhone) {
         const cleanPhone = customerPhone.replace(/\D/g, '');
@@ -310,7 +324,15 @@ const Checkout = () => {
         try { window.open(`https://wa.me/55${cleanPhone}?text=${message}`, '_blank'); } catch {}
       }
 
-      alert('Venda finalizada!');
+      if (sheetsError) {
+        setSaleSyncStatus('error');
+        setLastSaleError(sheetsError);
+        alert(`⚠️ Venda salva localmente, mas HOUVE ERRO ao enviar para Sheets!\n\nErro: ${sheetsError}\n\nA venda ficou salva no navegador. Clique em "Reenviar para Sheets" para tentar novamente.`);
+      } else {
+        setSaleSyncStatus('success');
+        setLastSaleError('');
+        alert('✅ Venda finalizada e enviada para Sheets!');
+      }
       setCart([]); setCustomerName(''); setCustomerPhone(''); setDiscount(0); setDiscountType('%');
       setPaymentMethod('Pix'); setSaleOrigin('Físico'); setVendaRetroativa(false); setPermitirSemEstoque(false); setDescricaoProduto(''); setPrecoCustomizado(''); setQuantidadeCustomizada(''); setNomeProdutoManual('');
       setDataManual(new Date().toISOString().split('T')[0]);
@@ -321,6 +343,45 @@ const Checkout = () => {
       alert(`Erro ao processar venda:\n\n${msg}`);
     }
     setProcessing(false);
+  };
+
+  const retrySyncToSheets = async () => {
+    const lastOrder = (await storage.getAllOrders())
+      .filter(o => String(o.id_pedido).startsWith('VENDA-'))
+      .sort((a, b) => new Date(b.data || b.dataCriacao || 0).getTime() - new Date(a.data || a.dataCriacao || 0).getTime())[0];
+
+    if (!lastOrder) {
+      alert('Nenhuma venda recente encontrada para reenviar.');
+      return;
+    }
+
+    setSaleSyncStatus('sending');
+    try {
+      const salePayload = {
+        action: "nova_venda",
+        data: lastOrder.data || lastOrder.dataCriacao,
+        previsao_recebimento: lastOrder.previsaoRecebimento || '',
+        cliente: lastOrder.cliente || 'Venda Balcão',
+        telefone: lastOrder.whatsapp || '',
+        origem_venda: lastOrder.origem || 'Físico',
+        metodo_pagamento: lastOrder.metodoPagamento || 'Pix',
+        itens: [{ produto: lastOrder.produtoNome, tamanho: lastOrder.tamanho, cor: lastOrder.cor, quantidade: lastOrder.quantidade, preco_unitario: lastOrder.preco || 35, ID: `${lastOrder.produtoNome}-${lastOrder.tamanho}`, descricao: lastOrder.descricaoProduto || '' }],
+        total_bruto: lastOrder.valorTotal || 0,
+        desconto: 0,
+        total_liquido: lastOrder.valorTotal || 0,
+        observacoes: '',
+        descricao_produto: lastOrder.descricaoProduto || ''
+      };
+      await apiSync.notifyNewSale(salePayload);
+      await apiSync.notifyCaixa({ action: "nova_entrada", data: lastOrder.data || lastOrder.dataCriacao, descricao: `Venda ${lastOrder.origem || 'Físico'} - ${lastOrder.cliente || 'Balcão'}`, categoria: "Vendas", entrada: lastOrder.valorTotal || 0, saida: 0, metodo_pagamento: lastOrder.metodoPagamento || 'Pix' });
+      setSaleSyncStatus('success');
+      setLastSaleError('');
+      alert('✅ Venda reenviada para Sheets com sucesso!');
+    } catch (e: any) {
+      setSaleSyncStatus('error');
+      setLastSaleError(e?.message || 'Erro ao reenviar');
+      alert(`❌ Falha ao reenviar: ${e?.message || 'Erro desconhecido'}`);
+    }
   };
 
   return (
@@ -647,6 +708,26 @@ const Checkout = () => {
               <CheckCircle size={20} />
               {processing ? 'Processando...' : 'FINALIZAR E EMITIR RECIBO'}
             </button>
+
+            {/* Status de sincronização */}
+            {saleSyncStatus === 'sending' && (
+              <div style={{ marginTop: '0.5rem', padding: '0.5rem', borderRadius: '8px', background: '#eff6ff', color: '#1d4ed8', fontSize: '0.75rem', textAlign: 'center', fontWeight: '600' }}>
+                📤 Enviando para Sheets...
+              </div>
+            )}
+            {saleSyncStatus === 'success' && (
+              <div style={{ marginTop: '0.5rem', padding: '0.5rem', borderRadius: '8px', background: '#f0fdf4', color: '#15803d', fontSize: '0.75rem', textAlign: 'center', fontWeight: '600' }}>
+                ✅ Enviado com sucesso!
+              </div>
+            )}
+            {saleSyncStatus === 'error' && (
+              <div style={{ marginTop: '0.5rem', padding: '0.5rem', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', fontSize: '0.75rem', textAlign: 'center', fontWeight: '600' }}>
+                ⚠️ Erro ao enviar para Sheets
+                <button onClick={retrySyncToSheets} style={{ marginLeft: '0.5rem', background: '#dc2626', color: 'white', border: 'none', padding: '0.2rem 0.5rem', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700', cursor: 'pointer' }}>
+                  Reenviar
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
