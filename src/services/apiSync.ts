@@ -26,6 +26,7 @@ const N8N_WEBHOOK_URLS = {
   CHAT: `${BASE_URL}/webhook/chat`,
   PERFORMANCE_PRODUTOS: `${BASE_URL}/webhook/performance-optimized`,
   WOO_CREATE: `${BASE_URL}/webhook/criar-produto-woo`,
+  CRIAR_PEDIDO: `${BASE_URL}/webhook/criar-pedido`,
 };
 
 
@@ -182,6 +183,10 @@ export const apiSync = {
 
   notifyCaixa: async (data: any) => {
     return sendWebhook(`${BASE_URL}/webhook/caixa`, { action: 'nova_entrada', ...data });
+  },
+
+  criarPedido: async (pedido: any) => {
+    return sendWebhook(N8N_WEBHOOK_URLS.CRIAR_PEDIDO, { action: 'criar_pedido', ...pedido });
   },
 
   fetchPedidos: async () => {

@@ -4,7 +4,7 @@ import type { Order } from '../types';
 import { OrderStatus } from '../types';
 import { storage } from '../services/storage';
 import { apiSync } from '../services/apiSync';
-import { MessageCircle, TrendingUp as ProfitIcon, Settings } from 'lucide-react';
+import { MessageCircle, TrendingUp as ProfitIcon, Settings, Plus } from 'lucide-react';
 
 const Pedidos = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -16,6 +16,22 @@ const Pedidos = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showCostModal, setShowCostModal] = useState(false);
   const [costConfig, setCostConfig] = useState(storage.getCostConfig());
+  const [showNewOrderModal, setShowNewOrderModal] = useState(false);
+  const [newOrder, setNewOrder] = useState({
+    nomeResponsavel: '',
+    whatsapp: '',
+    produto: '',
+    tamanho: '',
+    cor: '',
+    quantidade: 1,
+    turma: '',
+    dataNascimento: '',
+    formaPagamento: 'Pix' as 'Pix' | 'Dinheiro' | 'Cartão',
+    valorUnitario: '',
+    endereco: '',
+    observacoes: '',
+  });
+  const [sendingOrder, setSendingOrder] = useState(false);
 
 
   useEffect(() => {
@@ -102,6 +118,59 @@ const Pedidos = () => {
       console.error('Erro ao marcar como entregue:', err);
       alert('Erro ao registrar entrega.');
     }
+  };
+
+  const handleCreateOrder = async () => {
+    if (!newOrder.nomeResponsavel.trim()) { alert('Preencha o nome do responsável!'); return; }
+    if (!newOrder.produto.trim()) { alert('Preencha o produto!'); return; }
+    if (!newOrder.tamanho) { alert('Selecione o tamanho!'); return; }
+    if (!newOrder.cor) { alert('Selecione a cor!'); return; }
+    if (newOrder.quantidade < 1) { alert('Quantidade deve ser pelo menos 1!'); return; }
+
+    setSendingOrder(true);
+    try {
+      const valorUnitario = Number(newOrder.valorUnitario) || 0;
+      const total = valorUnitario * newOrder.quantidade;
+
+      const pedido = {
+        'whatsApp': newOrder.whatsapp.replace(/\D/g, ''),
+        'Carimbo de data/hora': new Date().toISOString(),
+        'Tamanho da camiseta': newOrder.tamanho,
+        'Cor': newOrder.cor,
+        'Quantidade': newOrder.quantidade,
+        'Turma': newOrder.turma,
+        'Data De Nacimento': newOrder.dataNascimento,
+        'Forma de pagamento': newOrder.formaPagamento,
+        'Nome completo do responsavel': newOrder.nomeResponsavel,
+        'Logistica': '',
+        'Pago?': newOrder.formaPagamento === 'Pix' ? 'Sim' : 'Não',
+        'Valor unitario': valorUnitario,
+        'total': total,
+        'Total pago': newOrder.formaPagamento === 'Pix' ? total : 0,
+        'camisetas prontas': '',
+        'Pedidos total': newOrder.quantidade,
+        'Entregue?': '',
+        'Data de entrega': '',
+        'Prontos e embalados para entrega': '',
+        'Trocas': '',
+        'Endereço': newOrder.endereco,
+        'Codigo De Barra': '',
+      };
+
+      await apiSync.criarPedido(pedido);
+
+      alert('✅ Pedido criado com sucesso!');
+      setShowNewOrderModal(false);
+      setNewOrder({
+        nomeResponsavel: '', whatsapp: '', produto: '', tamanho: '', cor: '',
+        quantidade: 1, turma: '', dataNascimento: '', formaPagamento: 'Pix',
+        valorUnitario: '', endereco: '', observacoes: '',
+      });
+    } catch (e: any) {
+      console.error('Erro ao criar pedido:', e);
+      alert(`❌ Erro ao criar pedido: ${e?.message || 'Erro desconhecido'}`);
+    }
+    setSendingOrder(false);
   };
 
   // Lista ativa: se filtro=ENTREGUE usa planilha Entrega, senão usa pedidos normais
@@ -200,9 +269,14 @@ const Pedidos = () => {
     <div className="page-content" style={{ background: '#f5f5f5', minHeight: '100vh', padding: '1rem', paddingBottom: '80px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         <h1 className="page-title" style={{ marginBottom: 0 }}>Meus Pedidos</h1>
-        <button className="btn btn-primary" onClick={handleSyncN8N} style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}>
-          Sincronizar
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button className="btn btn-primary" onClick={() => setShowNewOrderModal(true)} style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+            <Plus size={16} /> Novo Pedido
+          </button>
+          <button className="btn btn-primary" onClick={handleSyncN8N} style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}>
+            Sincronizar
+          </button>
+        </div>
       </div>
 
       <div style={{ background: 'white', padding: '1rem 1.5rem', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
@@ -577,6 +651,226 @@ const Pedidos = () => {
                 style={{ flex: 2, padding: '0.8rem', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', fontWeight: '700', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)' }}
               >
                 Salvar Custos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Novo Pedido */}
+      {showNewOrderModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000, padding: '1rem'
+        }}>
+          <div style={{
+            background: 'white', borderRadius: '20px', padding: '1.5rem', width: '100%', maxWidth: '500px',
+            maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
+          }}>
+            <h2 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1rem', color: '#1e293b' }}>
+              📋 Novo Pedido
+            </h2>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+              {/* Nome do Responsável */}
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.3rem', display: 'block' }}>
+                  Nome Completo do Responsável *
+                </label>
+                <input
+                  type="text" placeholder="Nome completo"
+                  value={newOrder.nomeResponsavel}
+                  onChange={(e) => setNewOrder({ ...newOrder, nomeResponsavel: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem' }}
+                />
+              </div>
+
+              {/* WhatsApp */}
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.3rem', display: 'block' }}>
+                  WhatsApp
+                </label>
+                <input
+                  type="tel" placeholder="(00) 00000-0000"
+                  value={newOrder.whatsapp}
+                  onChange={(e) => setNewOrder({ ...newOrder, whatsapp: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem' }}
+                />
+              </div>
+
+              {/* Produto */}
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.3rem', display: 'block' }}>
+                  Produto *
+                </label>
+                <input
+                  type="text" placeholder="Ex: Camiseta Escolar"
+                  value={newOrder.produto}
+                  onChange={(e) => setNewOrder({ ...newOrder, produto: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem' }}
+                />
+              </div>
+
+              {/* Tamanho e Cor */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.3rem', display: 'block' }}>
+                    Tamanho *
+                  </label>
+                  <select
+                    value={newOrder.tamanho}
+                    onChange={(e) => setNewOrder({ ...newOrder, tamanho: e.target.value })}
+                    style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem' }}
+                  >
+                    <option value="">Selecione</option>
+                    <option value="PP">PP</option>
+                    <option value="P">P</option>
+                    <option value="M">M</option>
+                    <option value="G">G</option>
+                    <option value="GG">GG</option>
+                    <option value="Único">Único</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.3rem', display: 'block' }}>
+                    Cor *
+                  </label>
+                  <select
+                    value={newOrder.cor}
+                    onChange={(e) => setNewOrder({ ...newOrder, cor: e.target.value })}
+                    style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem' }}
+                  >
+                    <option value="">Selecione</option>
+                    <option value="Branco">Branco</option>
+                    <option value="Preto">Preto</option>
+                    <option value="Azul">Azul</option>
+                    <option value="Vermelho">Vermelho</option>
+                    <option value="Verde">Verde</option>
+                    <option value="Amarelo">Amarelo</option>
+                    <option value="Rosa">Rosa</option>
+                    <option value="Cinza">Cinza</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Quantidade e Valor Unitário */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.3rem', display: 'block' }}>
+                    Quantidade *
+                  </label>
+                  <input
+                    type="number" min="1" placeholder="1"
+                    value={newOrder.quantidade}
+                    onChange={(e) => setNewOrder({ ...newOrder, quantidade: Math.max(1, Number(e.target.value)) })}
+                    style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem', fontWeight: '700' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.3rem', display: 'block' }}>
+                    Valor Unitário (R$)
+                  </label>
+                  <input
+                    type="number" step="0.01" min="0" placeholder="0,00"
+                    value={newOrder.valorUnitario}
+                    onChange={(e) => setNewOrder({ ...newOrder, valorUnitario: e.target.value })}
+                    style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem', fontWeight: '700' }}
+                  />
+                </div>
+              </div>
+
+              {/* Turma e Data de Nascimento */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.3rem', display: 'block' }}>
+                    Turma
+                  </label>
+                  <input
+                    type="text" placeholder="Ex: 3º Ano A"
+                    value={newOrder.turma}
+                    onChange={(e) => setNewOrder({ ...newOrder, turma: e.target.value })}
+                    style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.3rem', display: 'block' }}>
+                    Data de Nascimento
+                  </label>
+                  <input
+                    type="date"
+                    value={newOrder.dataNascimento}
+                    onChange={(e) => setNewOrder({ ...newOrder, dataNascimento: e.target.value })}
+                    style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem' }}
+                  />
+                </div>
+              </div>
+
+              {/* Forma de Pagamento */}
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.3rem', display: 'block' }}>
+                  Forma de Pagamento
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  {(['Pix', 'Dinheiro', 'Cartão'] as const).map(p => (
+                    <button
+                      key={p}
+                      onClick={() => setNewOrder({ ...newOrder, formaPagamento: p })}
+                      style={{
+                        flex: 1, padding: '0.6rem', borderRadius: '8px', border: newOrder.formaPagamento === p ? '2px solid #4f46e5' : '1px solid #e2e8f0',
+                        background: newOrder.formaPagamento === p ? '#eef2ff' : 'white', fontWeight: '700', fontSize: '0.85rem',
+                        cursor: 'pointer', color: newOrder.formaPagamento === p ? '#4f46e5' : '#64748b'
+                      }}
+                    >
+                      {p === 'Pix' ? '📱' : p === 'Dinheiro' ? '💵' : '💳'} {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Endereço */}
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '0.3rem', display: 'block' }}>
+                  Endereço
+                </label>
+                <input
+                  type="text" placeholder="Endereço completo"
+                  value={newOrder.endereco}
+                  onChange={(e) => setNewOrder({ ...newOrder, endereco: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem' }}
+                />
+              </div>
+
+              {/* Resumo */}
+              {newOrder.valorUnitario && (
+                <div style={{ background: '#f0fdf4', padding: '0.8rem', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#166534' }}>
+                    <span>{newOrder.quantidade}x R$ {Number(newOrder.valorUnitario).toFixed(2)}</span>
+                    <span style={{ fontWeight: '800' }}>Total: R$ {(newOrder.quantidade * Number(newOrder.valorUnitario)).toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Botões */}
+            <div style={{ display: 'flex', gap: '0.8rem', marginTop: '1.2rem' }}>
+              <button
+                onClick={() => setShowNewOrderModal(false)}
+                style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #e2e8f0', background: 'white', fontWeight: '700', color: '#64748b', cursor: 'pointer' }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCreateOrder}
+                disabled={sendingOrder}
+                style={{
+                  flex: 2, padding: '0.8rem', borderRadius: '12px', border: 'none',
+                  background: sendingOrder ? '#94a3b8' : 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                  color: 'white', fontWeight: '700', cursor: sendingOrder ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)'
+                }}
+              >
+                {sendingOrder ? '⏳ Enviando...' : '✅ Criar Pedido'}
               </button>
             </div>
           </div>
