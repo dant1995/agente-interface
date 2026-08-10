@@ -1,13 +1,50 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { storage } from '../services/storage';
 import { apiSync } from '../services/apiSync';
 import type { Order } from '../types';
-import { BarChart, TrendingUp, DollarSign, Package, PieChart, Calendar, AlertTriangle, Truck, ShoppingBag } from 'lucide-react';
+import {
+  BarChart, TrendingUp, DollarSign, Package, PieChart, Calendar, AlertTriangle, Truck, ShoppingBag,
+  Search, List, ChevronDown, ChevronUp, Clock, Edit3, CheckCircle
+} from 'lucide-react';
+
+const CUSTOS_KEY = 'relatorio_custos_por_venda';
+
+const loadCustosFromStorage = (): Record<string, number> => {
+  try {
+    const raw = localStorage.getItem(CUSTOS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+};
+
+const saveCustosToStorage = (custos: Record<string, number>) => {
+  try {
+    localStorage.setItem(CUSTOS_KEY, JSON.stringify(custos));
+  } catch {}
+};
 
 type Periodo = 'mes' | '30dias' | 'mesAnterior' | '3meses' | '6meses' | 'ano' | 'personalizado';
 
+const formatDateTime = (dateStr: string) => {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '-';
+
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+
+  if (hours === '00' && minutes === '00') {
+    return `${day}/${month}/${year}`;
+  }
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
+};
+
 const Relatorios = () => {
   const [orders, setOrders] = useState<Order[]>([]);
+  const ordersRef = useRef<Order[]>([]);
+  ordersRef.current = orders;
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<Periodo>('mes');
   const [dataInicio, setDataInicio] = useState(() => {
@@ -19,6 +56,57 @@ const Relatorios = () => {
   const [stockItems, setStockItems] = useState<any[]>([]);
   const [gastosData, setGastosData] = useState<any>(null);
 
+  // Novos estados para visualização detalhada
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'highestVal' | 'lowestVal'>('newest');
+  const [viewTab, setViewTab] = useState<'itemByItem' | 'byDay'>('itemByItem');
+  const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
+
+  // Custos editáveis por venda (persistidos em localStorage)
+  const [custosVenda, setCustosVenda] = useState<Record<string, number>>(loadCustosFromStorage);
+  const [editingCusto, setEditingCusto] = useState<string | null>(null);
+  const [custoInputVal, setCustoInputVal] = useState<string>('');
+
+  const saveCusto = useCallback((id: string, valor: number) => {
+    const order = ordersRef.current.find(o => o.id_pedido === id);
+    const produtoNome = order?.produtoNome;
+
+    setCustosVenda(prev => {
+      const next = { ...prev, [id]: valor };
+      const autoFilled: { rowNumber: number; produto: string; custo: number }[] = [];
+      if (produtoNome && valor > 0) {
+        ordersRef.current.forEach(o => {
+          if (o.produtoNome === produtoNome && !next[o.id_pedido] && o.id_pedido !== id) {
+            next[o.id_pedido] = valor;
+            const rm = o.id_pedido?.match(/venda-row-(\d+)/);
+            if (rm) {
+              autoFilled.push({ rowNumber: parseInt(rm[1], 10), produto: produtoNome, custo: valor });
+            }
+          }
+        });
+      }
+      saveCustosToStorage(next);
+
+      if (order && valor > 0) {
+        const rm = id.match(/venda-row-(\d+)/);
+        if (rm) {
+          apiSync.atualizarCustoVenda(parseInt(rm[1], 10), produtoNome || '', valor).catch(() => {});
+        }
+      }
+      autoFilled.forEach(af => {
+        apiSync.atualizarCustoVenda(af.rowNumber, af.produto, af.custo).catch(() => {});
+      });
+
+      return next;
+    });
+    setEditingCusto(null);
+  }, []);
+
+  const startEdit = useCallback((id: string, currentVal: number) => {
+    setEditingCusto(id);
+    setCustoInputVal(String(currentVal > 0 ? currentVal : ''));
+  }, []);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -29,21 +117,26 @@ const Relatorios = () => {
 
   const loadData = async () => {
     setLoading(true);
+    let freshSales: Order[] = [];
     
     // Sincroniza vendas da planilha primeiro
     try {
       const extSales = await apiSync.fetchVendas().catch(() => []);
       if (extSales && extSales.length > 0) {
         await storage.syncExternalVendas(extSales);
+        freshSales = extSales;
       }
     } catch {}
 
-    const [allOrders, stock, gastos] = await Promise.all([
-      storage.getAllOrders(),
+    const [externalSales, stock, gastos] = await Promise.all([
+      freshSales.length > 0 ? Promise.resolve(freshSales) : storage.getExternalSales(),
       storage.getStock(),
       apiSync.fetchGastos().catch(() => null),
     ]);
-    setOrders(allOrders);
+
+    const salesToUse = externalSales.length > 0 ? externalSales : await storage.getAllOrders();
+
+    setOrders(salesToUse);
     setStockItems(stock);
     setGastosData(gastos);
     setLoading(false);
@@ -56,38 +149,106 @@ const Relatorios = () => {
   const filteredOrders = useMemo(() => {
     const now = new Date();
     let inicio: Date;
+    let fim: Date;
 
     if (periodo === 'mes') {
-      inicio = new Date(now.getFullYear(), now.getMonth(), 1);
+      inicio = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      fim = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
     } else if (periodo === '30dias') {
       inicio = new Date(now);
       inicio.setDate(now.getDate() - 30);
+      inicio.setHours(0, 0, 0, 0);
+      fim = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
     } else if (periodo === 'mesAnterior') {
-      inicio = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const fimMesAnt = new Date(now.getFullYear(), now.getMonth(), 0);
-      return orders.filter(o => {
-        const d = new Date(o.data);
-        return d >= inicio && d <= fimMesAnt;
-      });
+      inicio = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+      fim = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
     } else if (periodo === '3meses') {
-      inicio = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+      inicio = new Date(now.getFullYear(), now.getMonth() - 3, 1, 0, 0, 0, 0);
+      fim = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
     } else if (periodo === '6meses') {
-      inicio = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+      inicio = new Date(now.getFullYear(), now.getMonth() - 6, 1, 0, 0, 0, 0);
+      fim = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
     } else if (periodo === 'ano') {
-      inicio = new Date(now.getFullYear(), 0, 1);
+      inicio = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+      fim = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
     } else {
-      inicio = new Date(dataInicio + 'T00:00:00');
+      const [yI, mI, dI] = (dataInicio || '').split('-').map(Number);
+      inicio = yI && mI && dI ? new Date(yI, mI - 1, dI, 0, 0, 0, 0) : new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+
+      const [yF, mF, dF] = (dataFim || '').split('-').map(Number);
+      fim = yF && mF && dF ? new Date(yF, mF - 1, dF, 23, 59, 59, 999) : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
     }
 
-    const fim = periodo === 'personalizado'
-      ? new Date(dataFim + 'T23:59:59')
-      : now;
-
     return orders.filter(o => {
+      if (!o.data) return false;
       const d = new Date(o.data);
+      if (isNaN(d.getTime())) return false;
       return d >= inicio && d <= fim;
     });
   }, [orders, periodo, dataInicio, dataFim]);
+
+  const sortedOrders = useMemo(() => {
+    let list = [...filteredOrders];
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase().trim();
+      list = list.filter(o =>
+        (o.produtoNome || '').toLowerCase().includes(term) ||
+        (o.cliente || '').toLowerCase().includes(term) ||
+        (o.origem || '').toLowerCase().includes(term) ||
+        (o.tamanho || '').toLowerCase().includes(term) ||
+        (o.cor || '').toLowerCase().includes(term) ||
+        formatDateTime(o.data).includes(term)
+      );
+    }
+
+    list.sort((a, b) => {
+      const tA = new Date(a.data).getTime() || 0;
+      const tB = new Date(b.data).getTime() || 0;
+      const vA = a.valorTotal || 0;
+      const vB = b.valorTotal || 0;
+
+      if (sortOrder === 'newest') return tB - tA;
+      if (sortOrder === 'oldest') return tA - tB;
+      if (sortOrder === 'highestVal') return vB - vA;
+      if (sortOrder === 'lowestVal') return vA - vB;
+      return tB - tA;
+    });
+
+    return list;
+  }, [filteredOrders, searchTerm, sortOrder]);
+
+  const ordersByDay = useMemo(() => {
+    const groups: Record<string, { dateKey: string; displayDate: string; orders: Order[]; totalVal: number; totalQtd: number }> = {};
+    const weekDays = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+
+    filteredOrders.forEach(o => {
+      if (!o.data) return;
+      const d = new Date(o.data);
+      if (isNaN(d.getTime())) return;
+
+      const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      const weekDayName = weekDays[d.getDay()];
+      const displayDate = `${day}/${month}/${year} (${weekDayName})`;
+
+      if (!groups[dateKey]) {
+        groups[dateKey] = {
+          dateKey,
+          displayDate,
+          orders: [],
+          totalVal: 0,
+          totalQtd: 0,
+        };
+      }
+      groups[dateKey].orders.push(o);
+      groups[dateKey].totalVal += (o.valorTotal || 0);
+      groups[dateKey].totalQtd += o.quantidade;
+    });
+
+    return Object.values(groups).sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+  }, [filteredOrders]);
 
   const stats = useMemo(() => {
     const prodMap = new Map<string, number>();
@@ -105,7 +266,7 @@ const Relatorios = () => {
       const canal = o.origem || 'Sem Origem';
       canalMap[canal] = (canalMap[canal] || 0) + (o.valorTotal || 0);
 
-      totalCustoMP += (o.custo || 15) * o.quantidade;
+      totalCustoMP += custosVenda[o.id_pedido] ?? 0;
     });
 
     const topProds = Array.from(prodMap.entries())
@@ -113,25 +274,28 @@ const Relatorios = () => {
       .sort((a, b) => b.qtd - a.qtd)
       .slice(0, 5);
 
-    // Lucro por produto: cruza vendas com custos da planilha
+    // Lucro por produto: soma custos editáveis por venda
     const lucroPorProduto = Array.from(prodMap.entries()).map(([nome, qtdVendida]) => {
       const vendasDoProduto = filteredOrders.filter(o => o.produtoNome === nome);
       const receita = vendasDoProduto.reduce((acc, o) => acc + (o.valorTotal || 0), 0);
       
-      // Busca custo na planilha de gastos (fuzzy match)
-      const gastoEncontrado = gastosData?.gastos?.find((g: any) => {
-        const desc = (g.descricao || '').toLowerCase().trim();
-        const nomeLower = nome.toLowerCase().trim();
-        return desc === nomeLower || 
-               desc.includes(nomeLower) || 
-               nomeLower.includes(desc) ||
-               (desc.includes('meia') && nomeLower.includes('meia')) ||
-               (desc.includes('camiseta') && nomeLower.includes('camiseta'));
-      });
-      
-      // Usa custoUnitario direto da planilha (coluna D / quantidade)
-      const custoUnitario = gastoEncontrado?.custoUnitario || 0;
-      const custoTotal = custoUnitario * qtdVendida;
+      const datasVendaSet = new Set(
+        vendasDoProduto
+          .map(o => {
+            if (!o.data) return '';
+            const d = new Date(o.data);
+            if (isNaN(d.getTime())) return '';
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            return `${day}/${month}`;
+          })
+          .filter(Boolean)
+      );
+
+      const datasFormatadas = Array.from(datasVendaSet).sort().join(', ');
+
+      const custoTotal = vendasDoProduto.reduce((acc, o) => acc + (custosVenda[o.id_pedido] ?? 0), 0);
+      const custoUnitario = qtdVendida > 0 ? custoTotal / qtdVendida : 0;
       const lucro = receita - custoTotal;
       const margem = receita > 0 ? (lucro / receita) * 100 : 0;
 
@@ -143,7 +307,8 @@ const Relatorios = () => {
         custoTotal,
         lucro,
         margem,
-        custoEncontrado: gastoEncontrado ? true : false,
+        datasFormatadas,
+        custoEncontrado: custoTotal > 0,
       };
     }).sort((a, b) => b.receita - a.receita);
 
@@ -175,7 +340,7 @@ const Relatorios = () => {
       totalQtd,
       ticketMedio: filteredOrders.length > 0 ? totalVendido / filteredOrders.length : 0,
     };
-  }, [filteredOrders, gastosData]);
+  }, [filteredOrders, gastosData, custosVenda]);
 
   // Alerta de matéria-prima: projeção de esgotamento
   const alertasInsumos = useMemo(() => {
@@ -346,6 +511,397 @@ const Relatorios = () => {
         </div>
       </div>
 
+      {/* NOVA SEÇÃO: DETALHAMENTO DE VENDAS ITEM POR ITEM / POR DIA */}
+      <div style={{ background: 'white', padding: '1.2rem', borderRadius: '14px', marginBottom: '1.2rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.8rem' }}>
+          <div>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <List size={18} color="#6366f1" /> DETALHAMENTO DAS VENDAS
+            </h3>
+            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.2rem' }}>
+              Exibindo {sortedOrders.length} vendas individuais no período selecionado
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', background: '#f1f5f9', padding: '3px', borderRadius: '8px', gap: '2px' }}>
+            <button
+              onClick={() => setViewTab('itemByItem')}
+              style={{
+                padding: '0.4rem 0.8rem',
+                borderRadius: '6px',
+                border: 'none',
+                background: viewTab === 'itemByItem' ? 'white' : 'transparent',
+                color: viewTab === 'itemByItem' ? '#4f46e5' : '#64748b',
+                fontWeight: viewTab === 'itemByItem' ? '700' : '500',
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                boxShadow: viewTab === 'itemByItem' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                display: 'flex', alignItems: 'center', gap: '0.4rem'
+              }}
+            >
+              <List size={14} /> Item por Item ({sortedOrders.length})
+            </button>
+            <button
+              onClick={() => setViewTab('byDay')}
+              style={{
+                padding: '0.4rem 0.8rem',
+                borderRadius: '6px',
+                border: 'none',
+                background: viewTab === 'byDay' ? 'white' : 'transparent',
+                color: viewTab === 'byDay' ? '#4f46e5' : '#64748b',
+                fontWeight: viewTab === 'byDay' ? '700' : '500',
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                boxShadow: viewTab === 'byDay' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                display: 'flex', alignItems: 'center', gap: '0.4rem'
+              }}
+            >
+              <Calendar size={14} /> Agrupado por Dia ({ordersByDay.length} dias)
+            </button>
+          </div>
+        </div>
+
+        {/* Filtro e Pesquisa */}
+        <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '220px', position: 'relative' }}>
+            <Search size={15} color="#94a3b8" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+            <input
+              type="text"
+              placeholder="Buscar produto, cliente ou canal (ex: Caneca, Shopee)..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.45rem 0.6rem 0.45rem 2rem',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.78rem',
+                outline: 'none',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '600' }}>Ordem:</span>
+            <select
+              value={sortOrder}
+              onChange={e => setSortOrder(e.target.value as any)}
+              style={{
+                padding: '0.45rem 0.6rem',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.75rem',
+                background: 'white',
+                cursor: 'pointer',
+                outline: 'none',
+              }}
+            >
+              <option value="newest">📅 Mais Recentes Primeiro</option>
+              <option value="oldest">📅 Mais Antigos Primeiro</option>
+              <option value="highestVal">💲 Maior Valor Total</option>
+              <option value="lowestVal">💲 Menor Valor Total</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Aba 1: Item por Item */}
+        {viewTab === 'itemByItem' && (
+          <div style={{ overflowX: 'auto' }}>
+            {sortedOrders.length > 0 ? (() => {
+              const totalFaturado = sortedOrders.reduce((acc, o) => acc + (o.valorTotal || 0), 0);
+              const totalCustos = sortedOrders.reduce((acc, o) => acc + (custosVenda[o.id_pedido] ?? 0), 0);
+              const totalLucro = totalFaturado - totalCustos;
+              return (
+              <>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0', color: '#475569' }}>
+                    <th style={{ padding: '0.6rem 0.8rem', fontWeight: '700' }}>Data / Hora</th>
+                    <th style={{ padding: '0.6rem 0.8rem', fontWeight: '700' }}>Produto / Variação</th>
+                    <th style={{ padding: '0.6rem 0.8rem', fontWeight: '700', textAlign: 'center' }}>Qtd</th>
+                    <th style={{ padding: '0.6rem 0.8rem', fontWeight: '700', textAlign: 'right' }}>Total Venda</th>
+                    <th style={{ padding: '0.6rem 0.8rem', fontWeight: '700', textAlign: 'right', color: '#dc2626' }}>💸 Custo</th>
+                    <th style={{ padding: '0.6rem 0.8rem', fontWeight: '700', textAlign: 'right', color: '#059669' }}>📈 Lucro</th>
+                    <th style={{ padding: '0.6rem 0.8rem', fontWeight: '700' }}>Canal / Origem</th>
+                    <th style={{ padding: '0.6rem 0.8rem', fontWeight: '700' }}>Cliente</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedOrders.map((o, index) => {
+                    const custo = custosVenda[o.id_pedido] ?? 0;
+                    const lucroItem = (o.valorTotal || 0) - custo;
+                    const isEditing = editingCusto === o.id_pedido;
+                    return (
+                    <tr
+                      key={o.id_pedido || index}
+                      style={{
+                        borderBottom: '1px solid #f1f5f9',
+                        background: index % 2 === 0 ? 'white' : '#fafafa',
+                      }}
+                    >
+                      <td style={{ padding: '0.6rem 0.8rem', whiteSpace: 'nowrap', fontWeight: '600', color: '#334155' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <Clock size={12} color="#64748b" />
+                          {formatDateTime(o.data)}
+                        </div>
+                      </td>
+                      <td style={{ padding: '0.6rem 0.8rem' }}>
+                        <div style={{ fontWeight: '700', color: '#0f172a' }}>{o.produtoNome}</div>
+                        {(o.tamanho || o.cor) && (
+                          <div style={{ fontSize: '0.68rem', color: '#64748b' }}>
+                            {o.tamanho && `Tam: ${o.tamanho}`} {o.cor && `• Cor: ${o.cor}`}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ padding: '0.6rem 0.8rem', textAlign: 'center', fontWeight: '700', color: '#1e293b' }}>
+                        {o.quantidade} un.
+                      </td>
+                      <td style={{ padding: '0.6rem 0.8rem', textAlign: 'right', fontWeight: '800', color: '#047857' }}>
+                        R$ {(o.valorTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ padding: '0.5rem 0.8rem', textAlign: 'right' }}>
+                        {isEditing ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', justifyContent: 'flex-end' }}>
+                            <span style={{ color: '#64748b', fontSize: '0.75rem' }}>R$</span>
+                            <input
+                              autoFocus
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={custoInputVal}
+                              onChange={e => setCustoInputVal(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') saveCusto(o.id_pedido, parseFloat(custoInputVal.replace(',', '.')) || 0);
+                                if (e.key === 'Escape') setEditingCusto(null);
+                              }}
+                              style={{
+                                width: '80px', padding: '0.25rem 0.4rem', border: '2px solid #6366f1',
+                                borderRadius: '6px', fontSize: '0.78rem', textAlign: 'right', outline: 'none',
+                                fontFamily: 'inherit'
+                              }}
+                            />
+                            <button
+                              onClick={() => saveCusto(o.id_pedido, parseFloat(custoInputVal.replace(',', '.')) || 0)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#059669' }}
+                            >
+                              <CheckCircle size={16} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div
+                            onClick={() => startEdit(o.id_pedido, custo)}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '0.3rem', justifyContent: 'flex-end',
+                              cursor: 'pointer', color: custo > 0 ? '#dc2626' : '#94a3b8',
+                              fontWeight: custo > 0 ? '700' : '400',
+                              padding: '0.2rem 0.4rem', borderRadius: '6px',
+                              border: '1px dashed ' + (custo > 0 ? '#fca5a5' : '#cbd5e1'),
+                              background: custo > 0 ? '#fff5f5' : 'transparent',
+                              fontSize: '0.78rem',
+                            }}
+                          >
+                            {custo > 0 ? `R$ ${custo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '+ Custo'}
+                            <Edit3 size={11} style={{ opacity: 0.5 }} />
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ padding: '0.6rem 0.8rem', textAlign: 'right', fontWeight: '800', color: lucroItem >= 0 ? '#059669' : '#dc2626' }}>
+                        {custo > 0 ? `R$ ${lucroItem.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : <span style={{ color: '#94a3b8', fontWeight: '400', fontSize: '0.7rem' }}>—</span>}
+                      </td>
+                      <td style={{ padding: '0.6rem 0.8rem' }}>
+                        <span style={{
+                          padding: '0.2rem 0.5rem', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '600',
+                          background: o.origem?.includes('Shopee') ? '#fff7ed' : o.origem?.includes('TikTok') ? '#f1f5f9' : o.origem?.includes('Físico') ? '#f0fdf4' : '#eff6ff',
+                          color: o.origem?.includes('Shopee') ? '#c2410c' : o.origem?.includes('TikTok') ? '#0f172a' : o.origem?.includes('Físico') ? '#166534' : '#1d4ed8',
+                          border: `1px solid ${o.origem?.includes('Shopee') ? '#ffedd5' : o.origem?.includes('Físico') ? '#bbf7d0' : '#e2e8f0'}`,
+                        }}>
+                          {o.origem || 'Venda Direta'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '0.6rem 0.8rem', color: '#64748b', fontSize: '0.72rem' }}>
+                        {o.cliente || 'Direto / Loja'}
+                      </td>
+                    </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {/* Linha de totais */}
+              <div style={{
+                display: 'flex', justifyContent: 'flex-end', gap: '2rem',
+                padding: '0.8rem 1rem', background: '#f8fafc',
+                borderTop: '2px solid #e2e8f0', fontSize: '0.82rem', fontWeight: '700',
+              }}>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ color: '#64748b', fontSize: '0.68rem', fontWeight: '500' }}>TOTAL FATURADO</div>
+                  <div style={{ color: '#047857' }}>R$ {totalFaturado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ color: '#64748b', fontSize: '0.68rem', fontWeight: '500' }}>TOTAL CUSTOS</div>
+                  <div style={{ color: '#dc2626' }}>R$ {totalCustos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ color: '#64748b', fontSize: '0.68rem', fontWeight: '500' }}>LUCRO LÍQUIDO</div>
+                  <div style={{ color: totalLucro >= 0 ? '#059669' : '#dc2626', fontSize: '1rem' }}>R$ {totalLucro.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                </div>
+              </div>
+              </>
+              );
+            })() : (
+              <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8', fontSize: '0.85rem' }}>
+                Nenhuma venda encontrada para os filtros aplicados.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Aba 2: Agrupado por Dia */}
+        {viewTab === 'byDay' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+            {ordersByDay.length > 0 ? (
+              ordersByDay.map(dayGroup => {
+                const isExpanded = expandedDays[dayGroup.dateKey] !== false;
+                return (
+                  <div
+                    key={dayGroup.dateKey}
+                    style={{
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '10px',
+                      overflow: 'hidden',
+                      background: 'white',
+                    }}
+                  >
+                    <div
+                      onClick={() => setExpandedDays(prev => ({ ...prev, [dayGroup.dateKey]: !isExpanded }))}
+                      style={{
+                        padding: '0.75rem 1rem',
+                        background: '#f8fafc',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        borderBottom: isExpanded ? '1px solid #e2e8f0' : 'none',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <Calendar size={16} color="#4f46e5" />
+                        <span style={{ fontWeight: '800', fontSize: '0.85rem', color: '#0f172a' }}>
+                          {dayGroup.displayDate}
+                        </span>
+                        <span style={{ fontSize: '0.7rem', background: '#e0e7ff', color: '#3730a3', padding: '0.15rem 0.5rem', borderRadius: '12px', fontWeight: '700' }}>
+                          {dayGroup.orders.length} vendas ({dayGroup.totalQtd} itens)
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '0.65rem', color: '#64748b' }}>Total do Dia</div>
+                          <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#047857' }}>
+                            R$ {dayGroup.totalVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </div>
+                        </div>
+                        {isExpanded ? <ChevronUp size={18} color="#64748b" /> : <ChevronDown size={18} color="#64748b" />}
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div style={{ padding: '0.5rem', overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', textAlign: 'left' }}>
+                          <thead>
+                            <tr style={{ background: '#fafafa', color: '#64748b', borderBottom: '1px solid #f1f5f9' }}>
+                              <th style={{ padding: '0.4rem 0.6rem', fontWeight: '600' }}>Horário</th>
+                              <th style={{ padding: '0.4rem 0.6rem', fontWeight: '600' }}>Produto / Variação</th>
+                              <th style={{ padding: '0.4rem 0.6rem', fontWeight: '600', textAlign: 'center' }}>Qtd</th>
+                              <th style={{ padding: '0.4rem 0.6rem', fontWeight: '600', textAlign: 'right' }}>Total Venda</th>
+                              <th style={{ padding: '0.4rem 0.6rem', fontWeight: '600', textAlign: 'right', color: '#dc2626' }}>💸 Custo</th>
+                              <th style={{ padding: '0.4rem 0.6rem', fontWeight: '600', textAlign: 'right', color: '#059669' }}>📈 Lucro</th>
+                              <th style={{ padding: '0.4rem 0.6rem', fontWeight: '600' }}>Canal</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dayGroup.orders.map((o, idx) => {
+                              const custo = custosVenda[o.id_pedido] ?? 0;
+                              const lucroItem = (o.valorTotal || 0) - custo;
+                              const isEditing = editingCusto === o.id_pedido;
+                              return (
+                              <tr key={o.id_pedido || idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '0.45rem 0.6rem', fontWeight: '600', color: '#475569' }}>
+                                  {formatDateTime(o.data).split(' ')[1] || '12:00'}
+                                </td>
+                                <td style={{ padding: '0.45rem 0.6rem', fontWeight: '700', color: '#1e293b' }}>
+                                  {o.produtoNome}
+                                  {(o.tamanho || o.cor) && <span style={{ fontWeight: '400', color: '#64748b', fontSize: '0.68rem' }}> ({o.tamanho}/{o.cor})</span>}
+                                </td>
+                                <td style={{ padding: '0.45rem 0.6rem', textAlign: 'center', fontWeight: '700' }}>
+                                  {o.quantidade} un.
+                                </td>
+                                <td style={{ padding: '0.45rem 0.6rem', textAlign: 'right', fontWeight: '800', color: '#047857' }}>
+                                  R$ {(o.valorTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </td>
+                                <td style={{ padding: '0.35rem 0.6rem', textAlign: 'right' }}>
+                                  {isEditing ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'flex-end' }}>
+                                      <span style={{ color: '#64748b', fontSize: '0.7rem' }}>R$</span>
+                                      <input
+                                        autoFocus
+                                        type="number" min="0" step="0.01"
+                                        value={custoInputVal}
+                                        onChange={e => setCustoInputVal(e.target.value)}
+                                        onKeyDown={e => {
+                                          if (e.key === 'Enter') saveCusto(o.id_pedido, parseFloat(custoInputVal.replace(',', '.')) || 0);
+                                          if (e.key === 'Escape') setEditingCusto(null);
+                                        }}
+                                        style={{ width: '70px', padding: '0.2rem 0.3rem', border: '2px solid #6366f1', borderRadius: '5px', fontSize: '0.75rem', textAlign: 'right', outline: 'none', fontFamily: 'inherit' }}
+                                      />
+                                      <button onClick={() => saveCusto(o.id_pedido, parseFloat(custoInputVal.replace(',', '.')) || 0)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#059669' }}>
+                                        <CheckCircle size={14} />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div
+                                      onClick={() => startEdit(o.id_pedido, custo)}
+                                      style={{
+                                        display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'flex-end',
+                                        cursor: 'pointer', color: custo > 0 ? '#dc2626' : '#94a3b8',
+                                        fontWeight: custo > 0 ? '700' : '400',
+                                        padding: '0.15rem 0.3rem', borderRadius: '5px',
+                                        border: '1px dashed ' + (custo > 0 ? '#fca5a5' : '#cbd5e1'),
+                                        background: custo > 0 ? '#fff5f5' : 'transparent',
+                                        fontSize: '0.75rem',
+                                      }}
+                                    >
+                                      {custo > 0 ? `R$ ${custo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '+ Custo'}
+                                      <Edit3 size={10} style={{ opacity: 0.5 }} />
+                                    </div>
+                                  )}
+                                </td>
+                                <td style={{ padding: '0.45rem 0.6rem', textAlign: 'right', fontWeight: '800', color: lucroItem >= 0 ? '#059669' : '#dc2626' }}>
+                                  {custo > 0 ? `R$ ${lucroItem.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : <span style={{ color: '#94a3b8', fontWeight: '400', fontSize: '0.7rem' }}>—</span>}
+                                </td>
+                                <td style={{ padding: '0.45rem 0.6rem', color: '#64748b' }}>
+                                  {o.origem || 'Venda Direta'}
+                                </td>
+                              </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8', fontSize: '0.85rem' }}>
+                Nenhum dia com vendas encontrado.
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Top Produtos */}
       <div style={{ background: 'white', padding: '1.2rem', borderRadius: '14px', marginBottom: '1rem', border: '1px solid #f1f5f9' }}>
         <h3 style={{ fontSize: '0.85rem', fontWeight: '700', color: '#1e293b', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -357,7 +913,9 @@ const Relatorios = () => {
               <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', width: '18px' }}>#{i + 1}</span>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '0.2rem' }}>
-                  <span style={{ fontWeight: '600' }}>{p.nome}</span>
+                  <span style={{ fontWeight: '600', cursor: 'pointer', color: '#2563eb' }} onClick={() => setSearchTerm(p.nome)}>
+                    {p.nome}
+                  </span>
                   <span style={{ color: '#64748b' }}>{p.qtd} unid.</span>
                 </div>
                 <div style={{ height: '5px', background: '#f1f5f9', borderRadius: '3px', overflow: 'hidden' }}>
@@ -384,10 +942,17 @@ const Relatorios = () => {
                 border: p.lucro >= 0 ? '1px solid #dcfce7' : '1px solid #fecaca',
               }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#1e293b' }}>{p.nome}</div>
-                  <div style={{ fontSize: '0.65rem', color: '#64748b' }}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: '700', color: '#1e293b', cursor: 'pointer' }} onClick={() => setSearchTerm(p.nome)}>
+                    {p.nome}
+                  </div>
+                  <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: '0.1rem' }}>
                     {p.qtdVendida} un. × R$ {(p.receita / Math.max(p.qtdVendida, 1)).toFixed(2)} = R$ {p.receita.toFixed(2)}
                   </div>
+                  {p.datasFormatadas && (
+                    <div style={{ fontSize: '0.62rem', color: '#475569', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                      <Calendar size={10} color="#6366f1" /> Dias vendidos: <strong>{p.datasFormatadas}</strong>
+                    </div>
+                  )}
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: '0.85rem', fontWeight: '700', color: p.lucro >= 0 ? '#166534' : '#991b1b' }}>

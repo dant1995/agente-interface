@@ -110,20 +110,130 @@ const sendWebhook = async (url: string, data: any) => {
   }
 };
 
-const parseBRDate = (dateStr: string | any) => {
-  if (!dateStr || typeof dateStr !== 'string') return null;
-  const parts = dateStr.includes('/') ? dateStr.split('/') : dateStr.split('-');
-  if (parts.length < 3) return null;
-  
-  let d, m, y;
-  if (dateStr.includes('/')) {
-    [d, m, y] = parts;
-  } else {
-    [y, m, d] = parts;
+export const parseBRDate = (dateStr: string | any): Date | null => {
+  if (!dateStr) return null;
+  if (dateStr instanceof Date) {
+    return isNaN(dateStr.getTime()) ? null : dateStr;
   }
-  
-  const year = y.length === 2 ? `20${y}` : y;
-  return new Date(`${year.substring(0,4)}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T12:00:00Z`);
+
+  const str = String(dateStr).trim();
+  if (!str) return null;
+
+  // 1. Se for timestamp numérico (ms ou seg)
+  if (/^\d{10,13}$/.test(str)) {
+    const num = Number(str);
+    const d = new Date(num > 1e11 ? num : num * 1000);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // 2. Se for formato ISO nativo ou contiver 'T' (ex: "2026-08-01T19:52:37.037Z" ou "2026-08-01")
+  if (str.includes('T') || /^\d{4}-\d{2}-\d{2}/.test(str)) {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // 3. Se for formato brasileiro com barras (ex: "01/08/2026" ou "01/08/2026 19:52:37")
+  if (str.includes('/')) {
+    const [datePart, timePart] = str.split(' ');
+    const parts = datePart.split('/');
+    if (parts.length === 3) {
+      let [day, month, year] = parts;
+      if (year.length === 2) year = `20${year}`;
+      day = day.padStart(2, '0');
+      month = month.padStart(2, '0');
+      
+      const isoStr = timePart 
+        ? `${year.substring(0, 4)}-${month}-${day}T${timePart}`
+        : `${year.substring(0, 4)}-${month}-${day}T12:00:00Z`;
+      
+      const d = new Date(isoStr);
+      if (!isNaN(d.getTime())) return d;
+    }
+  }
+
+  // 4. Se for formato YYYY-MM-DD sem T
+  if (str.includes('-')) {
+    const [datePart, timePart] = str.split(' ');
+    const parts = datePart.split('-');
+    if (parts.length === 3) {
+      let [year, month, day] = parts;
+      if (year.length === 2) year = `20${year}`;
+      day = day.padStart(2, '0');
+      month = month.padStart(2, '0');
+      
+      const isoStr = timePart 
+        ? `${year.substring(0, 4)}-${month}-${day}T${timePart}`
+        : `${year.substring(0, 4)}-${month}-${day}T12:00:00Z`;
+        
+      const d = new Date(isoStr);
+      if (!isNaN(d.getTime())) return d;
+    }
+  }
+
+  // 5. Fallback tentativa direta
+  const dDirect = new Date(str);
+  if (!isNaN(dDirect.getTime())) return dDirect;
+
+  return null;
+};
+
+export const extractDateFromItem = (item: any): Date | null => {
+  if (!item || typeof item !== 'object') return null;
+
+  // 1. PRIORIDADE 1: Tenta buscar diretamente pelas chaves conhecidas da Coluna O (15ª coluna)
+  const colOKeys = ['col_15', 'col_O', 'O', 'o', 'col15', '15', '14', 'col_14', 'data_venda', 'Data da Venda', 'DATAVENDA'];
+  for (const k of colOKeys) {
+    if (item[k] !== undefined && item[k] !== null && String(item[k]).trim() !== '') {
+      const pDate = parseBRDate(String(item[k]).trim());
+      if (pDate && !isNaN(pDate.getTime())) return pDate;
+    }
+  }
+
+  // 2. PRIORIDADE 2: Examina as posições de colunas ao redor da 15ª coluna (Coluna O)
+  const entries = Object.entries(item);
+  const targetIndices = [14, 13, 15, 12, 16];
+  for (const idx of targetIndices) {
+    if (entries[idx]) {
+      const [key, val] = entries[idx];
+      const normKey = normalizeString(key);
+      // Ignora se for a Coluna A (Carimbo de data/hora da criação/importação)
+      if (normKey.includes('carimbodedatahora') || normKey === 'carimbo') continue;
+
+      if (typeof val === 'string' && val.trim().length >= 8) {
+        const pDate = parseBRDate(val.trim());
+        if (pDate && !isNaN(pDate.getTime())) {
+          return pDate;
+        }
+      }
+    }
+  }
+
+  // 3. PRIORIDADE 3: Vasculha do FIM para o COMEÇO (Coluna O fica no final do objeto, Coluna A fica no começo)
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const [key, val] = entries[i];
+    const normKey = normalizeString(key);
+    // Ignora a coluna A (Carimbo de data/hora) do formulário se houver outra data no final
+    if (normKey.includes('carimbodedatahora') || (normKey.includes('carimbo') && i === 0)) continue;
+
+    if (typeof val === 'string' && val.trim().length >= 8) {
+      const trimmed = val.trim();
+      if (trimmed.includes('T') || /^\d{4}-\d{2}-\d{2}/.test(trimmed) || /^\d{2}\/\d{2}\/\d{4}/.test(trimmed)) {
+        const pDate = parseBRDate(trimmed);
+        if (pDate && !isNaN(pDate.getTime())) {
+          return pDate;
+        }
+      }
+    }
+  }
+
+  // 4. ÚLTIMA TENTATIVA: Se nada funcionou nas colunas de trás, aceita a data da coluna A (Carimbo)
+  const genericDate = getValueByKeywords(item, ['DATA', 'CARIMBO', 'CRIADO', 'data', 'DATE']);
+  if (genericDate) {
+    const pDate = parseBRDate(genericDate);
+    if (pDate && !isNaN(pDate.getTime())) return pDate;
+  }
+
+  return null;
 };
 
 const syncTimestamps: Record<string, number> = {};
@@ -239,8 +349,7 @@ export const apiSync = {
         const totalPlanilha = parseReal(getValueByKeywords(item, ['TOTAL PAGO', 'PAGO', 'VALOR PAGO', 'TOTAL', 'VALOR', 'SUBTOTAL', 'TOTAL GERAL', 'VALOR TOTAL']));
         const valorTotal = (totalPlanilha > 0) ? totalPlanilha : (preco * quantidade);
 
-        const rawDate = getValueByKeywords(item, ['DATA', 'CARIMBO', 'CRIADO', 'CARIMBO DE DATA/HORA']);
-        const parsedDate = parseBRDate(rawDate) || new Date();
+        const parsedDate = extractDateFromItem(item) || new Date();
 
         const custo = parseReal(getValueByKeywords(item, ['CUSTO', 'COST', 'VALOR CUSTO', 'CUSTO UNITARIO', 'CUSTO UN'])) || 15;
         const lucroCalculado = valorTotal - (custo * quantidade);
@@ -777,9 +886,40 @@ export const apiSync = {
         console.log('[fetchVendas] DEBUG - Todas as chaves do primeiro item:', Object.keys(items[0]));
         console.log('[fetchVendas] DEBUG - Primeiro item completo:', items[0]);
       }
-      return (items || []).map((item: any, index: number) => {
-        const baseDateStr = getValueByKeywords(item, ['DATA', 'CARIMBO', 'CRIADO', 'data']);
-        const baseDate = parseBRDate(baseDateStr) || new Date();
+      const validItems = (items || []).filter((item: any) => {
+        if (!item || typeof item !== 'object') return false;
+
+        const prodName = String(
+          getValueByKeywords(item, ['produto', 'PRODUTO', 'DESCRICAO', 'DESC', 'ITEM']) ||
+          item.produto || item.Produto || item.B || item['1'] || ''
+        ).trim();
+
+        const prodLower = prodName.toLowerCase();
+
+        // 1. Ignora linhas de cabeçalho ou totais da planilha
+        if (['produto', 'descricao', 'desc', 'item', 'total', 'subtotal', 'total geral', 'total custos', 'carimbo de data/hora'].includes(prodLower)) {
+          return false;
+        }
+
+        // 2. Ignora se o produto for nulo/genérico ("Produto") E não houver data válida na Coluna O
+        const dateObj = extractDateFromItem(item);
+        if ((!prodName || prodLower === 'produto') && !dateObj) {
+          return false;
+        }
+
+        // 3. Ignora se não tiver nome de produto e o valor for 0
+        const precoVenda = parseReal(getValueByKeywords(item, ['preço', 'PRECO', 'VALOR UNITARIO', 'PRICE', 'UNITARIO', 'VALOR UNITÁRIO', 'preco', 'VALOR', 'PREÇO UNITÁRIO', 'VALOR VENDA', 'PRECO VENDA']));
+        const comDesconto = parseReal(getValueByKeywords(item, ['total com desconto', 'COM DESCONTO', 'TOTAL', 'TOTAL PAGO', 'VALOR PAGO', 'PAGO', 'VALOR TOTAL', 'PRECO TOTAL', 'PREÇO TOTAL', 'VALOR FINAL', 'TOTAL VENDA', 'VALOR VENDA TOTAL', 'PRECO FINAL', 'PREÇO FINAL']));
+        
+        if ((!prodName || prodLower === 'produto') && comDesconto === 0 && precoVenda === 0) {
+          return false;
+        }
+
+        return true;
+      });
+
+      return validItems.map((item: any, index: number) => {
+        const baseDate = extractDateFromItem(item) || new Date();
         const forecastDate = new Date(baseDate);
         forecastDate.setDate(forecastDate.getDate() + 10);
         
@@ -792,21 +932,10 @@ export const apiSync = {
         
         const finalValue = comDesconto > 0 ? comDesconto : (precoVenda * qtdVenda > 0 ? precoVenda * qtdVenda : previsaoRecebimento);
 
-        // Debug: log detalhado para cada venda
-        const generatedId = `venda-row-${item.row_number || index}`;
-        console.log(`[fetchVendas] Item "${item.produto || item.Produto}" | id=${generatedId} | preço=${precoVenda} | qtd=${qtdVenda} | comDesconto=${comDesconto} | finalValue=${finalValue}`);
-
-        // Debug: log quando valorTotal = 0 para diagnóstico
-        if (finalValue === 0) {
-          console.warn('[fetchVendas] Venda com valorTotal = 0:', {
-            id: item.ID || item.id || item.row_number,
-            item: item,
-            precoVenda,
-            qtdVenda,
-            comDesconto,
-            previsaoRecebimento
-          });
-        }
+        const realProdName = String(
+          getValueByKeywords(item, ['produto', 'PRODUTO', 'DESCRICAO', 'DESC', 'ITEM']) ||
+          item.produto || item.Produto || item.B || item['1'] || 'Produto'
+        );
 
         return {
           id_pedido: `venda-row-${item.row_number || index}`,
@@ -815,7 +944,7 @@ export const apiSync = {
           cliente: String(getValueByKeywords(item, ['Cliente', 'CLIENTE', 'NOME', 'RESPONSAVEL']) || 'Venda Marketplace'),
           whatsapp: String(getValueByKeywords(item, ['TELEFONE', 'WHATSAPP', 'CELULAR']) || ''),
           status: OrderStatusValue.ENTREGUE,
-          produtoNome: String(getValueByKeywords(item, ['produto', 'PRODUTO', 'DESCRICAO', 'DESC']) || 'Produto'),
+          produtoNome: realProdName,
           produtoId: String(getValueByKeywords(item, ['ID', 'produto', 'SKU']) || ''),
           tamanho: String(getValueByKeywords(item, ['taamnho', 'TAMANHO', 'TAM', 'SIZE']) || 'M'),
           cor: String(getValueByKeywords(item, ['cor', 'COR', 'COLOR']) || ''),
@@ -1070,5 +1199,14 @@ export const apiSync = {
       ...dados,
       dataEntrega: dados.dataEntrega || new Date().toISOString()
     });
-  }
+  },
+
+  atualizarCustoVenda: async (rowNumber: number, produtoNome: string, custo: number) => {
+    return sendWebhook(N8N_WEBHOOK_URLS.NEW_SALE, {
+      action: 'update_cost',
+      row_number: rowNumber,
+      produto: produtoNome,
+      custo: custo,
+    });
+  },
 };

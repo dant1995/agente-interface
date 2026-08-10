@@ -116,11 +116,24 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
   const fotoVariacaoInputRef = useRef<HTMLInputElement>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
-  // Ao selecionar foto, corta para 3:4
+  // Ao selecionar foto, corta para 3:4. Caso falhe ou o arquivo seja grande, usa ObjectURL para economizar memória.
   const handleFotoSelecionada = async (e: React.ChangeEvent<HTMLInputElement>, slot: 1 | 2) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const imagem = await cropTo3x4(file);
+    const MAX_SIZE = 2 * 1024 * 1024; // 2 MB
+    let imagem: string = '';
+    if (file.size > MAX_SIZE) {
+      // Arquivo grande: usar URL direta
+      console.warn('Arquivo grande, usando ObjectURL sem recorte');
+      imagem = URL.createObjectURL(file);
+    } else {
+      try {
+        imagem = await cropTo3x4(file);
+      } catch (err) {
+        console.error('Crop falhou, usando ObjectURL como fallback:', err);
+        imagem = URL.createObjectURL(file);
+      }
+    }
     if (slot === 1) {
       setProduto(p => ({ ...p, imagem }));
     } else {
@@ -132,7 +145,29 @@ export const CadastrarProduto = ({ onClose, onSave }: Props) => {
   const handleFotoVariacaoSelecionada = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const imagem = await cropTo3x4(file);
+    const MAX_SIZE = 2 * 1024 * 1024; // 2 MB
+    let imagem: string = '';
+    if (file.size > MAX_SIZE) {
+      console.warn('Arquivo grande, usando fallback sem recorte');
+      imagem = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    } else {
+      try {
+        imagem = await cropTo3x4(file);
+      } catch (err) {
+        console.error('Crop failed, fallback to raw image:', err);
+        imagem = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
+    }
     setVariacaoAtual(v => ({ ...v, imagem }));
     e.target.value = '';
   };
