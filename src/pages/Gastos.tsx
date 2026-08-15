@@ -534,9 +534,14 @@ const Gastos = () => {
                 }}
               >
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.85rem', fontWeight: '500', color: '#333', marginBottom: '0.2rem' }}>
-                    {item.categoria || 'Sem categoria'}
+                  <div style={{ fontSize: '0.85rem', fontWeight: '500', color: '#333', marginBottom: '0.15rem' }}>
+                    {item.descricao || item.categoria || 'Sem descrição'}
                   </div>
+                  {item.descricao && item.categoria && (
+                    <div style={{ fontSize: '0.72rem', color: '#888', marginBottom: '0.15rem' }}>
+                      {item.categoria}
+                    </div>
+                  )}
                   <div style={{ fontSize: '0.7rem', color: '#999', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                     📅 {item.data}
                     <span style={{ fontSize: '0.6rem', background: '#f0f0f0', padding: '0.1rem 0.3rem', borderRadius: '4px' }}>clique para filtrar</span>

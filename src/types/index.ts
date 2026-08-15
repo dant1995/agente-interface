@@ -144,6 +144,7 @@ export interface FinanceiroSummary {
 
 export interface CaixaItem {
   data: string;
+  descricao?: string;
   categoria: string;
   entrada: number;
   saida: number;

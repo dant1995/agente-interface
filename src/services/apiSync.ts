@@ -684,10 +684,11 @@ export const apiSync = {
 
       const caixaItems: CaixaItem[] = rawItems.map((item: any) => {
         const data = String(getValueByKeywords(item, ['DATA', 'CARIMBO', 'CARIMBO DE DATA/HORA']) || '');
-        const categoria = String(getValueByKeywords(item, ['METODO', 'CATEGORIA', 'DESCRICAO', 'DESCRIÇÃO', 'DESPESA', 'ORIGEM']) || 'Outros');
+        const descricao = String(getValueByKeywords(item, ['DESCRIÇÃO', 'DESCRICAO', 'DESCRIÇAO', 'DESC', 'DESPESA', 'HISTÓRICO', 'HISTORICO', 'OBSERVAÇÃO', 'OBSERVACAO', 'DETALHE', 'ITEM']) || '');
+        const categoria = String(getValueByKeywords(item, ['METODO', 'CATEGORIA', 'TIPO', 'ORIGEM', 'FORMA DE PAGAMENTO']) || 'Outros');
         const entrada = parseReal(getValueByKeywords(item, ['ENTRA', 'ENTRADA', 'TOTAL PAGO', 'VALOR PAGO', 'PAGO', 'RECEBIDO']));
         const saida = parseReal(getValueByKeywords(item, ['SAIDA', 'SAÍDA', 'DESPESA', 'TOTAL DESPESA', 'GASTO', 'CUSTO', 'PAGAMENTO']));
-        return { data, categoria, entrada, saida };
+        return { data, descricao: descricao || categoria, categoria, entrada, saida };
       })
       .filter((i: CaixaItem) => i.entrada > 0 || i.saida > 0);
 
