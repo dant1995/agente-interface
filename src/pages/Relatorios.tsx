@@ -634,10 +634,10 @@ const Relatorios = () => {
             };
 
             filteredOrders.forEach(o => {
-              const grupo = categorizar(o.id, o.produtoNome || '', o.origem || '');
+              const grupo = categorizar(o.id_pedido, o.produtoNome || '', o.origem || '');
               grupos[grupo].vendas += o.quantidade || 1;
               grupos[grupo].valor += o.valorTotal || 0;
-              grupos[grupo].itens.push({ id: o.id, nome: o.produtoNome || 'Sem nome', qtd: o.quantidade || 1, valor: o.valorTotal || 0 });
+              grupos[grupo].itens.push({ id: o.id_pedido, nome: o.produtoNome || 'Sem nome', qtd: o.quantidade || 1, valor: o.valorTotal || 0 });
             });
 
             const totalItens = Object.values(grupos).reduce((a, g) => a + g.vendas, 0);

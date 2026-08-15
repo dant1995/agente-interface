@@ -191,7 +191,6 @@ const Gastos = () => {
   const displayVendas = selectedMonth ? (statsPeriodo.vendas || displayEntradas) : (financeiro.totalEntradas || financeiro.totalVendas || 0);
   
   const displaySaldo = selectedMonth ? (statsPeriodo.entradas - statsPeriodo.saidas) : (financeiro.saldoReal || 0);
-  const displayCustos = selectedMonth ? statsPeriodo.negocio : (financeiro.totalCustos || 0);
 
   const mesesDisponiveis = Array.from(new Set([
     ...(financeiro.caixa || []).map(i => getMonthKey(i.data)),
