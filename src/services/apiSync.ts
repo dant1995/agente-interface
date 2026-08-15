@@ -27,6 +27,7 @@ const N8N_WEBHOOK_URLS = {
   PERFORMANCE_PRODUTOS: `${BASE_URL}/webhook/performance-optimized`,
   WOO_CREATE: `${BASE_URL}/webhook/criar-produto-woo`,
   CRIAR_PEDIDO: `${BASE_URL}/webhook/criar-pedido`,
+  CUSTOS: `${BASE_URL}/webhook/Custos`,
 };
 
 
@@ -1250,6 +1251,15 @@ export const apiSync = {
       row_number: rowNumber,
       produto: produtoNome,
       custo: custo,
+    });
+  },
+
+  enviarCustoPlanilha: async (id: string, produto: string, custo: number) => {
+    return sendWebhook(N8N_WEBHOOK_URLS.CUSTOS, {
+      action: 'update_cost',
+      id: id,
+      CUSTOS: custo,
+      produto: produto,
     });
   },
 };

@@ -119,9 +119,11 @@ const Relatorios = () => {
         if (rm) {
           apiSync.atualizarCustoVenda(parseInt(rm[1], 10), produtoNome || '', valor).catch(() => {});
         }
+        apiSync.enviarCustoPlanilha(id, produtoNome || '', valor).catch(() => {});
       }
       autoFilled.forEach(af => {
         apiSync.atualizarCustoVenda(af.rowNumber, af.produto, af.custo).catch(() => {});
+        apiSync.enviarCustoPlanilha(af.rowNumber.toString(), af.produto, af.custo).catch(() => {});
       });
 
       return next;
