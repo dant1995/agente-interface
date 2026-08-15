@@ -241,7 +241,7 @@ const Dashboard = () => {
           {/* Coluna esquerda: logo + valor */}
           <div className="dash-banner-left">
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.6rem' }}>
-              <div style={{ width: '32px', height: '32px', background: 'rgba(255,255,255,0.2)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>👕</div>
+              <img src="/logo.jpeg" alt="Lojas Capel" style={{ width: '32px', height: '32px', borderRadius: '8px', objectFit: 'cover' }} />
               <span style={{ fontWeight: '600', fontSize: '0.95rem' }}>Lojas Capel</span>
             </div>
             <div style={{ fontSize: '2rem', fontWeight: '700', letterSpacing: '-0.5px', marginBottom: '0.2rem' }}>

@@ -88,7 +88,7 @@ const Login = ({ onLogin }: Props) => {
       <div style={{ background: '#1e293b', borderRadius: '20px', border: '1px solid #334155', padding: '2.5rem', width: '380px', maxWidth: '90vw', boxShadow: '0 25px 50px rgba(0,0,0,0.5)' }}>
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>👕</div>
+          <img src="/logo.jpeg" alt="Lojas Capel" style={{ width: '64px', height: '64px', borderRadius: '16px', objectFit: 'cover', marginBottom: '0.5rem' }} />
           <h1 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#f1f5f9', margin: 0 }}>Lojas Capel</h1>
           <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.3rem 0 0 0' }}>Sistema de Gestão</p>
         </div>

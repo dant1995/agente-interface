@@ -87,12 +87,12 @@ const Sidebar = ({ user, onLogout, permissoes = [], collapsed = false, onToggleC
       <div className="sidebar-header" style={{ padding: collapsed ? '1.25rem 0.5rem' : '1.25rem 1rem', display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between' }}>
         {!collapsed && (
           <div className="sidebar-logo">
-            <div className="sidebar-logo-icon">👕</div>
+            <img src="/logo.jpeg" alt="Lojas Capel" style={{ width: 36, height: 36, borderRadius: '10px', objectFit: 'cover' }} />
             <span className="sidebar-brand">Lojas Capel</span>
           </div>
         )}
         {collapsed && (
-          <div className="sidebar-logo-icon" style={{ width: 36, height: 36 }}>👕</div>
+          <img src="/logo.jpeg" alt="Lojas Capel" style={{ width: 36, height: 36, borderRadius: '10px', objectFit: 'cover' }} />
         )}
         <button
           onClick={onToggleCollapse}
