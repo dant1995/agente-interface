@@ -121,10 +121,7 @@ const Dashboard = () => {
     });
     if (vencendoHoje.length > 0) novosAlertas.push(`Você tem ${vencendoHoje.length} conta(s) a pagar vencendo hoje!`);
 
-    const pedidosLocal = orders.filter(o => !String(o.id_pedido).startsWith('venda-row-'));
     const vendasExterna = orders.filter(o => String(o.id_pedido).startsWith('venda-row-'));
-    const somaPedidosLocal = pedidosLocal.reduce((acc: number, o: any) => acc + (Number(o.valorTotal) || 0), 0);
-    const somaVendasExterna = vendasExterna.reduce((acc: number, o: any) => acc + (Number(o.valorTotal) || 0), 0);
     const somaVendasColH = vendasExterna.reduce((acc: number, o: any) => acc + (Number(o.valorTotal) || 0), 0);
     const somaPedidosColN = vendasExterna.reduce((acc: number, o: any) => acc + (Number(o.pedidoValue) || 0), 0);
     const totalVendasExibir = somaVendasColH;
