@@ -13,7 +13,7 @@ const N8N_WEBHOOK_URLS = {
   NEW_SALE: `${BASE_URL}/webhook/venda`,
   NEW_CONTAS: `${BASE_URL}/webhook/contas`,
   GASTOS: `${BASE_URL}/webhook/gastos`,
-  CAIXA: `${BASE_URL}/webhook/caixa`,
+  CAIXA: `${BASE_URL}/webhook/CAIXA`,
   STRATEGY: `${BASE_URL}/webhook/coo_lojascapel_v4_webhook`,
   ESTOQUE: `${BASE_URL}/webhook/estoque`,
   IA_CHAT: `${BASE_URL}/webhook/contas`,
@@ -606,6 +606,17 @@ export const apiSync = {
         };
       });
 
+      const custosPorProduto: Record<string, number> = {};
+      gastos.forEach((g: any) => {
+        if (g.descricao && g.custoUnitario > 0) {
+          const key = g.descricao.toLowerCase().trim();
+          if (!custosPorProduto[key]) {
+            custosPorProduto[key] = g.custoUnitario;
+          }
+        }
+      });
+      console.log('[fetchGastos] custosPorProduto:', custosPorProduto);
+
       return {
         totalCustos: totalCustosCalc,
         totalVendas: totalVendasCalc,
@@ -617,6 +628,7 @@ export const apiSync = {
         totalOutrosGastos,
         totalDespesasOperacionais: 0,
         gastos,
+        custosPorProduto,
       };
     } catch (error) {
       console.error('Erro buscando gastos:', error);
@@ -626,7 +638,7 @@ export const apiSync = {
 
   fetchCaixa: async (): Promise<{ items: CaixaItem[], summary: { entrada: number, saida: number, saldo: number } } | null> => {
     try {
-      const response = await fetch(N8N_WEBHOOK_URLS.NEW_SALE, {
+      const response = await fetch(N8N_WEBHOOK_URLS.CAIXA, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'get_caixa' })
@@ -634,6 +646,7 @@ export const apiSync = {
       if (!response.ok) throw new Error('Falha ao buscar fluxo de caixa');
 
       const rawData = await response.json();
+      console.log('[fetchCaixa] rawData type:', typeof rawData, 'isArray:', Array.isArray(rawData));
 
       let rawItems: any[] = [];
       if (Array.isArray(rawData)) {
@@ -644,10 +657,13 @@ export const apiSync = {
         else rawItems = [rawData];
       }
 
+      console.log('[fetchCaixa] rawItems count:', rawItems.length);
+      if (rawItems.length > 0) console.log('[fetchCaixa] First item keys:', Object.keys(rawItems[0]));
+
       const caixaItems: CaixaItem[] = rawItems.map((item: any) => {
-        const data = getValueByKeywords(item, ['DATA', 'CARIMBO', 'CARIMBO DE DATA/HORA']);
-        const categoria = String(getValueByKeywords(item, ['CATEGORIA', 'DESCRICAO', 'DESCRIÇÃO', 'DESPESA', 'ORIGEM']) || 'Outros');
-        const entrada = parseReal(getValueByKeywords(item, ['ENTRADA', 'TOTAL ENTRADA', 'TOTAL PAGO', 'VALOR PAGO', 'PAGO', 'RECEBIDO']));
+        const data = String(getValueByKeywords(item, ['DATA', 'CARIMBO', 'CARIMBO DE DATA/HORA']) || '');
+        const categoria = String(getValueByKeywords(item, ['METODO', 'CATEGORIA', 'DESCRICAO', 'DESCRIÇÃO', 'DESPESA', 'ORIGEM']) || 'Outros');
+        const entrada = parseReal(getValueByKeywords(item, ['ENTRA', 'ENTRADA', 'TOTAL PAGO', 'VALOR PAGO', 'PAGO', 'RECEBIDO']));
         const saida = parseReal(getValueByKeywords(item, ['SAIDA', 'SAÍDA', 'DESPESA', 'TOTAL DESPESA', 'GASTO', 'CUSTO', 'PAGAMENTO']));
         return { data, categoria, entrada, saida };
       })
@@ -658,16 +674,22 @@ export const apiSync = {
       let saldoSheet = totalEntradaSheet - totalSaidaSheet;
 
       if (rawItems.length > 0) {
-        const row3 = rawItems.length >= 3 ? rawItems[2] : rawItems[rawItems.length - 1];
-        const hVal = parseReal(getValueByKeywords(row3, ['H', 'TOTAL ENTRADA', 'ENTRADA']));
-        const iVal = parseReal(getValueByKeywords(row3, ['I', 'TOTAL DESPESA', 'DESPESA', 'TOTAL SAIDA', 'SAIDA']));
-        const jVal = parseReal(getValueByKeywords(row3, ['J', 'SALDO', 'TOTAL SALDO']));
+        const totalsRow = rawItems.find((r: any) =>
+          parseReal(r['total entreda']) > 0 || parseReal(r['total saida']) > 0 || parseReal(r['total']) > 0
+        ) || rawItems[rawItems.length - 1];
+
+        const hVal = parseReal(totalsRow['total entreda'] || totalsRow['ENTRADA']);
+        const iVal = parseReal(totalsRow['total saida'] || totalsRow['SAIDA']);
+        const jVal = parseReal(totalsRow['total'] || totalsRow['SALDO']);
+        console.log(`[fetchCaixa] Totals row: row_number=${totalsRow.row_number} | entrada: ${hVal} | saida: ${iVal} | saldo: ${jVal}`);
         if (hVal > 0 || iVal > 0 || jVal > 0) {
           totalEntradaSheet = hVal || totalEntradaSheet;
           totalSaidaSheet = iVal || totalSaidaSheet;
           saldoSheet = jVal || (totalEntradaSheet - totalSaidaSheet);
         }
       }
+
+      console.log(`[fetchCaixa] FINAL summary entrada: ${totalEntradaSheet} | saida: ${totalSaidaSheet} | saldo: ${saldoSheet} | items: ${caixaItems.length}`);
 
       return {
         items: caixaItems,
@@ -777,21 +799,27 @@ export const apiSync = {
       if (!response.ok) throw new Error('Falha ao buscar contas');
 
       const rawData = await response.json();
+      console.log('[fetchContas] rawData type:', typeof rawData, 'isArray:', Array.isArray(rawData));
       let items: any[] = [];
       if (Array.isArray(rawData)) items = rawData;
       else if (rawData && typeof rawData === 'object') {
         items = Object.values(rawData).find(val => Array.isArray(val)) as any[] || [rawData];
       }
+      console.log('[fetchContas] items count:', items.length);
+      if (items.length > 0) console.log('[fetchContas] first item keys:', Object.keys(items[0]), 'data:', items[0]);
 
-      return items.filter(item => item['Descrição'] || item['Descricao'] || item.descricao).map(item => ({
-        data: item['Data'] || item.data,
-        descricao: item['Descrição'] || item['Descricao'] || item.descricao,
+      const mapped = items.map(item => ({
+        data: item['Data'] || item.data || '',
+        descricao: item['Descrição'] || item['Descricao'] || item.descricao || '',
         valor: parseReal(item['Valor'] || item.valor),
+        total: parseReal(item['H'] || item['Total'] || item['total'] || item.col_8),
         tipo: (item['Tipo'] || item.tipo || '').toLowerCase(),
         status: (item['Status'] || item.status || '').toLowerCase(),
       }));
+      console.log('[fetchContas] mapped count:', mapped.length, 'total:', mapped.reduce((a: number, c: any) => a + (c.total || 0), 0));
+      return mapped;
     } catch (error) {
-      console.error('Erro buscando contas:', error);
+      console.error('[fetchContas] ERRO:', error);
       return [];
     }
   },

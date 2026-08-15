@@ -4,7 +4,7 @@ import { apiSync } from '../services/apiSync';
 import type { Order } from '../types';
 import {
   BarChart, TrendingUp, DollarSign, Package, PieChart, Calendar, AlertTriangle, Truck, ShoppingBag,
-  Search, List, ChevronDown, ChevronUp, Clock, Edit3, CheckCircle
+  Search, List, ChevronDown, ChevronUp, Clock, Edit3, CheckCircle, Tag
 } from 'lucide-react';
 
 const CUSTOS_KEY = 'relatorio_custos_por_venda';
@@ -55,12 +55,39 @@ const Relatorios = () => {
   const [dataFim, setDataFim] = useState(() => new Date().toISOString().split('T')[0]);
   const [stockItems, setStockItems] = useState<any[]>([]);
   const [gastosData, setGastosData] = useState<any>(null);
+  const [contasData, setContasData] = useState<any[]>([]);
 
   // Novos estados para visualização detalhada
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'highestVal' | 'lowestVal'>('newest');
   const [viewTab, setViewTab] = useState<'itemByItem' | 'byDay'>('itemByItem');
   const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
+  const [expandedGrupos, setExpandedGrupos] = useState<Record<string, boolean>>({});
+
+  // Overrides manuais de categoria (persistidos em localStorage)
+  const [categoriasOverrides, setCategoriasOverrides] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem('categoriasOverrides') || '{}'); } catch { return {}; }
+  });
+  const [showCategoriaMenu, setShowCategoriaMenu] = useState<string | null>(null);
+
+  const gruposNomes = ['TikTok', 'Produtos Personalizados e Sublimação', 'Roupas e Moda', 'Gráfica Rápida, Impressões e Fotos', 'Acessórios e Embalagens', 'Serviços Diversos / Balcão'];
+
+  const mudarCategoria = (produtoId: string, novaCategoria: string) => {
+    setCategoriasOverrides(prev => {
+      const next = { ...prev, [produtoId]: novaCategoria };
+      localStorage.setItem('categoriasOverrides', JSON.stringify(next));
+      return next;
+    });
+    setShowCategoriaMenu(null);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = () => setShowCategoriaMenu(null);
+    if (showCategoriaMenu) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [showCategoriaMenu]);
 
   // Custos editáveis por venda (persistidos em localStorage)
   const [custosVenda, setCustosVenda] = useState<Record<string, number>>(loadCustosFromStorage);
@@ -128,10 +155,11 @@ const Relatorios = () => {
       }
     } catch {}
 
-    const [externalSales, stock, gastos] = await Promise.all([
+    const [externalSales, stock, gastos, contas] = await Promise.all([
       freshSales.length > 0 ? Promise.resolve(freshSales) : storage.getExternalSales(),
       storage.getStock(),
       apiSync.fetchGastos().catch(() => null),
+      apiSync.fetchContas().catch(() => []),
     ]);
 
     const salesToUse = externalSales.length > 0 ? externalSales : await storage.getAllOrders();
@@ -139,6 +167,7 @@ const Relatorios = () => {
     setOrders(salesToUse);
     setStockItems(stock);
     setGastosData(gastos);
+    setContasData(contas);
     setLoading(false);
   };
 
@@ -250,6 +279,15 @@ const Relatorios = () => {
     return Object.values(groups).sort((a, b) => b.dateKey.localeCompare(a.dateKey));
   }, [filteredOrders]);
 
+  const custosAutoMap = gastosData?.custosPorProduto || {};
+  const getCusto = (o: any) => {
+    if (o.id_pedido in custosVenda) return custosVenda[o.id_pedido] ?? 0;
+    const key = (o.produtoNome || '').toLowerCase().trim();
+    const custoUnit = custosAutoMap[key];
+    if (custoUnit && custoUnit > 0) return custoUnit * (o.quantidade || 1);
+    return 0;
+  };
+
   const stats = useMemo(() => {
     const prodMap = new Map<string, number>();
     const tamMap: Record<string, number> = {};
@@ -266,7 +304,7 @@ const Relatorios = () => {
       const canal = o.origem || 'Sem Origem';
       canalMap[canal] = (canalMap[canal] || 0) + (o.valorTotal || 0);
 
-      totalCustoMP += custosVenda[o.id_pedido] ?? 0;
+      totalCustoMP += getCusto(o);
     });
 
     const topProds = Array.from(prodMap.entries())
@@ -294,7 +332,7 @@ const Relatorios = () => {
 
       const datasFormatadas = Array.from(datasVendaSet).sort().join(', ');
 
-      const custoTotal = vendasDoProduto.reduce((acc, o) => acc + (custosVenda[o.id_pedido] ?? 0), 0);
+      const custoTotal = vendasDoProduto.reduce((acc, o) => acc + getCusto(o), 0);
       const custoUnitario = qtdVendida > 0 ? custoTotal / qtdVendida : 0;
       const lucro = receita - custoTotal;
       const margem = receita > 0 ? (lucro / receita) * 100 : 0;
@@ -315,11 +353,9 @@ const Relatorios = () => {
     const totalVendido = filteredOrders.reduce((acc, o) => acc + (o.valorTotal || 0), 0);
     const totalQtd = filteredOrders.reduce((acc, o) => acc + o.quantidade, 0);
 
-    // Custos operacionais estimados (baseado em dados reais quando disponível)
-    const freteEstimado = totalQtd * 8; // ~R$8 por envio
-    const comissaoEstimado = totalVendido * 0.12; // 12% marketplace
-    const campanhasEstimado = totalVendido * 0.05; // 5% marketing
-    const custosOperacionais = freteEstimado + comissaoEstimado + campanhasEstimado;
+    console.log('[Relatorios] contasData:', contasData.length, 'items:', contasData);
+    const custosOperacionais = contasData.reduce((acc: number, c: any) => acc + (c.valor || 0), 0);
+    console.log('[Relatorios] custosOperacionais:', custosOperacionais);
 
     const lucroReal = totalVendido - totalCustoMP - custosOperacionais;
 
@@ -327,9 +363,9 @@ const Relatorios = () => {
       vendasTotais: totalVendido,
       custoMP: totalCustoMP,
       custosOperacionais,
-      frete: freteEstimado,
-      comissao: comissaoEstimado,
-      campanhas: campanhasEstimado,
+      frete: 0,
+      comissao: 0,
+      campanhas: 0,
       lucroReal,
       markupMedio: totalCustoMP > 0 ? totalVendido / totalCustoMP : 0,
       topProdutos: topProds,
@@ -340,7 +376,7 @@ const Relatorios = () => {
       totalQtd,
       ticketMedio: filteredOrders.length > 0 ? totalVendido / filteredOrders.length : 0,
     };
-  }, [filteredOrders, gastosData, custosVenda]);
+  }, [filteredOrders, gastosData, custosVenda, contasData]);
 
   // Alerta de matéria-prima: projeção de esgotamento
   const alertasInsumos = useMemo(() => {
@@ -511,6 +547,179 @@ const Relatorios = () => {
         </div>
       </div>
 
+      {/* SEÇÃO: CUSTOS POR CATEGORIA */}
+      {contasData.length > 0 && (() => {
+        const catMap: Record<string, number> = {};
+        contasData.forEach((c: any) => {
+          const cat = c.categoria || c.Tipo || c.tipo || 'Sem Categoria';
+          catMap[cat] = (catMap[cat] || 0) + (c.valor || 0);
+        });
+        const catEntries = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
+        const catTotal = catEntries.reduce((a, [, v]) => a + v, 0);
+        const colors = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+
+        return (
+          <div style={{ background: 'white', padding: '1.2rem', borderRadius: '14px', marginBottom: '1.2rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', margin: '0 0 0.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Tag size={18} color="#6366f1" /> CUSTOS POR CATEGORIA
+            </h3>
+            <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '1rem' }}>
+              Total: R$ {catTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '0.7rem' }}>
+              {catEntries.map(([cat, val], i) => {
+                const pct = catTotal > 0 ? (val / catTotal) * 100 : 0;
+                const color = colors[i % colors.length];
+                return (
+                  <div key={cat} style={{ background: '#f8fafc', borderRadius: '12px', padding: '0.8rem', border: '1px solid #f1f5f9' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#334155', textTransform: 'uppercase' }}>{cat}</span>
+                      <span style={{ fontSize: '0.65rem', fontWeight: '600', color, background: `${color}15`, padding: '2px 6px', borderRadius: '4px' }}>{pct.toFixed(0)}%</span>
+                    </div>
+                    <div style={{ fontSize: '1rem', fontWeight: '800', color: '#1e293b', marginBottom: '0.4rem' }}>
+                      R$ {val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </div>
+                    <div style={{ height: '6px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: '3px', transition: 'width 0.5s ease' }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* SEÇÃO: RESUMO DE VENDAS POR GRUPO - DARK THEME */}
+      <div style={{ background: 'linear-gradient(135deg, #1a1f2e 0%, #0f1219 100%)', padding: '1.5rem', borderRadius: '16px', marginBottom: '1.2rem', border: '1px solid #2a3042', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
+        <h3 style={{ fontSize: '0.95rem', fontWeight: '800', color: '#e2e8f0', margin: '0 0 1.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <BarChart size={18} color="#6366f1" /> RESUMO DE VENDAS POR GRUPO (PRODUTO/SERVIÇO)
+        </h3>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: '0', marginBottom: '0.8rem', padding: '0 0.5rem' }}>
+          <span style={{ fontSize: '0.65rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Nome</span>
+          <span style={{ fontSize: '0.65rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center', minWidth: '80px' }}>Vendas</span>
+          <span style={{ fontSize: '0.65rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right', minWidth: '100px' }}>Valor</span>
+          <span style={{ minWidth: '30px' }}></span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+          {(() => {
+            type GrupoData = { vendas: number; valor: number; icon: string; itens: { id: string; nome: string; qtd: number; valor: number }[] };
+            const grupos: Record<string, GrupoData> = {
+              'TikTok': { vendas: 0, valor: 0, icon: '🎵', itens: [] },
+              'Produtos Personalizados e Sublimação': { vendas: 0, valor: 0, icon: '☕', itens: [] },
+              'Roupas e Moda': { vendas: 0, valor: 0, icon: '👕', itens: [] },
+              'Gráfica Rápida, Impressões e Fotos': { vendas: 0, valor: 0, icon: '🖨️', itens: [] },
+              'Acessórios e Embalagens': { vendas: 0, valor: 0, icon: '📦', itens: [] },
+              'Serviços Diversos / Balcão': { vendas: 0, valor: 0, icon: '🔧', itens: [] },
+            };
+
+            const categorizar = (id: string, nome: string, origem: string) => {
+              if (categoriasOverrides[id]) return categoriasOverrides[id];
+              const n = (nome + ' ' + origem).toLowerCase();
+              // TikTok
+              if (n.includes('tiktok') || n.includes('tik tok')) return 'TikTok';
+              // Roupas e Moda
+              if (n.includes('camiseta') || n.includes('blusa') || n.includes('moletom') || n.includes('moletinho') || n.includes('meia') || n.includes('roupa') || n.includes('moda') || n.includes('vestido') || n.includes('calça') || n.includes('calca') || n.includes('bermuda') || n.includes('conjunto') || n.includes('gorro') || n.includes('bones') || n.includes('boné') || n.includes('bota') || n.includes('sapato') || n.includes('tenis') || n.includes('tênis') || n.includes('chinelo')) return 'Roupas e Moda';
+              // Acessórios e Embalagens
+              if (n.includes('caixa') && !n.includes('personaliz')) return 'Acessórios e Embalagens';
+              if (n.includes('saco') || n.includes('embalag') || n.includes('fita') || n.includes('laço') || n.includes('laco') || n.includes('cordão') || n.includes('cordao') || n.includes('acessório') || n.includes('acessorio') || n.includes('presente') || n.includes('toalha')) return 'Acessórios e Embalagens';
+              // Produtos Personalizados e Sublimação
+              if (n.includes('caneca') || n.includes('sublima') || n.includes('personaliz') || n.includes('chaveiro') || n.includes('bombom') || n.includes('jojo') || n.includes('taça') || n.includes('taca') || n.includes('tasas') || n.includes('vinil') || n.includes('dtf') || n.includes('versiculo') || n.includes('caixinha') || n.includes('kit') || n.includes('garrafa') || n.includes('caneta')) return 'Produtos Personalizados e Sublimação';
+              // Gráfica
+              if (n.includes('grafica') || n.includes('gráfica') || n.includes('impress') || n.includes('foto') || n.includes('banner') || n.includes('lona') || n.includes('adesivo') || n.includes('etiqueta') || n.includes('cartão') || n.includes('cartao') || n.includes('flyer') || n.includes('folheto') || n.includes('card') || n.includes('plastific') || n.includes('copia') || n.includes('cópia') || n.includes('xerox') || n.includes('cherox')) return 'Gráfica Rápida, Impressões e Fotos';
+              return 'Serviços Diversos / Balcão';
+            };
+
+            filteredOrders.forEach(o => {
+              const grupo = categorizar(o.id, o.produtoNome || '', o.origem || '');
+              grupos[grupo].vendas += o.quantidade || 1;
+              grupos[grupo].valor += o.valorTotal || 0;
+              grupos[grupo].itens.push({ id: o.id, nome: o.produtoNome || 'Sem nome', qtd: o.quantidade || 1, valor: o.valorTotal || 0 });
+            });
+
+            const totalItens = Object.values(grupos).reduce((a, g) => a + g.vendas, 0);
+            const totalGeral = Object.values(grupos).reduce((a, g) => a + g.valor, 0);
+            const bgCores = ['#312e81', '#78350f', '#064e3b', '#7f1d1d', '#3b0764', '#1e3a5f'];
+
+            return (
+              <>
+                {Object.entries(grupos).map(([nome, dados], i) => {
+                  const isExpanded = !!expandedGrupos[nome];
+                  return (
+                    <div key={nome}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: '0', alignItems: 'center', padding: '0.7rem 0.8rem', background: bgCores[i] || '#1e293b', borderRadius: isExpanded ? '10px 10px 0 0' : '10px', border: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer' }} onClick={() => setExpandedGrupos(prev => ({ ...prev, [nome]: !prev[nome] }))}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                          <span style={{ fontSize: '1.1rem' }}>{dados.icon}</span>
+                          <span style={{ fontSize: '0.8rem', fontWeight: '600', color: '#e2e8f0' }}>{nome}</span>
+                        </div>
+                        <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#94a3b8', textAlign: 'center', minWidth: '80px' }}>{dados.vendas} vendas</span>
+                        <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#4ade80', textAlign: 'right', minWidth: '100px' }}>R$ {dados.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        <span style={{ minWidth: '30px', display: 'flex', justifyContent: 'center' }}>
+                          {isExpanded ? <ChevronUp size={16} color="#64748b" /> : <ChevronDown size={16} color="#64748b" />}
+                        </span>
+                      </div>
+                      {isExpanded && (
+                        <div style={{ background: '#151922', borderRadius: '0 0 10px 10px', border: '1px solid #2a3042', borderTop: 'none', padding: '0.5rem 0.8rem' }}>
+                          {dados.itens.sort((a, b) => b.valor - a.valor).map((item, idx) => (
+                            <div key={item.id} style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.45rem 0.5rem', borderBottom: idx < dados.itens.length - 1 ? '1px solid #1e2536' : 'none' }}>
+                              <span style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>{item.nome}</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>{item.qtd}x</span>
+                                <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#4ade80', minWidth: '80px', textAlign: 'right' }}>R$ {item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                <div style={{ position: 'relative' }}>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setShowCategoriaMenu(showCategoriaMenu === item.id ? null : item.id); }}
+                                    style={{ background: categoriasOverrides[item.id] ? '#4f46e5' : '#1e2536', border: '1px solid #334155', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer', fontSize: '0.6rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '2px' }}
+                                    title="Mover para outro grupo"
+                                  >
+                                    ↕ mover
+                                  </button>
+                                  {showCategoriaMenu === item.id && (
+                                    <div style={{ position: 'absolute', right: 0, top: '100%', zIndex: 100, background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '0.3rem', minWidth: '200px', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
+                                      {categoriasOverrides[item.id] && (
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); mudarCategoria(item.id, ''); }}
+                                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.6rem', fontSize: '0.7rem', color: '#fbbf24', background: 'transparent', border: 'none', borderBottom: '1px solid #334155', borderRadius: '4px 4px 0 0', cursor: 'pointer' }}
+                                        >
+                                          ↩ Resetar (automático)
+                                        </button>
+                                      )}
+                                      {gruposNomes.map(g => (
+                                        <button
+                                          key={g}
+                                          onClick={(e) => { e.stopPropagation(); mudarCategoria(item.id, g); }}
+                                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.6rem', fontSize: '0.7rem', color: categoriasOverrides[item.id] === g ? '#4ade80' : '#cbd5e1', background: categoriasOverrides[item.id] === g ? '#064e3b' : 'transparent', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                          onMouseEnter={(e) => { (e.target as HTMLElement).style.background = '#334155'; }}
+                                          onMouseLeave={(e) => { (e.target as HTMLElement).style.background = categoriasOverrides[item.id] === g ? '#064e3b' : 'transparent'; }}
+                                        >
+                                          {g}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.5rem', marginTop: '0.8rem', padding: '0.6rem 0.8rem', borderTop: '1px solid #2a3042' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748b' }}>Faturamento Geral Somado:</span>
+                  <span style={{ fontSize: '0.9rem', fontWeight: '800', color: '#4ade80' }}>R$ {totalGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  <span style={{ fontSize: '0.7rem', color: '#64748b' }}>({totalItens} itens)</span>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      </div>
+
       {/* NOVA SEÇÃO: DETALHAMENTO DE VENDAS ITEM POR ITEM / POR DIA */}
       <div style={{ background: 'white', padding: '1.2rem', borderRadius: '14px', marginBottom: '1.2rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.8rem' }}>
@@ -610,7 +819,7 @@ const Relatorios = () => {
           <div style={{ overflowX: 'auto' }}>
             {sortedOrders.length > 0 ? (() => {
               const totalFaturado = sortedOrders.reduce((acc, o) => acc + (o.valorTotal || 0), 0);
-              const totalCustos = sortedOrders.reduce((acc, o) => acc + (custosVenda[o.id_pedido] ?? 0), 0);
+              const totalCustos = sortedOrders.reduce((acc, o) => acc + getCusto(o), 0);
               const totalLucro = totalFaturado - totalCustos;
               return (
               <>
@@ -822,7 +1031,7 @@ const Relatorios = () => {
                           </thead>
                           <tbody>
                             {dayGroup.orders.map((o, idx) => {
-                              const custo = custosVenda[o.id_pedido] ?? 0;
+                    const custo = getCusto(o);
                               const lucroItem = (o.valorTotal || 0) - custo;
                               const isEditing = editingCusto === o.id_pedido;
                               return (

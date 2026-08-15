@@ -188,11 +188,10 @@ const Gastos = () => {
 
   const displayEntradas = selectedMonth ? statsPeriodo.entradas : (financeiro.totalEntradas || 0);
   const displaySaidas = selectedMonth ? statsPeriodo.saidas : (financeiro.totalSaidas || 0);
-  const displayVendas = selectedMonth ? (statsPeriodo.vendas || displayEntradas) : (financeiro.totalVendas || 0);
+  const displayVendas = selectedMonth ? (statsPeriodo.vendas || displayEntradas) : (financeiro.totalEntradas || financeiro.totalVendas || 0);
   
   const displaySaldo = selectedMonth ? (statsPeriodo.entradas - statsPeriodo.saidas) : (financeiro.saldoReal || 0);
   const displayCustos = selectedMonth ? statsPeriodo.negocio : (financeiro.totalCustos || 0);
-  const displayLucro = displaySaldo - displayCustos;
 
   const mesesDisponiveis = Array.from(new Set([
     ...(financeiro.caixa || []).map(i => getMonthKey(i.data)),
@@ -254,7 +253,7 @@ const Gastos = () => {
 
         {/* Dash principal (Vendas, Saldo, Lucro) */}
         <div style={{ position: 'relative', zIndex: 1 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.1fr', gap: '0.8rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
             <div>
               <div style={{ fontSize: '0.75rem', opacity: 0.85, marginBottom: '0.2rem' }}>🛒 {selectedMonth ? 'Vendas (Mês)' : 'Vendas'}</div>
               <div style={{ fontSize: '1.4rem', fontWeight: '800' }}>
@@ -263,12 +262,6 @@ const Gastos = () => {
             </div>
             <div style={{ borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '0.8rem' }}>
               <div style={{ fontSize: '0.75rem', opacity: 0.85, marginBottom: '0.2rem' }}>💰 {selectedMonth ? 'Saldo (Mês)' : 'Saldo de Caixa'}</div>
-              <div style={{ fontSize: '1.4rem', fontWeight: '800' }}>
-                R$ {(selectedMonth ? (statsPeriodo.entradas - statsPeriodo.saidas) : (financeiro.saldoReal || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </div>
-            </div>
-            <div style={{ borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '0.8rem' }}>
-              <div style={{ fontSize: '0.75rem', opacity: 0.85, marginBottom: '0.2rem' }}>💰 {selectedMonth ? 'Saldo (Mês)' : 'Saldo'}</div>
               <div style={{ fontSize: '1.4rem', fontWeight: '800' }}>
                 R$ {displaySaldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </div>
