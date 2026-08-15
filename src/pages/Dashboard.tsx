@@ -52,6 +52,15 @@ const Dashboard = () => {
       console.warn('Não foi possível sincronizar vendas:', e);
     }
 
+    try {
+      const pedidosData = await apiSync.fetchPedidos();
+      if (pedidosData && pedidosData.length > 0) {
+        await storage.syncExternalOrders(pedidosData);
+      }
+    } catch (e) {
+      console.warn('Não foi possível sincronizar pedidos:', e);
+    }
+
     let financeiro: { totalCustos: number; totalVendas: number; lucroBruto: number; totalNegocio: number; totalPessoal: number; totalCustoMercadoria?: number; totalDespesasOperacionais?: number; totalOutrosGastos?: number } = { totalCustos: 0, totalVendas: 0, lucroBruto: 0, totalNegocio: 0, totalPessoal: 0 };
     let caixa = { summary: { entrada: 0, saida: 0, saldo: 0 } };
     let contas: any[] = [];
@@ -112,8 +121,18 @@ const Dashboard = () => {
     });
     if (vencendoHoje.length > 0) novosAlertas.push(`Você tem ${vencendoHoje.length} conta(s) a pagar vencendo hoje!`);
 
-    const totalPedidosAtivosSoma = activeSales.reduce((acc: number, o: any) => acc + (Number(o.valorTotal) || 0), 0);
-    const totalVendasExibir = totalPedidosAtivosSoma;
+    const pedidosLocal = orders.filter(o => !String(o.id_pedido).startsWith('venda-row-'));
+    const vendasExterna = orders.filter(o => String(o.id_pedido).startsWith('venda-row-'));
+    const somaPedidosLocal = pedidosLocal.reduce((acc: number, o: any) => acc + (Number(o.valorTotal) || 0), 0);
+    const somaVendasExterna = vendasExterna.reduce((acc: number, o: any) => acc + (Number(o.valorTotal) || 0), 0);
+    const somaVendasColH = vendasExterna.reduce((acc: number, o: any) => acc + (Number(o.valorTotal) || 0), 0);
+    const somaPedidosColN = vendasExterna.reduce((acc: number, o: any) => acc + (Number(o.pedidoValue) || 0), 0);
+    const totalVendasExibir = somaVendasColH;
+
+    console.log('[Dashboard] orders total:', orders.length, '| activeSales:', activeSales.length);
+    console.log('[Dashboard] vendasColH:', somaVendasColH, '| pedidosColN:', somaPedidosColN);
+    console.log('[Dashboard] financeiro from gastos:', financeiro);
+    console.log('[Dashboard] caixa:', caixa.summary);
 
     let totalCustosFinal = financeiro.totalCustos;
     if (caixa.summary.saida > totalCustosFinal) totalCustosFinal = caixa.summary.saida;
@@ -126,7 +145,7 @@ const Dashboard = () => {
     }
 
     setMetrics({
-      totalVendas: totalPedidosAtivosSoma,
+      totalVendas: totalVendasExibir,
       totalPedidos: orders.length,
       emProducao: emProducaoCount,
       prontos: orders.filter(o => String(o.status) === OrderStatus.PRONTA || String(o.status) === 'Camiseta pronta').length,
@@ -232,7 +251,7 @@ const Dashboard = () => {
               R$ {(metrics.totalVendasFinanceiro || metrics.totalVendas).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div style={{ fontSize: '0.8rem', opacity: 0.8, fontWeight: '400' }}>
-              Total de vendas • {metrics.totalPedidos} pedidos
+              Soma de Pedidos e Vendas • {metrics.totalPedidos} pedidos
             </div>
           </div>
 

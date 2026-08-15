@@ -42,6 +42,7 @@ const Checkout = () => {
   const [allClients, setAllClients] = useState<{ nome: string; whatsapp: string; cidade?: string }[]>([]);
   const [recentSales, setRecentSales] = useState<Order[]>([]);
   const [saleSyncStatus, setSaleSyncStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
+  const [dataPrevista, setDataPrevista] = useState('');
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const clientDropdownRef = useRef<HTMLDivElement | null>(null);
 
@@ -258,8 +259,11 @@ const Checkout = () => {
     try {
       const saleDate = vendaRetroativa ? new Date(dataManual) : new Date();
       const isMarketplace = ['Shopee', 'TikTok', 'Temu', 'Mercado Livre', 'Facebook'].includes(saleOrigin);
-      const forecastDate = new Date(saleDate);
-      forecastDate.setDate(forecastDate.getDate() + (isMarketplace ? 10 : 1));
+      const forecastDate = dataPrevista ? new Date(dataPrevista) : (() => {
+        const d = new Date(saleDate);
+        d.setDate(d.getDate() + (isMarketplace ? 10 : 1));
+        return d;
+      })();
 
       for (const item of cart) {
         const semEstoque = permitirSemEstoque && item.estoque <= 0;
@@ -292,8 +296,8 @@ const Checkout = () => {
         await storage.addOrder(orderData);
       }
 
-      const salePayload = {
-        action: "nova_venda", data: saleDate.toISOString(), previsao_recebimento: forecastDate.toISOString(),
+      const salePayload: Record<string, any> = {
+        action: "nova_venda", data: saleDate.toISOString(),
         cliente: customerName || 'Venda Balcão', telefone: customerPhone || '',
         origem_venda: saleOrigin, metodo_pagamento: paymentMethod,
         itens: cart.map(i => ({ produto: i.produto, tamanho: i.tamanho, cor: i.cor, quantidade: i.quantity, preco_unitario: i.preco || 35, ID: `${i.produto}-${i.tamanho}`, descricao: i.descricao || '' })),
@@ -301,6 +305,9 @@ const Checkout = () => {
         total_liquido: totalComDesconto, observacoes: `Desc: ${discountType === '%' ? discount + '%' : 'R$ ' + discount}`,
         descricao_produto: cart.map(i => i.descricao || '').filter(Boolean).join(' | ') || ''
       };
+      if (dataPrevista) {
+        salePayload.previsao_recebimento = new Date(dataPrevista).toISOString();
+      }
 
       setSaleSyncStatus('sending');
       let sheetsError = '';
@@ -331,7 +338,7 @@ const Checkout = () => {
         alert('✅ Venda finalizada e enviada para Sheets!');
       }
       setCart([]); setCustomerName(''); setCustomerPhone(''); setDiscount(0); setDiscountType('%');
-      setPaymentMethod('Pix'); setSaleOrigin('Físico'); setVendaRetroativa(false); setPermitirSemEstoque(false); setDescricaoProduto(''); setPrecoCustomizado(''); setQuantidadeCustomizada(''); setNomeProdutoManual('');
+      setPaymentMethod('Pix'); setSaleOrigin('Físico'); setVendaRetroativa(false); setPermitirSemEstoque(false); setDescricaoProduto(''); setPrecoCustomizado(''); setQuantidadeCustomizada(''); setNomeProdutoManual(''); setDataPrevista('');
       setDataManual(new Date().toISOString().split('T')[0]);
       loadData();
     } catch (e: any) {
@@ -678,6 +685,17 @@ const Checkout = () => {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Data Prevista de Recebimento */}
+            <div className="checkout-panel-section">
+              <label className="checkout-label">📅 DATA PREVISTA DE RECEBIMENTO (opcional)</label>
+              <input
+                type="date"
+                value={dataPrevista}
+                onChange={(e) => setDataPrevista(e.target.value)}
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem', fontWeight: '600', outline: 'none' }}
+              />
             </div>
 
             {/* Resumo */}

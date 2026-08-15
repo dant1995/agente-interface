@@ -96,6 +96,7 @@ export interface Order {
   dataRevisao?: string;
   dataPronta?: string;
   previsaoRecebimento?: string; // New field for sales forecast
+  pedidoValue?: number; // Coluna N da planilha
   observacoes?: string;
   descricaoProduto?: string;
   metodoPagamento?: 'Pix' | 'Dinheiro' | 'Cartão';

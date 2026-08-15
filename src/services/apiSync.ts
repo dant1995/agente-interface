@@ -92,6 +92,27 @@ const getValueByKeywords = (item: any, keywords: string[]) => {
   return null;
 };
 
+const getColumnValueByLetter = (item: any, letter: string): any => {
+  const entries = Object.entries(item);
+  const upperLetter = letter.toUpperCase();
+  const lowerLetter = letter.toLowerCase();
+  const columnIndex = upperLetter.charCodeAt(0) - 64;
+
+  const candidates = [
+    `col_${upperLetter}`, `col_${lowerLetter}`, upperLetter, lowerLetter,
+    `col_${columnIndex}`, String(columnIndex),
+  ];
+
+  for (const k of candidates) {
+    if (item[k] !== undefined && item[k] !== null) return item[k];
+  }
+
+  const entriesByIndex = entries[columnIndex - 1];
+  if (entriesByIndex) return entriesByIndex[1];
+
+  return null;
+};
+
 
 
 const sendWebhook = async (url: string, data: any) => {
@@ -962,7 +983,7 @@ export const apiSync = {
         return true;
       });
 
-      return validItems.map((item: any, index: number) => {
+      const mapped = validItems.map((item: any, index: number) => {
         const baseDate = extractDateFromItem(item) || new Date();
         const forecastDate = new Date(baseDate);
         forecastDate.setDate(forecastDate.getDate() + 10);
@@ -975,11 +996,10 @@ export const apiSync = {
         
         if (index < 5) console.log('[fetchVendas] Item', index, '| Custo direct:', item['Custo'], '| custoRaw:', custoRaw, '| parsed:', custoPlanilha);
         
-        // Prioriza o valor com desconto, se não houver, usa o preço unitário * quantidade
-        const comDesconto = parseReal(getValueByKeywords(item, ['total com desconto', 'COM DESCONTO', 'TOTAL', 'TOTAL PAGO', 'VALOR PAGO', 'PAGO', 'VALOR TOTAL', 'PRECO TOTAL', 'PREÇO TOTAL', 'VALOR FINAL', 'TOTAL VENDA', 'VALOR VENDA TOTAL', 'PRECO FINAL', 'PREÇO FINAL']));
-        const previsaoRecebimento = parseReal(getValueByKeywords(item, ['previsao de recebimento', 'PREVISAO DE RECEBIMENTO']));
-        
-        const finalValue = comDesconto > 0 ? comDesconto : (precoVenda * qtdVenda > 0 ? precoVenda * qtdVenda : previsaoRecebimento);
+        const finalValue = parseReal(getColumnValueByLetter(item, 'H'));
+        const pedidoValue = parseReal(getColumnValueByLetter(item, 'N'));
+
+        if (index < 5) console.log('[fetchVendas] Item', index, '| ColH:', getColumnValueByLetter(item, 'H'), '| finalValue:', finalValue, '| ColN:', getColumnValueByLetter(item, 'N'), '| pedidoValue:', pedidoValue);
 
         const realProdName = String(
           getValueByKeywords(item, ['produto', 'PRODUTO', 'DESCRICAO', 'DESC', 'ITEM']) ||
@@ -1002,6 +1022,7 @@ export const apiSync = {
           preco: precoVenda || (finalValue > 0 && qtdVenda > 0 ? finalValue / qtdVenda : 0),
           custo: custoPlanilha || 0,
           lucro: finalValue - ((custoPlanilha || 0) * qtdVenda),
+          pedidoValue: pedidoValue,
           codigo_barra: item.ID || item.codigo_barra || item.codigo_barras || '',
           pago: true,
           entregue: true,
@@ -1017,6 +1038,10 @@ export const apiSync = {
           })()
         };
       });
+
+      const totalMapped = mapped.reduce((acc: number, o: any) => acc + (Number(o.valorTotal) || 0), 0);
+      console.log('[fetchVendas] totalMapped:', totalMapped, '| count:', mapped.length);
+      return mapped;
     } catch (error) {
       console.error('Erro buscando vendas:', error);
       return [];

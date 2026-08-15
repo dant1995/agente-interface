@@ -286,7 +286,6 @@ const Relatorios = () => {
     return Object.values(groups).sort((a, b) => b.dateKey.localeCompare(a.dateKey));
   }, [filteredOrders]);
 
-  const custosAutoMap = gastosData?.custosPorProduto || {};
   const getCusto = (o: any) => {
     if (o.id_pedido in custosVenda) return custosVenda[o.id_pedido] ?? 0;
     if (o.custo && o.custo > 0) return o.custo * (o.quantidade || 1);

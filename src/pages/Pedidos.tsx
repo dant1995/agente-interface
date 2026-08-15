@@ -36,6 +36,7 @@ const Pedidos = () => {
 
   useEffect(() => {
     loadOrders();
+    syncFromN8N();
   }, []);
 
   // Quando o filtro mudar para Entregue, carrega da planilha Entrega
@@ -49,6 +50,18 @@ const Pedidos = () => {
     const data = await storage.getOrders();
     // Mantém todos os pedidos da planilha principal (incluindo entregues se estiverem lá)
     setOrders(data);
+  };
+
+  const syncFromN8N = async () => {
+    try {
+      const data = await apiSync.fetchPedidos();
+      if (data && data.length > 0) {
+        const updatedOrders = await storage.syncExternalOrders(data);
+        setOrders(updatedOrders);
+      }
+    } catch {
+      // Silently fail on auto-sync
+    }
   };
 
   const carregarEntregas = async () => {
