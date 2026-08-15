@@ -510,52 +510,78 @@ const Gastos = () => {
             <p>Sincronizando dados...</p>
           </div>
         ) : activeTab === 'caixa' ? (
-          // LISTA DO FLUXO DE CAIXA
+          // LISTA DO FLUXO DE CAIXA — AGRUPADO POR DIA
           caixaFiltrado.length === 0 ? (
             <div style={{ padding: '3rem', textAlign: 'center', color: '#bbb' }}>
               <div style={{ fontSize: '2.5rem', marginBottom: '0.8rem' }}>📜</div>
               <p>Nenhuma movimentação encontrada</p>
             </div>
           ) : (
-            caixaFiltrado.filter(i => {
-              if (!searchTerm) return true;
-              return i.categoria?.toLowerCase().includes(searchTerm.toLowerCase());
-            }).map((item, idx) => (
-              <div 
-                key={idx} 
-                onClick={() => setSearchTerm(item.categoria)}
-                style={{
-                  background: 'white', borderRadius: '8px', padding: '0.8rem 1rem',
-                  marginBottom: '0.5rem', boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  borderLeft: `4px solid ${item.entrada > 0 ? '#10B981' : '#EF4444'}`,
-                  cursor: 'pointer',
-                  transition: 'opacity 0.2s'
-                }}
-              >
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.85rem', fontWeight: '500', color: '#333', marginBottom: '0.15rem' }}>
-                    {item.descricao || item.categoria || 'Sem descrição'}
-                  </div>
-                  {item.descricao && item.categoria && (
-                    <div style={{ fontSize: '0.72rem', color: '#888', marginBottom: '0.15rem' }}>
-                      {item.categoria}
+            (() => {
+              const filtered = caixaFiltrado.filter(i => {
+                if (!searchTerm) return true;
+                return i.categoria?.toLowerCase().includes(searchTerm.toLowerCase()) || i.descricao?.toLowerCase().includes(searchTerm.toLowerCase());
+              });
+
+              const grouped: Record<string, { items: typeof filtered; totalEntrada: number; totalSaida: number }> = {};
+              filtered.forEach(item => {
+                const day = item.data || 'Sem data';
+                if (!grouped[day]) grouped[day] = { items: [], totalEntrada: 0, totalSaida: 0 };
+                grouped[day].items.push(item);
+                grouped[day].totalEntrada += item.entrada || 0;
+                grouped[day].totalSaida += item.saida || 0;
+              });
+
+              const sortedDays = Object.keys(grouped).sort((a, b) => parseToSortableDate(b) - parseToSortableDate(a));
+
+              return sortedDays.map(day => {
+                const group = grouped[day];
+                const saldoDia = group.totalEntrada - group.totalSaida;
+                return (
+                  <div key={day} style={{ marginBottom: '1rem' }}>
+                    <div style={{
+                      background: '#f8fafc', borderRadius: '8px', padding: '0.5rem 1rem',
+                      marginBottom: '0.4rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      borderLeft: '3px solid #6366f1',
+                    }}>
+                      <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#334155' }}>📅 {day}</span>
+                      <span style={{ fontSize: '0.78rem', fontWeight: '700', color: saldoDia >= 0 ? '#059669' : '#DC2626' }}>
+                        Saldo: {saldoDia >= 0 ? '+' : '-'} R$ {Math.abs(saldoDia).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
                     </div>
-                  )}
-                  <div style={{ fontSize: '0.7rem', color: '#999', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    📅 {item.data}
-                    <span style={{ fontSize: '0.6rem', background: '#f0f0f0', padding: '0.1rem 0.3rem', borderRadius: '4px' }}>clique para filtrar</span>
+                    {group.items.map((item, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => setSearchTerm(item.categoria)}
+                        style={{
+                          background: 'white', borderRadius: '8px', padding: '0.7rem 1rem',
+                          marginBottom: '0.3rem', marginLeft: '0.5rem', boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          borderLeft: `4px solid ${item.entrada > 0 ? '#10B981' : '#EF4444'}`,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '0.82rem', fontWeight: '500', color: '#333', marginBottom: '0.1rem' }}>
+                            {item.descricao || item.categoria || 'Sem descrição'}
+                          </div>
+                          {item.descricao && item.categoria && (
+                            <div style={{ fontSize: '0.68rem', color: '#888' }}>{item.categoria}</div>
+                          )}
+                        </div>
+                        <div style={{
+                          fontSize: '0.9rem', fontWeight: '600',
+                          color: item.entrada > 0 ? '#059669' : '#DC2626',
+                          whiteSpace: 'nowrap', marginLeft: '0.8rem',
+                        }}>
+                          {item.entrada > 0 ? '+' : '-'} R$ {(item.entrada || item.saida || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
-                <div style={{
-                  fontSize: '0.95rem', fontWeight: '600', 
-                  color: item.entrada > 0 ? '#059669' : '#DC2626',
-                  whiteSpace: 'nowrap', marginLeft: '0.8rem',
-                }}>
-                  {item.entrada > 0 ? '+' : '-'} R$ {(item.entrada || item.saida || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </div>
-              </div>
-            ))
+                );
+              });
+            })()
           )
         ) : (
           // LISTA DE DESPESAS (Geral)
