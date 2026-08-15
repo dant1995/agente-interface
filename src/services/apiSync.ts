@@ -810,7 +810,8 @@ export const apiSync = {
 
       const mapped = items.map(item => ({
         data: item['Data'] || item.data || '',
-        descricao: item['Descrição'] || item['Descricao'] || item.descricao || '',
+        descricao: item['Descriçao'] || item['Descrição'] || item['Descricao'] || item.descricao || '',
+        categoria: item['Categoria'] || item.categoria || item['Tipo'] || item.tipo || 'Negocio',
         valor: parseReal(item['Valor'] || item.valor),
         total: parseReal(item['H'] || item['Total'] || item['total'] || item.col_8),
         tipo: (item['Tipo'] || item.tipo || '').toLowerCase(),
