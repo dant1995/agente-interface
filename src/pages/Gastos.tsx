@@ -20,6 +20,15 @@ const Gastos = () => {
   const [selectedMonth, setSelectedMonth] = useState<string>(''); // Formato: "MM/YYYY"
   const [typeFilter, setTypeFilter] = useState<'all' | 'entrada' | 'saida'>('all');
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'Negócio' | 'Pessoal' | 'Outros Gastos'>('all');
+  const [showModalDespesa, setShowModalDespesa] = useState(false);
+  const [savingDespesa, setSavingDespesa] = useState(false);
+  const [formDespesa, setFormDespesa] = useState({
+    data: new Date().toISOString().split('T')[0],
+    descricao: '',
+    valor: '',
+    categoria: 'Negócio' as 'Negócio' | 'Pessoal' | 'Outros Gastos',
+    metodoPagamento: 'Pix' as 'Pix' | 'Dinheiro' | 'Cartão',
+  });
 
   useEffect(() => {
     syncGastos();
@@ -96,6 +105,40 @@ const Gastos = () => {
       console.error('Erro ao sincronizar gastos:', e);
     }
     setSyncing(false);
+  };
+
+  const handleSalvarDespesa = async () => {
+    if (!formDespesa.descricao.trim() || !formDespesa.valor || Number(formDespesa.valor) <= 0) return;
+    setSavingDespesa(true);
+    try {
+      const [ano, mes, dia] = formDespesa.data.split('-');
+      const dataISO = new Date(`${ano}-${mes}-${dia}T12:00:00`).toISOString();
+      const payload = {
+        action: 'new_despesa',
+        data: dataISO,
+        descricao: formDespesa.descricao.trim(),
+        categoria: formDespesa.categoria,
+        entrada: 0,
+        saida: Number(formDespesa.valor),
+        metodo_pagamento: formDespesa.metodoPagamento,
+      };
+      console.log('[Despesa] Enviando payload:', payload);
+      const result = await apiSync.enviarDespesa(payload);
+      console.log('[Despesa] Resultado webhook:', result);
+      setShowModalDespesa(false);
+      setFormDespesa({
+        data: new Date().toISOString().split('T')[0],
+        descricao: '',
+        valor: '',
+        categoria: 'Negócio',
+        metodoPagamento: 'Pix',
+      });
+      await syncGastos();
+    } catch (e: any) {
+      console.error('[Despesa] Erro ao salvar:', e?.message || e);
+      alert(`Erro ao salvar despesa:\n${e?.message || 'Verifique o console para detalhes'}`);
+    }
+    setSavingDespesa(false);
   };
 
   // 1. Filtrar e ORDENAR Itens do Caixa por Mês e por Tipo (Entrada/Saída)
@@ -568,6 +611,152 @@ const Gastos = () => {
           })
         )}
       </div>
+
+      {/* Botão Flutuante Nova Despesa */}
+      <button
+        onClick={() => setShowModalDespesa(true)}
+        style={{
+          position: 'fixed', bottom: '24px', right: '24px',
+          width: '56px', height: '56px', borderRadius: '50%',
+          background: 'linear-gradient(135deg, #EF4444, #DC2626)',
+          color: 'white', border: 'none', fontSize: '1.8rem',
+          boxShadow: '0 4px 16px rgba(220,38,38,0.4)',
+          cursor: 'pointer', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', zIndex: 100,
+          transition: 'transform 0.2s',
+        }}
+      >
+        +
+      </button>
+
+      {/* Modal Nova Despesa */}
+      {showModalDespesa && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+            zIndex: 200,
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowModalDespesa(false); }}
+        >
+          <div style={{
+            background: 'white', borderRadius: '16px 16px 0 0',
+            width: '100%', maxWidth: '480px', padding: '1.5rem',
+            maxHeight: '85vh', overflowY: 'auto',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
+              <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: '#333' }}>💸 Nova Despesa</h2>
+              <button
+                onClick={() => setShowModalDespesa(false)}
+                style={{ background: '#f3f4f6', border: 'none', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', fontSize: '1rem', color: '#666' }}
+              >✕</button>
+            </div>
+
+            {/* Data */}
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ fontSize: '0.78rem', fontWeight: '600', color: '#555', display: 'block', marginBottom: '0.3rem' }}>Data</label>
+              <input
+                type="date"
+                value={formDespesa.data}
+                onChange={(e) => setFormDespesa({ ...formDespesa, data: e.target.value })}
+                style={{
+                  width: '100%', padding: '0.65rem', border: '1px solid #ddd',
+                  borderRadius: '8px', fontSize: '0.9rem', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            {/* Descrição */}
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ fontSize: '0.78rem', fontWeight: '600', color: '#555', display: 'block', marginBottom: '0.3rem' }}>Descrição</label>
+              <input
+                type="text"
+                placeholder="Ex: Aluguel, Fornecedor, Material..."
+                value={formDespesa.descricao}
+                onChange={(e) => setFormDespesa({ ...formDespesa, descricao: e.target.value })}
+                style={{
+                  width: '100%', padding: '0.65rem', border: '1px solid #ddd',
+                  borderRadius: '8px', fontSize: '0.9rem', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            {/* Valor */}
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ fontSize: '0.78rem', fontWeight: '600', color: '#555', display: 'block', marginBottom: '0.3rem' }}>Valor (R$)</label>
+              <input
+                type="number"
+                placeholder="0,00"
+                min="0"
+                step="0.01"
+                value={formDespesa.valor}
+                onChange={(e) => setFormDespesa({ ...formDespesa, valor: e.target.value })}
+                style={{
+                  width: '100%', padding: '0.65rem', border: '1px solid #ddd',
+                  borderRadius: '8px', fontSize: '0.9rem', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            {/* Categoria */}
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ fontSize: '0.78rem', fontWeight: '600', color: '#555', display: 'block', marginBottom: '0.3rem' }}>Categoria</label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {(['Negócio', 'Pessoal', 'Outros Gastos'] as const).map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setFormDespesa({ ...formDespesa, categoria: cat })}
+                    style={{
+                      flex: 1, padding: '0.55rem', borderRadius: '8px', border: 'none',
+                      background: formDespesa.categoria === cat
+                        ? cat === 'Negócio' ? '#EF4444' : cat === 'Pessoal' ? '#F59E0B' : '#8B5CF6'
+                        : '#f3f4f6',
+                      color: formDespesa.categoria === cat ? 'white' : '#666',
+                      fontWeight: '600', fontSize: '0.78rem', cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                  >{cat}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Método de Pagamento */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ fontSize: '0.78rem', fontWeight: '600', color: '#555', display: 'block', marginBottom: '0.3rem' }}>Método de Pagamento</label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {(['Pix', 'Dinheiro', 'Cartão'] as const).map(met => (
+                  <button
+                    key={met}
+                    onClick={() => setFormDespesa({ ...formDespesa, metodoPagamento: met })}
+                    style={{
+                      flex: 1, padding: '0.55rem', borderRadius: '8px', border: 'none',
+                      background: formDespesa.metodoPagamento === met ? '#3b82f6' : '#f3f4f6',
+                      color: formDespesa.metodoPagamento === met ? 'white' : '#666',
+                      fontWeight: '600', fontSize: '0.78rem', cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                  >{met}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Botão Salvar */}
+            <button
+              onClick={handleSalvarDespesa}
+              disabled={savingDespesa || !formDespesa.descricao.trim() || !formDespesa.valor || Number(formDespesa.valor) <= 0}
+              style={{
+                width: '100%', padding: '0.85rem', borderRadius: '10px', border: 'none',
+                background: savingDespesa ? '#9ca3af' : '#EF4444',
+                color: 'white', fontWeight: '700', fontSize: '0.95rem',
+                cursor: savingDespesa ? 'not-allowed' : 'pointer',
+                transition: 'background 0.2s',
+              }}
+            >
+              {savingDespesa ? 'Salvando...' : 'Salvar Despesa'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

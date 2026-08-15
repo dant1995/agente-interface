@@ -291,6 +291,10 @@ export const apiSync = {
     return sendWebhook(N8N_WEBHOOK_URLS.NEW_SALE, { action: 'new_sale', ...sale });
   },
 
+  enviarDespesa: async (despesa: any) => {
+    return sendWebhook(N8N_WEBHOOK_URLS.NEW_SALE, { action: 'new_despesa', ...despesa });
+  },
+
   notifyCaixa: async (data: any) => {
     return sendWebhook(`${BASE_URL}/webhook/caixa`, { action: 'nova_entrada', ...data });
   },
