@@ -549,24 +549,28 @@ const Relatorios = () => {
 
       {/* SEÇÃO: CUSTOS POR CATEGORIA - DARK THEME */}
       {contasData.length > 0 && (() => {
-        const itemMap: Record<string, { valor: number; categoria: string }> = {};
+        const catMap: Record<string, { valor: number; itens: string[] }> = {};
         contasData.forEach((c: any) => {
           const nome = (c.descricao || c.Descrição || c['Descriçao'] || c.Item || 'Sem Nome').trim();
-          const cat = c.categoria || c.Tipo || c.tipo || 'Outros';
-          if (!itemMap[nome]) itemMap[nome] = { valor: 0, categoria: cat };
-          itemMap[nome].valor += c.valor || 0;
+          const catDetect = (() => {
+            const n = (nome + ' ' + (c.categoria || '')).toLowerCase();
+            if (n.includes('aluguel') || n.includes('luz') || n.includes('agua') || n.includes('água') || n.includes('internet') || n.includes('energia') || n.includes('espaço') || n.includes('espaco') || n.includes('ponto')) return 'Infraestrutura & Espaço Físico';
+            if (n.includes('emprest') || n.includes('parcel') || n.includes('divida') || n.includes('dívida') || n.includes('nubank') || n.includes('financ') || n.includes('saldo')) return 'Financeiro & Amortizações';
+            if (n.includes('host') || n.includes('vps') || n.includes('software') || n.includes('sistem') || n.includes('dominio') || n.includes('servidor')) return 'Tecnologia & Sistemas';
+            return 'Outros';
+          })();
+          if (!catMap[catDetect]) catMap[catDetect] = { valor: 0, itens: [] };
+          catMap[catDetect].valor += c.valor || 0;
+          if (!catMap[catDetect].itens.includes(nome)) catMap[catDetect].itens.push(nome);
         });
-        const itemEntries = Object.entries(itemMap).sort((a, b) => b[1].valor - a[1].valor);
-        const totalOperacional = itemEntries.reduce((a, [, v]) => a + v.valor, 0);
+        const catEntries = Object.entries(catMap).sort((a, b) => b[1].valor - a[1].valor);
+        const totalOperacional = catEntries.reduce((a, [, v]) => a + v.valor, 0);
 
-        const getCor = (nome: string, cat: string) => {
-          const n = (nome + ' ' + cat).toLowerCase();
-          if (n.includes('aluguel') || n.includes('espaço') || n.includes('espaco') || n.includes('ponto')) return { bar: '#a78bfa', bg: 'rgba(167,139,250,0.12)', text: '#c4b5fd', label: 'Infraestrutura' };
-          if (n.includes('emprest') || n.includes('parcel') || n.includes('divida') || n.includes('dívida') || n.includes('nubank') || n.includes('financ')) return { bar: '#fb923c', bg: 'rgba(251,146,60,0.12)', text: '#fdba74', label: 'Financeiro' };
-          if (n.includes('host') || n.includes('vps') || n.includes('software') || n.includes('sistem') || n.includes('dominio')) return { bar: '#60a5fa', bg: 'rgba(96,165,250,0.12)', text: '#93c5fd', label: 'Tecnologia' };
-          if (n.includes('luz') || n.includes('agua') || n.includes('água') || n.includes('internet') || n.includes('energia')) return { bar: '#34d399', bg: 'rgba(52,211,153,0.12)', text: '#6ee7b7', label: 'Infraestrutura' };
-          if (n.includes('marketing') || n.includes('publicidade') || n.includes('anúncio')) return { bar: '#f472b6', bg: 'rgba(244,114,182,0.12)', text: '#f9a8d4', label: 'Marketing' };
-          return { bar: '#6366f1', bg: 'rgba(99,102,241,0.12)', text: '#a5b4fc', label: cat };
+        const catCores: Record<string, { bar: string; bg: string; text: string; icon: string }> = {
+          'Infraestrutura & Espaço Físico': { bar: '#a78bfa', bg: 'rgba(167,139,250,0.12)', text: '#c4b5fd', icon: '🏢' },
+          'Financeiro & Amortizações': { bar: '#fb923c', bg: 'rgba(251,146,60,0.12)', text: '#fdba74', icon: '💰' },
+          'Tecnologia & Sistemas': { bar: '#60a5fa', bg: 'rgba(96,165,250,0.12)', text: '#93c5fd', icon: '💻' },
+          'Outros': { bar: '#6366f1', bg: 'rgba(99,102,241,0.12)', text: '#a5b4fc', icon: '📋' },
         };
 
         return (
@@ -581,23 +585,28 @@ const Relatorios = () => {
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginTop: '1.2rem' }}>
-              {itemEntries.map(([nome, dados]) => {
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem', marginTop: '1.2rem' }}>
+              {catEntries.map(([cat, dados]) => {
                 const pct = totalOperacional > 0 ? (dados.valor / totalOperacional) * 100 : 0;
-                const cor = getCor(nome, dados.categoria);
+                const cor = catCores[cat] || catCores['Outros'];
                 return (
-                  <div key={nome} style={{ background: '#151922', borderRadius: '10px', padding: '0.8rem 1rem', border: '1px solid #1e2536' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#e2e8f0' }}>{nome}</span>
-                        <span style={{ fontSize: '0.55rem', fontWeight: '600', color: cor.text, background: cor.bg, padding: '1px 6px', borderRadius: '8px' }}>{cor.label}</span>
+                  <div key={cat} style={{ background: '#151922', borderRadius: '12px', padding: '1rem 1.1rem', border: '1px solid #1e2536' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.6rem' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                          <span style={{ fontSize: '1rem' }}>{cor.icon}</span>
+                          <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#e2e8f0' }}>{cat}</span>
+                        </div>
+                        <div style={{ fontSize: '0.62rem', color: '#64748b', lineHeight: '1.4', paddingLeft: '1.5rem' }}>
+                          {dados.itens.join(' • ')}
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.6rem' }}>
-                        <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#f8fafc' }}>R$ {dados.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                        <span style={{ fontSize: '0.65rem', fontWeight: '600', color: cor.text }}>{pct.toFixed(1)}%</span>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#f8fafc' }}>R$ {dados.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        <div style={{ fontSize: '0.65rem', fontWeight: '600', color: cor.text, background: cor.bg, padding: '2px 8px', borderRadius: '10px', display: 'inline-block', marginTop: '2px' }}>{pct.toFixed(1)}%</div>
                       </div>
                     </div>
-                    <div style={{ height: '5px', background: '#1e2536', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ height: '6px', background: '#1e2536', borderRadius: '3px', overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${pct}%`, background: `linear-gradient(90deg, ${cor.bar}, ${cor.bar}88)`, borderRadius: '3px', transition: 'width 0.8s ease' }} />
                     </div>
                   </div>
