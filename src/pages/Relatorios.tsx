@@ -4,7 +4,7 @@ import { apiSync } from '../services/apiSync';
 import type { Order } from '../types';
 import {
   BarChart, TrendingUp, DollarSign, Package, PieChart, Calendar, AlertTriangle, Truck, ShoppingBag,
-  Search, List, ChevronDown, ChevronUp, Clock, Edit3, CheckCircle, Tag
+  Search, List, ChevronDown, ChevronUp, Clock, Edit3, CheckCircle, Tag, Info
 } from 'lucide-react';
 
 const CUSTOS_KEY = 'relatorio_custos_por_venda';
@@ -547,45 +547,69 @@ const Relatorios = () => {
         </div>
       </div>
 
-      {/* SEÇÃO: CUSTOS POR CATEGORIA */}
+      {/* SEÇÃO: CUSTOS POR CATEGORIA - DARK THEME */}
       {contasData.length > 0 && (() => {
-        const catMap: Record<string, number> = {};
+        const itemMap: Record<string, { valor: number; categoria: string }> = {};
         contasData.forEach((c: any) => {
-          const cat = c.categoria || c.Tipo || c.tipo || 'Sem Categoria';
-          catMap[cat] = (catMap[cat] || 0) + (c.valor || 0);
+          const nome = (c.descricao || c.Descrição || c['Descriçao'] || c.Item || 'Sem Nome').trim();
+          const cat = c.categoria || c.Tipo || c.tipo || 'Outros';
+          if (!itemMap[nome]) itemMap[nome] = { valor: 0, categoria: cat };
+          itemMap[nome].valor += c.valor || 0;
         });
-        const catEntries = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
-        const catTotal = catEntries.reduce((a, [, v]) => a + v, 0);
-        const colors = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+        const itemEntries = Object.entries(itemMap).sort((a, b) => b[1].valor - a[1].valor);
+        const totalOperacional = itemEntries.reduce((a, [, v]) => a + v.valor, 0);
+
+        const getCor = (nome: string, cat: string) => {
+          const n = (nome + ' ' + cat).toLowerCase();
+          if (n.includes('aluguel') || n.includes('espaço') || n.includes('espaco') || n.includes('ponto')) return { bar: '#a78bfa', bg: 'rgba(167,139,250,0.12)', text: '#c4b5fd', label: 'Infraestrutura' };
+          if (n.includes('emprest') || n.includes('parcel') || n.includes('divida') || n.includes('dívida') || n.includes('nubank') || n.includes('financ')) return { bar: '#fb923c', bg: 'rgba(251,146,60,0.12)', text: '#fdba74', label: 'Financeiro' };
+          if (n.includes('host') || n.includes('vps') || n.includes('software') || n.includes('sistem') || n.includes('dominio')) return { bar: '#60a5fa', bg: 'rgba(96,165,250,0.12)', text: '#93c5fd', label: 'Tecnologia' };
+          if (n.includes('luz') || n.includes('agua') || n.includes('água') || n.includes('internet') || n.includes('energia')) return { bar: '#34d399', bg: 'rgba(52,211,153,0.12)', text: '#6ee7b7', label: 'Infraestrutura' };
+          if (n.includes('marketing') || n.includes('publicidade') || n.includes('anúncio')) return { bar: '#f472b6', bg: 'rgba(244,114,182,0.12)', text: '#f9a8d4', label: 'Marketing' };
+          return { bar: '#6366f1', bg: 'rgba(99,102,241,0.12)', text: '#a5b4fc', label: cat };
+        };
 
         return (
-          <div style={{ background: 'white', padding: '1.2rem', borderRadius: '14px', marginBottom: '1.2rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', margin: '0 0 0.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Tag size={18} color="#6366f1" /> CUSTOS POR CATEGORIA
-            </h3>
-            <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '1rem' }}>
-              Total: R$ {catTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          <div style={{ background: 'linear-gradient(135deg, #1a1f2e 0%, #0f1219 100%)', padding: '1.5rem', borderRadius: '16px', marginBottom: '1.2rem', border: '1px solid #2a3042', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.3rem' }}>
+              <div style={{ background: 'rgba(99,102,241,0.15)', borderRadius: '8px', padding: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Tag size={18} color="#6366f1" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '0.95rem', fontWeight: '800', color: '#e2e8f0', margin: 0 }}>CUSTOS POR CATEGORIA</h3>
+                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Total Operacional PJ: <span style={{ color: '#4ade80', fontWeight: '700' }}>R$ {totalOperacional.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></span>
+              </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '0.7rem' }}>
-              {catEntries.map(([cat, val], i) => {
-                const pct = catTotal > 0 ? (val / catTotal) * 100 : 0;
-                const color = colors[i % colors.length];
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginTop: '1.2rem' }}>
+              {itemEntries.map(([nome, dados]) => {
+                const pct = totalOperacional > 0 ? (dados.valor / totalOperacional) * 100 : 0;
+                const cor = getCor(nome, dados.categoria);
                 return (
-                  <div key={cat} style={{ background: '#f8fafc', borderRadius: '12px', padding: '0.8rem', border: '1px solid #f1f5f9' }}>
+                  <div key={nome} style={{ background: '#151922', borderRadius: '10px', padding: '0.8rem 1rem', border: '1px solid #1e2536' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#334155', textTransform: 'uppercase' }}>{cat}</span>
-                      <span style={{ fontSize: '0.65rem', fontWeight: '600', color, background: `${color}15`, padding: '2px 6px', borderRadius: '4px' }}>{pct.toFixed(0)}%</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#e2e8f0' }}>{nome}</span>
+                        <span style={{ fontSize: '0.55rem', fontWeight: '600', color: cor.text, background: cor.bg, padding: '1px 6px', borderRadius: '8px' }}>{cor.label}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.6rem' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#f8fafc' }}>R$ {dados.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        <span style={{ fontSize: '0.65rem', fontWeight: '600', color: cor.text }}>{pct.toFixed(1)}%</span>
+                      </div>
                     </div>
-                    <div style={{ fontSize: '1rem', fontWeight: '800', color: '#1e293b', marginBottom: '0.4rem' }}>
-                      R$ {val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </div>
-                    <div style={{ height: '6px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: '3px', transition: 'width 0.5s ease' }} />
+                    <div style={{ height: '5px', background: '#1e2536', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: `linear-gradient(90deg, ${cor.bar}, ${cor.bar}88)`, borderRadius: '3px', transition: 'width 0.8s ease' }} />
                     </div>
                   </div>
                 );
               })}
+            </div>
+
+            <div style={{ marginTop: '1rem', background: 'rgba(100,116,139,0.08)', borderRadius: '10px', padding: '0.75rem 1rem', border: '1px solid #1e2536', display: 'flex', alignItems: 'flex-start', gap: '0.6rem' }}>
+              <Info size={14} color="#64748b" style={{ marginTop: '2px', flexShrink: 0 }} />
+              <span style={{ fontSize: '0.65rem', color: '#94a3b8', lineHeight: '1.5' }}>
+                Saídas pessoais (Água, Luz, Internet da Casa) foram isoladas como <span style={{ color: '#fbbf24', fontWeight: '600' }}>Retirada de Pró-Labore</span> para não inflar os custos operacionais da empresa.
+              </span>
             </div>
           </div>
         );
