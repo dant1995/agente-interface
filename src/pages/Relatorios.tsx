@@ -290,9 +290,6 @@ const Relatorios = () => {
   const getCusto = (o: any) => {
     if (o.id_pedido in custosVenda) return custosVenda[o.id_pedido] ?? 0;
     if (o.custo && o.custo > 0) return o.custo * (o.quantidade || 1);
-    const key = (o.produtoNome || '').toLowerCase().trim();
-    const custoUnit = custosAutoMap[key];
-    if (custoUnit && custoUnit > 0) return custoUnit * (o.quantidade || 1);
     return 0;
   };
 
