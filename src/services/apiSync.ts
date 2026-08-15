@@ -296,7 +296,7 @@ export const apiSync = {
   },
 
   notifyCaixa: async (data: any) => {
-    return sendWebhook(`${BASE_URL}/webhook/caixa`, { action: 'nova_entrada', ...data });
+    return sendWebhook(N8N_WEBHOOK_URLS.NEW_SALE, { action: 'nova_entrada', ...data });
   },
 
   criarPedido: async (pedido: any) => {
@@ -626,32 +626,29 @@ export const apiSync = {
 
   fetchCaixa: async (): Promise<{ items: CaixaItem[], summary: { entrada: number, saida: number, saldo: number } } | null> => {
     try {
-      const response = await fetch(N8N_WEBHOOK_URLS.CAIXA, {
+      const response = await fetch(N8N_WEBHOOK_URLS.NEW_SALE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'get_caixa' })
       });
       if (!response.ok) throw new Error('Falha ao buscar fluxo de caixa');
 
-      const rawItems = await response.json();
-      
-      const caixaItems: CaixaItem[] = (rawItems || []).map((item: any) => {
-        const data = getValueByKeywords(item, ['DATA', 'CARIMBO', 'CARIMBO DE DATA/HORA']);
-        const categoria = String(getValueByKeywords(item, ['CATEGORIA', 'DESCRICAO', 'DESCRIÇÃO']) || 'Outros');
-        const entrada = parseReal(getValueByKeywords(item, ['ENTRADA', 'TOTAL PAGO', 'VALOR PAGO', 'PAGO', 'RECEBIDO']));
-        const saida = parseReal(getValueByKeywords(item, ['SAIDA', 'GASTO', 'CUSTO', 'PAGAMENTO']));
-        
-        // Inteligência: Detectar Insumos na descrição para sugestão de custos
-        const descLower = categoria.toLowerCase();
-        if (descLower.includes('camiseta') || descLower.includes('tecido') || descLower.includes('papel sublimatico') || descLower.includes('tinta')) {
-          const unitario = parseReal(getValueByKeywords(item, ['VALOR UNITARIO', 'PRECO UNITARIO', 'VALOR UNIT']));
-          if (unitario > 0) {
-            import('./storage').then(({ storage }) => {
-              storage.updateInsumoPrice(categoria, unitario);
-            });
-          }
-        }
+      const rawData = await response.json();
 
+      let rawItems: any[] = [];
+      if (Array.isArray(rawData)) {
+        rawItems = rawData;
+      } else if (rawData && typeof rawData === 'object') {
+        const found = Object.values(rawData).find(val => Array.isArray(val));
+        if (found) rawItems = found as any[];
+        else rawItems = [rawData];
+      }
+
+      const caixaItems: CaixaItem[] = rawItems.map((item: any) => {
+        const data = getValueByKeywords(item, ['DATA', 'CARIMBO', 'CARIMBO DE DATA/HORA']);
+        const categoria = String(getValueByKeywords(item, ['CATEGORIA', 'DESCRICAO', 'DESCRIÇÃO', 'DESPESA', 'ORIGEM']) || 'Outros');
+        const entrada = parseReal(getValueByKeywords(item, ['ENTRADA', 'TOTAL ENTRADA', 'TOTAL PAGO', 'VALOR PAGO', 'PAGO', 'RECEBIDO']));
+        const saida = parseReal(getValueByKeywords(item, ['SAIDA', 'SAÍDA', 'DESPESA', 'TOTAL DESPESA', 'GASTO', 'CUSTO', 'PAGAMENTO']));
         return { data, categoria, entrada, saida };
       })
       .filter((i: CaixaItem) => i.entrada > 0 || i.saida > 0);
