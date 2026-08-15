@@ -207,7 +207,7 @@ const Gastos = () => {
   });
 
   const totalGastosLista = (gastosFiltrados || []).reduce((acc, g) => acc + (g.total || 0), 0);
-  const isProfit = displayLucro >= 0;
+  const isProfit = displaySaldo >= 0;
 
   return (
     <div style={{ background: '#f5f5f5', minHeight: '100vh', paddingBottom: '80px' }}>
@@ -268,9 +268,9 @@ const Gastos = () => {
               </div>
             </div>
             <div style={{ borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '0.8rem' }}>
-              <div style={{ fontSize: '0.75rem', opacity: 0.85, marginBottom: '0.2rem' }}>📈 {selectedMonth ? 'Lucro (Mês)' : 'Lucro'}</div>
+              <div style={{ fontSize: '0.75rem', opacity: 0.85, marginBottom: '0.2rem' }}>💰 {selectedMonth ? 'Saldo (Mês)' : 'Saldo'}</div>
               <div style={{ fontSize: '1.4rem', fontWeight: '800' }}>
-                R$ {displayLucro.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                R$ {displaySaldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </div>
             </div>
           </div>

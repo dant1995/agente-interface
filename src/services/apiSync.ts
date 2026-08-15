@@ -653,15 +653,28 @@ export const apiSync = {
       })
       .filter((i: CaixaItem) => i.entrada > 0 || i.saida > 0);
 
-      const totalEntradaSheet = caixaItems.reduce((acc: number, i: CaixaItem) => acc + i.entrada, 0);
-      const totalSaidaSheet = caixaItems.reduce((acc: number, i: CaixaItem) => acc + i.saida, 0);
+      let totalEntradaSheet = caixaItems.reduce((acc: number, i: CaixaItem) => acc + i.entrada, 0);
+      let totalSaidaSheet = caixaItems.reduce((acc: number, i: CaixaItem) => acc + i.saida, 0);
+      let saldoSheet = totalEntradaSheet - totalSaidaSheet;
+
+      if (rawItems.length > 0) {
+        const row3 = rawItems.length >= 3 ? rawItems[2] : rawItems[rawItems.length - 1];
+        const hVal = parseReal(getValueByKeywords(row3, ['H', 'TOTAL ENTRADA', 'ENTRADA']));
+        const iVal = parseReal(getValueByKeywords(row3, ['I', 'TOTAL DESPESA', 'DESPESA', 'TOTAL SAIDA', 'SAIDA']));
+        const jVal = parseReal(getValueByKeywords(row3, ['J', 'SALDO', 'TOTAL SALDO']));
+        if (hVal > 0 || iVal > 0 || jVal > 0) {
+          totalEntradaSheet = hVal || totalEntradaSheet;
+          totalSaidaSheet = iVal || totalSaidaSheet;
+          saldoSheet = jVal || (totalEntradaSheet - totalSaidaSheet);
+        }
+      }
 
       return {
         items: caixaItems,
         summary: {
           entrada: totalEntradaSheet,
           saida: totalSaidaSheet,
-          saldo: totalEntradaSheet - totalSaidaSheet
+          saldo: saldoSheet
         }
       };
     } catch (error) {
