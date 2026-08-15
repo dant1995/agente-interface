@@ -970,10 +970,10 @@ export const apiSync = {
         const precoVenda = parseReal(getValueByKeywords(item, ['preço', 'PRECO', 'VALOR UNITARIO', 'PRICE', 'UNITARIO', 'VALOR UNITÁRIO', 'preco', 'VALOR', 'PREÇO UNITÁRIO', 'VALOR VENDA', 'PRECO VENDA']));
         const qtdVenda = Number(getValueByKeywords(item, ['quantidade', 'QUANTIDADE', 'QTD', 'AMOUNT', 'QTD VENDA', 'QUANTIDADE VENDIDA']) || 1);
         
-        const custoRaw = getValueByKeywords(item, ['Custo', 'CUSTO', 'Custo unitario', 'CUSTO UNITARIO']);
+        const custoRaw = getValueByKeywords(item, ['Custo', 'CUSTO', 'Custo unitario', 'CUSTO UNITARIO']) ?? item['Custo'] ?? item.custo;
         const custoPlanilha = parseReal(custoRaw);
         
-        if (index < 5) console.log('[fetchVendas] Item', index, '| custo keyword match:', custoRaw, '| parsed:', custoPlanilha, '| keys:', Object.keys(item).join(','));
+        if (index < 5) console.log('[fetchVendas] Item', index, '| Custo direct:', item['Custo'], '| custoRaw:', custoRaw, '| parsed:', custoPlanilha);
         
         // Prioriza o valor com desconto, se não houver, usa o preço unitário * quantidade
         const comDesconto = parseReal(getValueByKeywords(item, ['total com desconto', 'COM DESCONTO', 'TOTAL', 'TOTAL PAGO', 'VALOR PAGO', 'PAGO', 'VALOR TOTAL', 'PRECO TOTAL', 'PREÇO TOTAL', 'VALOR FINAL', 'TOTAL VENDA', 'VALOR VENDA TOTAL', 'PRECO FINAL', 'PREÇO FINAL']));
