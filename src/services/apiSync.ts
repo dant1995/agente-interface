@@ -969,6 +969,7 @@ export const apiSync = {
         
         const precoVenda = parseReal(getValueByKeywords(item, ['preço', 'PRECO', 'VALOR UNITARIO', 'PRICE', 'UNITARIO', 'VALOR UNITÁRIO', 'preco', 'VALOR', 'PREÇO UNITÁRIO', 'VALOR VENDA', 'PRECO VENDA']));
         const qtdVenda = Number(getValueByKeywords(item, ['quantidade', 'QUANTIDADE', 'QTD', 'AMOUNT', 'QTD VENDA', 'QUANTIDADE VENDIDA']) || 1);
+        const custoPlanilha = parseReal(getValueByKeywords(item, ['Custo', 'CUSTO', 'CUSTO UNITARIO', 'custo unitario']));
         
         // Prioriza o valor com desconto, se não houver, usa o preço unitário * quantidade
         const comDesconto = parseReal(getValueByKeywords(item, ['total com desconto', 'COM DESCONTO', 'TOTAL', 'TOTAL PAGO', 'VALOR PAGO', 'PAGO', 'VALOR TOTAL', 'PRECO TOTAL', 'PREÇO TOTAL', 'VALOR FINAL', 'TOTAL VENDA', 'VALOR VENDA TOTAL', 'PRECO FINAL', 'PREÇO FINAL']));
@@ -995,8 +996,8 @@ export const apiSync = {
           quantidade: qtdVenda,
           valorTotal: finalValue,
           preco: precoVenda || (finalValue > 0 && qtdVenda > 0 ? finalValue / qtdVenda : 0),
-          custo: 15,
-          lucro: finalValue - (15 * qtdVenda),
+          custo: custoPlanilha || 15,
+          lucro: finalValue - ((custoPlanilha || 15) * qtdVenda),
           codigo_barra: item.ID || item.codigo_barra || item.codigo_barras || '',
           pago: true,
           entregue: true,
