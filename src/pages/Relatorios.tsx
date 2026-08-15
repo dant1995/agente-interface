@@ -97,17 +97,18 @@ const Relatorios = () => {
   const saveCusto = useCallback((id: string, valor: number) => {
     const order = ordersRef.current.find(o => o.id_pedido === id);
     const produtoNome = order?.produtoNome;
+    const produtoId = order?.produtoId || order?.codigo_barra || '';
 
     setCustosVenda(prev => {
       const next = { ...prev, [id]: valor };
-      const autoFilled: { rowNumber: number; produto: string; custo: number }[] = [];
+      const autoFilled: { rowNumber: number; produto: string; custo: number; produtoId: string }[] = [];
       if (produtoNome && valor > 0) {
         ordersRef.current.forEach(o => {
           if (o.produtoNome === produtoNome && !next[o.id_pedido] && o.id_pedido !== id) {
             next[o.id_pedido] = valor;
             const rm = o.id_pedido?.match(/venda-row-(\d+)/);
             if (rm) {
-              autoFilled.push({ rowNumber: parseInt(rm[1], 10), produto: produtoNome, custo: valor });
+              autoFilled.push({ rowNumber: parseInt(rm[1], 10), produto: produtoNome, custo: valor, produtoId: o.produtoId || o.codigo_barra || '' });
             }
           }
         });
@@ -119,11 +120,15 @@ const Relatorios = () => {
         if (rm) {
           apiSync.atualizarCustoVenda(parseInt(rm[1], 10), produtoNome || '', valor).catch(() => {});
         }
-        apiSync.enviarCustoPlanilha(id, produtoNome || '', valor).catch(() => {});
+        if (produtoId) {
+          apiSync.enviarCustoPlanilha(produtoId, produtoNome || '', valor).catch(() => {});
+        }
       }
       autoFilled.forEach(af => {
         apiSync.atualizarCustoVenda(af.rowNumber, af.produto, af.custo).catch(() => {});
-        apiSync.enviarCustoPlanilha(af.rowNumber.toString(), af.produto, af.custo).catch(() => {});
+        if (af.produtoId) {
+          apiSync.enviarCustoPlanilha(af.produtoId, af.produto, af.custo).catch(() => {});
+        }
       });
 
       return next;

@@ -1255,10 +1255,10 @@ export const apiSync = {
   },
 
   enviarCustoPlanilha: async (id: string, produto: string, custo: number) => {
+    console.log('[enviarCustoPlanilha] id:', id, 'produto:', produto, 'custo:', custo);
     return sendWebhook(N8N_WEBHOOK_URLS.CUSTOS, {
-      action: 'update_cost',
       id: id,
-      CUSTOS: custo,
+      Custo: custo,
       produto: produto,
     });
   },
